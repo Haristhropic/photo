@@ -1,36 +1,148 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SnapVibe
 
-## Getting Started
+Web photobooth untuk event. Tamu buka link di browser HP, pilih layout, jepret
+bareng-bareng, dapat strip foto dengan QR untuk diunduh. Data tersimpan di
+Neon Postgres, file foto di disk lokal.
 
-First, run the development server:
+Stack: Next.js 16 (App Router) + React 19 + Tailwind v4 + Drizzle ORM + Neon Postgres.
+
+## Menjalankan
+
+Prasyarat: Node 20+ dan proyek Neon (koneksi string di `.env`).
 
 ```bash
+npm install
+
+# 1. Siapkan .env dari template
+cp .env.example .env
+
+# 2. Buat tabel di Neon
+npm run db:migrate
+
+# 3. Isi admin + event contoh
+npm run db:seed
+
+# 4. Jalankan
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka http://localhost:3000. Booth ada di `/booth`, dashboard di `/admin`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Kamera hanya bisa diakses lewat HTTPS atau `localhost`. Untuk HP di jaringan
+lokal, pakai HTTPS (misalnya lewat `ngrok http 3000` atau reverse proxy).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Perintah
 
-## Learn More
+| Perintah | Fungsi |
+| --- | --- |
+| `npm run dev` | Server pengembangan |
+| `npm run build` / `npm start` | Build dan jalankan produksi |
+| `npm run typecheck` | Pemeriksaan TypeScript |
+| `npm run lint` | ESLint |
+| `npm run db:push` | Terapkan schema langsung ke Neon (dev cepat, tanpa riwayat) |
+| `npm run db:migrate` | Terapkan file migrasi di `drizzle/` (pakai ini di produksi) |
+| `npm run db:seed` | Isi admin dan event contoh |
+| `npm run e2e` | Uji perjalanan booth sampai unduhan dengan kamera palsu |
 
-To learn more about Next.js, take a look at the following resources:
+`npm run e2e` butuh dev server berjalan dan kamera Chromium palsu
+(`npx playwright install chromium`).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Migrasi database
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Schema.sql berada di `drizzle/`. Setelah mengubah `src/db/schema.ts`:
 
-## Deploy on Vercel
+```bash
+npx drizzle-kit generate   # membuat drizzle/000X_*.sql
+npm run db:migrate          # menerapkan ke Neon
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`drizzle-kit push` hanya mengubah database langsung tanpa menulis file, jadi
+tidak ada jejak perubahan yang bisa direview atau dijalankan di server lain.
+Pemakaian `push` membuat `npm run db:migrate` gagal di database yang sudah
+terbentuk lewat `push`, karena tidak ada tabel `__drizzle_migrations` yang
+menandai migrasi lama sudah diterapkan.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Database dev lokal ini dibuat dengan `push`, jadi di database itu tetap pakai
+`db:push`. `db:migrate` dipakai untuk database baru atau produksi, yang belum
+pernah disentuh `push`. File di `drizzle/` adalah catatan perubahan schema dan
+sudah ikut di-commit.
+
+## Variabel environment
+
+| Nama | Keterangan |
+| --- | --- |
+| `DATABASE_URL` | Connection string Neon, mis. `postgresql://USER:PASS@ep-x-pooler.region.aws.neon.tech/neondb?sslmode=require` |
+| `STORAGE_DIR` | Folder penyimpanan file foto, default `./storage` |
+| `NEXT_PUBLIC_BASE_URL` | URL dasar untuk QR dan tautan berbagi |
+| `SESSION_SECRET` | Kunci HMAC untuk cookie sesi admin |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Kredensial admin untuk `db:seed` |
+
+## Alur
+
+1. `/booth` pilih layout (Strip 3, Strip 4, Grid 2x2, Single), aktifkan kamera,
+   hitung mundur 3-2-1, lalu burst beberapa bidikan.
+2. Bidikan dikirim ke `/studio` lewat `sessionStorage`, dirender jadi satu PNG
+   di canvas dengan filter, stiker, dan tata letak pilihan.
+3. PNG dikirim ke `POST /api/sessions`, disimpan ke disk, dan baris Postgres dibuat
+   dengan `accessKey` acak 20 karakter.
+4. `/p/[accessKey]` menampilkan strip, QR ke halaman yang sama, dan tombol unduh
+   yang menambah `download_count`.
+5. `/api/cron/cleanup` menghapus sesi kedaluwarsa beserta filenya.
+
+Admin membuat event di `/admin`, opsional dengan kode akses, dan mengunggah
+frame PNG. Event terkunci hanya bisa dibuka lewat `/e/[slug]` dengan kode yang
+benar.
+
+## CRUD admin
+
+Semua endpoint di bawah butuh cookie sesi admin dari `POST /api/admin/login`.
+Tanpa cookie selalu dibalas `401`.
+
+| Metode | Endpoint | Fungsi |
+| --- | --- | --- |
+| `GET` | `/api/admin/events` | Daftar event milik admin |
+| `POST` | `/api/admin/events` | Buat event |
+| `PATCH` | `/api/admin/events/[id]` | Ubah judul, kode akses, retensi |
+| `DELETE` | `/api/admin/events/[id]` | Hapus event, frame ikut terhapus |
+| `GET` | `/api/admin/frames` | Daftar frame |
+| `POST` | `/api/admin/frames` | Unggah frame PNG |
+| `PATCH` | `/api/admin/frames/[id]` | Ubah nama, layout, event |
+| `DELETE` | `/api/admin/frames/[id]` | Hapus frame dan file PNG |
+| `POST` | `/api/cron/cleanup` | Jalankan retensi kedaluwarsa |
+
+Mengubah judul event juga memperbarui slug-nya dan tetap unik. Menghapus event
+atau frame ikut menghapus file PNG di disk, bukan hanya baris di Postgres.
+
+## Catatan teknis
+
+**Zona waktu.** Semua kolom waktu adalah `timestamp without time zone` yang
+diisi sebagai UTC. Perbandingan kedaluwarsa memakai
+`now() at time zone 'utc'`, bukan `now()` biasa, supaya tidak ikut zona waktu
+sesi. Menyamakan kolom dengan `now()` telanjang pernah membuat job retensi
+diam-diam gagal dan foto tidak pernah terhapus.
+
+**Driver.** Koneksi memakai `postgres` (postgres.js) lewat
+`drizzle-orm/postgres-js`. Client di-cache di `globalThis` agar hot reload tidak
+membuka pool baru tiap edit. Pakai connection string *pooler* dari Neon untuk
+aplikasi, bukan koneksi langsung.
+
+**Enum.** Kolom enum memakai `pgEnum`, jadi nilainya berupa enum Postgres asli
+(`CREATE TYPE`), bukan varchar. `layout_type` dan `role` terdefinisi di
+`drizzle/0000_*.sql`.
+
+**Primary key.** Semua id bertipe `uuid` dengan default `gen_random_uuid()`,
+kecuali `photo_sessions.access_key` yang sengaja varchar 32 karakter karena
+dipakai di URL dan QR.
+
+**Penyimpanan file.** Foto ditulis ke `STORAGE_DIR` dan disajikan lewat
+`/api/files/[...path]`, yang menolak path di luar root. Untuk produksi,
+ganti dengan object storage (S3 atau sejenis) dan ganti `src/lib/storage.ts`.
+
+**Radius 0.** Token desain mengunci semua sudut menjadi 0, ditegakkan di
+`globals.css` pada `@layer base`.
+
+**Tailwind dan symlink.** `globals.css` memakai `source(none)` lalu
+`@source "../"`. Pemindaian otomatis Tailwind v4 akan menelusuri seluruh
+project, dan karena `.codegraph` adalah junction ke folder di luar project,
+Turbopack gagal build. Sources ditulis eksplisit supaya hanya `src/` yang
+dipindai.
