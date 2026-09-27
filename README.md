@@ -8,13 +8,13 @@ Stack: Next.js 16 (App Router) + React 19 + Tailwind v4 + Drizzle ORM + Neon Pos
 
 ## Menjalankan
 
-Prasyarat: Node 20+ dan proyek Neon (koneksi string di `.env`).
+Prasyarat: Node 20+ dan proyek Neon.
 
 ```bash
 npm install
 
-# 1. Siapkan .env dari template
-cp .env.example .env
+# 1. Hubungkan ke Neon (menulis DATABASE_URL ke .env)
+neon link --project-id <project-id> --branch production -y
 
 # 2. Buat tabel di Neon
 npm run db:migrate
@@ -30,6 +30,24 @@ Buka http://localhost:3000. Booth ada di `/booth`, dashboard di `/admin`.
 
 Kamera hanya bisa diakses lewat HTTPS atau `localhost`. Untuk HP di jaringan
 lokal, pakai HTTPS (misalnya lewat `ngrok http 3000` atau reverse proxy).
+
+## Neon
+
+Proyek ini terhubung ke Neon lewat `neon link`, yang menulis variabel berikut ke
+`.env`:
+
+| Variabel | Isi |
+| --- | --- |
+| `DATABASE_URL` | Koneksi *pooler*, dipakai aplikasi |
+| `DATABASE_URL_UNPOOLED` | Koneksi langsung, berguna untuk migrasi |
+| `NEON_BRANCH` | Branch aktif, saat ini `production` |
+
+`neon link` menimpa `DATABASE_URL` di `.env` setiap kali dijalankan. `SESSION_SECRET`,
+`STORAGE_DIR`, dan `ADMIN_*` tetap harus diisi manual seperti di `.env.example`.
+
+`neon.ts` memakai `defineConfig({})`, jadi tidak ada service yang diaktifkan.
+Kalau auth atau object storage diaktifkan nanti, perintahnya lewat
+`neon deploy` (`auth`, `storage`, `functions`).
 
 ## Perintah
 

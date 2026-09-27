@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 
-const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3001";
+const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 const SHOTS_DIR = "C:/Users/Haris/AppData/Local/Temp/opencode";
 
 function log(step: string, detail = "") {
@@ -99,7 +99,7 @@ async function main() {
     await page.getByRole("button", { name: /Simpan dan buat QR/i }).click();
     await page.waitForURL("**/p/**", { timeout: 25000 });
     const accessKey = page.url().split("/").pop() ?? "";
-    log("saved to mysql", `accessKey=${accessKey}`);
+    log("saved to database", `accessKey=${accessKey}`);
 
     await page.getByText("Fotomu sudah jadi").waitFor({ state: "visible", timeout: 15000 });
 
