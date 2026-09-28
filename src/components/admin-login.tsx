@@ -38,18 +38,25 @@ export function AdminLogin() {
   }
 
   return (
-    <main className="shell flex flex-1 flex-col justify-center py-[var(--section)]">
-      <div className="max-w-[var(--measure)]">
-        <p className="label">Admin</p>
-        <h1 className="mt-5 text-display font-semibold">Masuk dashboard</h1>
+    <main className="shell flex flex-1 flex-col items-center justify-center py-[var(--section)]">
+      <div className="w-full max-w-[var(--measure)] rounded-[var(--radius-xl)] border-2 border-ink bg-butter p-8 shadow-lift-3 sm:p-10">
+        <span className="inline-flex rounded-[var(--radius-pill)] border-2 border-ink bg-ink px-4 py-1.5 font-display text-label font-extrabold tracking-[0.12em] text-butter uppercase">
+          Admin
+        </span>
+        <h1 className="mt-6 text-display font-extrabold text-ink">
+          Masuk dashboard
+        </h1>
         <p className="mt-4 text-lead text-ink-body">
           Dashboard untuk membuat event, mengunggah frame, dan memantau jumlah
           foto.
         </p>
 
-        <form onSubmit={submit} className="mt-10 flex flex-col gap-4">
+        <form onSubmit={submit} className="mt-10 flex flex-col gap-5">
           <div>
-            <label htmlFor="admin-email" className="label">
+            <label
+              htmlFor="admin-email"
+              className="font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase"
+            >
               Email
             </label>
             <input
@@ -59,12 +66,15 @@ export function AdminLogin() {
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="mt-2 w-full border border-line bg-elev px-4 py-3 text-body text-ink outline-none focus:border-accent"
+              className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-4 py-3 font-semibold text-ink outline-none focus:bg-sky"
             />
           </div>
 
           <div>
-            <label htmlFor="admin-password" className="label">
+            <label
+              htmlFor="admin-password"
+              className="font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase"
+            >
               Password
             </label>
             <input
@@ -74,14 +84,14 @@ export function AdminLogin() {
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-2 w-full border border-line bg-elev px-4 py-3 text-body text-ink outline-none focus:border-accent"
+              className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-4 py-3 font-semibold text-ink outline-none focus:bg-sky"
             />
           </div>
 
           {error && (
             <p
               role="alert"
-              className="border border-line bg-elev px-4 py-3 text-small"
+              className="rounded-[var(--radius)] border-2 border-ink bg-pink px-4 py-3 font-semibold text-ink"
             >
               {error}
             </p>
@@ -90,9 +100,9 @@ export function AdminLogin() {
           <button
             type="submit"
             disabled={busy}
-            className="inline-flex items-center justify-center gap-2 border border-accent bg-accent px-6 py-3 text-body font-medium text-on-accent transition-colors duration-150 hover:bg-accent-hover disabled:opacity-50"
+            className="pressable inline-flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-pink px-7 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-[var(--mix-coral)] disabled:opacity-45"
           >
-            <IconLock size={20} stroke={1.75} aria-hidden="true" />
+            <IconLock size={22} stroke={2.5} aria-hidden="true" />
             {busy ? "Memeriksa..." : "Masuk"}
           </button>
         </form>

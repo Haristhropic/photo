@@ -7,6 +7,34 @@ function log(step: string, detail = "") {
   console.log(`[e2e] ${step}${detail ? ` -> ${detail}` : ""}`);
 }
 
+/**
+ * Lenis animates window scroll on its own rAF loop, so an element Playwright
+ * auto-scrolled to can still be moving when the click is dispatched. Wait for
+ * the bounding box to hold still across two reads before clicking.
+ */
+async function clickWhenSettled(
+  page: import("playwright").Page,
+  locator: import("playwright").Locator,
+) {
+  await locator.scrollIntoViewIfNeeded({ timeout: 10000 });
+  let previous = await locator.boundingBox();
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    await page.waitForTimeout(100);
+    const current = await locator.boundingBox();
+    if (
+      previous &&
+      current &&
+      Math.abs(previous.y - current.y) < 0.5 &&
+      Math.abs(previous.x - current.x) < 0.5
+    ) {
+      await locator.click({ timeout: 10000 });
+      return;
+    }
+    previous = current;
+  }
+  await locator.click({ timeout: 10000 });
+}
+
 async function main() {
   const browser = await chromium.launch({
     args: [
@@ -96,8 +124,20 @@ async function main() {
     log("preview rendered", `${Math.round(previewSrc.length / 1024)}kb data url`);
     await page.screenshot({ path: `${SHOTS_DIR}/e2e-studio.png` });
 
-    await page.getByRole("button", { name: /Simpan dan buat QR/i }).click();
-    await page.waitForURL("**/p/**", { timeout: 25000 });
+    const saveResponse = page.waitForResponse(
+      (r) => r.request().method() === "POST" && r.url().includes("/api/sessions"),
+      { timeout: 30000 },
+    );
+    await clickWhenSettled(
+      page,
+      page.getByRole("button", { name: /Simpan dan buat QR/i }),
+    );
+    const saved = await saveResponse;
+    if (!saved.ok()) {
+      const body = await saved.text().catch(() => "");
+      throw new Error(`save failed: ${saved.status()} ${body.slice(0, 300)}`);
+    }
+    await page.waitForURL("**/p/**", { timeout: 20000 });
     const accessKey = page.url().split("/").pop() ?? "";
     log("saved to database", `accessKey=${accessKey}`);
 
@@ -114,6 +154,34 @@ async function main() {
     await shot.waitFor({ state: "visible", timeout: 15000 });
     const shotSrc = await shot.getAttribute("src");
     log("result page", `qr=${qrSrc.length}b photo=${shotSrc}`);
+
+    const luma = await shot.evaluate(async (node) => {
+      const img = node as HTMLImageElement;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = 48;
+      c.height = 48;
+      const ctx = c.getContext("2d");
+      if (!ctx) throw new Error("no 2d context");
+      ctx.drawImage(img, 0, 0, 48, 48);
+      const data = ctx.getImageData(0, 0, 48, 48).data;
+      let sum = 0;
+      let min = 255;
+      let max = 0;
+      for (let p = 0; p < data.length; p += 4) {
+        const l = 0.2126 * data[p] + 0.7152 * data[p + 1] + 0.0722 * data[p + 2];
+        sum += l;
+        if (l < min) min = l;
+        if (l > max) max = l;
+      }
+      return { mean: sum / (data.length / 4), min, max };
+    });
+    if (luma.max - luma.min < 8 || luma.mean < 8) {
+      throw new Error(
+        `result strip is blank (mean=${luma.mean.toFixed(1)} min=${luma.min} max=${luma.max})`,
+      );
+    }
+    log("result strip has pixels", `mean=${luma.mean.toFixed(1)} range=${Math.round(luma.min)}-${Math.round(luma.max)}`);
 
     await page.screenshot({ path: `${SHOTS_DIR}/e2e-result.png`, fullPage: true });
 

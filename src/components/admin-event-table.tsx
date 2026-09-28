@@ -27,7 +27,7 @@ export function AdminEventTable({
   }
 
   return (
-    <div className="grid gap-px border border-line bg-line">
+    <div className="grid gap-4">
       {events.map((event) => (
         <EventItem key={event.id} event={event} onChanged={onChanged} />
       ))}
@@ -93,10 +93,10 @@ function EventItem({ event, onChanged }: { event: EventRow; onChanged: () => voi
 
   if (!editing) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-elev p-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-lg)] border-2 border-ink bg-elev p-6 shadow-lift-1">
         <div className="min-w-0">
-          <p className="text-h3 font-semibold">{event.title}</p>
-          <p className="mt-1 font-mono text-label tracking-[0.16em] uppercase text-meta">
+          <p className="font-display text-h3 font-extrabold">{event.title}</p>
+          <p className="mt-1 font-display text-label font-bold tracking-[0.08em] text-ink-meta">
             /e/{event.slug} / kode {event.accessCode ?? "terbuka"} / retensi{" "}
             {event.retentionHours} jam
           </p>
@@ -105,11 +105,11 @@ function EventItem({ event, onChanged }: { event: EventRow; onChanged: () => voi
         <div className="flex items-center gap-6">
           <div className="flex gap-6 text-right">
             <div>
-              <p className="label">Sesi</p>
+              <p className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">Sesi</p>
               <p className="mt-1 text-h3 font-semibold">{event.sessionCount}</p>
             </div>
             <div>
-              <p className="label">Unduhan</p>
+              <p className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">Unduhan</p>
               <p className="mt-1 text-h3 font-semibold">{event.downloadTotal}</p>
             </div>
           </div>
@@ -121,22 +121,22 @@ function EventItem({ event, onChanged }: { event: EventRow; onChanged: () => voi
               setEditing(true);
             }}
             aria-label={`Ubah ${event.title}`}
-            className="inline-flex size-10 items-center justify-center border border-line text-ink transition-colors hover:border-ink hover:text-accent"
+            className="pressable inline-flex size-11 items-center justify-center rounded-[var(--radius)] border-2 border-ink bg-elev text-ink shadow-lift-1 hover:bg-butter"
           >
-            <IconPencil size={18} stroke={1.75} aria-hidden="true" />
+            <IconPencil size={18} stroke={2.5} aria-hidden="true" />
           </button>
           <button
             type="button"
             onClick={remove}
             disabled={busy}
             aria-label={`Hapus ${event.title}`}
-            className="inline-flex size-10 items-center justify-center border border-line text-ink transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+            className="pressable inline-flex size-11 items-center justify-center rounded-[var(--radius)] border-2 border-ink bg-elev text-ink shadow-lift-1 hover:bg-pink disabled:opacity-45"
           >
-            <IconTrash size={18} stroke={1.75} aria-hidden="true" />
+            <IconTrash size={18} stroke={2.5} aria-hidden="true" />
           </button>
         </div>
 
-        {error && <p className="w-full text-small text-accent">{error}</p>}
+        {error && <p className="w-full rounded-[var(--radius)] border-2 border-ink bg-pink px-3 py-2 text-small font-semibold text-ink">{error}</p>}
       </div>
     );
   }
@@ -145,19 +145,19 @@ function EventItem({ event, onChanged }: { event: EventRow; onChanged: () => voi
     <div className="bg-elev p-6">
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
-          <label htmlFor={`title-${event.id}`} className="label">
+          <label htmlFor={`title-${event.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
             Judul
           </label>
           <input
             id={`title-${event.id}`}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="mt-2 w-full border border-line bg-sunken px-3 py-2 text-small outline-none focus:border-accent"
+            className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 text-small font-semibold text-ink outline-none focus:bg-butter"
           />
         </div>
 
         <div>
-          <label htmlFor={`code-${event.id}`} className="label">
+          <label htmlFor={`code-${event.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
             Kode akses
           </label>
           <input
@@ -165,12 +165,12 @@ function EventItem({ event, onChanged }: { event: EventRow; onChanged: () => voi
             value={accessCode}
             onChange={(e) => setAccessCode(e.target.value)}
             placeholder="kosongkan untuk terbuka"
-            className="mt-2 w-full border border-line bg-sunken px-3 py-2 text-small outline-none focus:border-accent"
+            className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 text-small font-semibold text-ink outline-none focus:bg-butter"
           />
         </div>
 
         <div>
-          <label htmlFor={`retention-${event.id}`} className="label">
+          <label htmlFor={`retention-${event.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
             Retensi (jam)
           </label>
           <input
@@ -180,21 +180,21 @@ function EventItem({ event, onChanged }: { event: EventRow; onChanged: () => voi
             max={720}
             value={retention}
             onChange={(e) => setRetention(e.target.value)}
-            className="mt-2 w-full border border-line bg-sunken px-3 py-2 text-small outline-none focus:border-accent"
+            className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 text-small font-semibold text-ink outline-none focus:bg-butter"
           />
         </div>
       </div>
 
-      {error && <p className="mt-3 text-small text-accent">{error}</p>}
+      {error && <p className="mt-3 rounded-[var(--radius)] border-2 border-ink bg-pink px-3 py-2 text-small font-semibold text-ink">{error}</p>}
 
       <div className="mt-4 flex gap-2">
         <button
           type="button"
           onClick={save}
           disabled={busy || title.trim().length === 0}
-          className="inline-flex items-center gap-2 border border-accent bg-accent px-4 py-2 text-small font-medium text-on-accent transition-colors hover:bg-accent-hover disabled:opacity-50"
+          className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-mint px-5 py-2.5 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-butter disabled:opacity-45"
         >
-          <IconCheck size={18} stroke={1.75} aria-hidden="true" />
+          <IconCheck size={18} stroke={2.5} aria-hidden="true" />
           Simpan
         </button>
         <button
@@ -203,9 +203,9 @@ function EventItem({ event, onChanged }: { event: EventRow; onChanged: () => voi
             reset();
             setEditing(false);
           }}
-          className="inline-flex items-center gap-2 border border-line-strong px-4 py-2 text-small font-medium text-ink transition-colors hover:border-ink"
+          className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-5 py-2.5 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-sunken"
         >
-          <IconX size={18} stroke={1.75} aria-hidden="true" />
+          <IconX size={18} stroke={2.5} aria-hidden="true" />
           Batal
         </button>
       </div>

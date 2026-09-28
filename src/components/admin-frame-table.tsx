@@ -35,7 +35,7 @@ export function AdminFrameTable({
   }
 
   return (
-    <div className="grid gap-px border border-line bg-line">
+    <div className="grid gap-4">
       {frames.map((frame) => (
         <FrameItem
           key={frame.id}
@@ -112,16 +112,16 @@ function FrameItem({
 
   if (!editing) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-elev p-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-lg)] border-2 border-ink bg-elev p-6 shadow-lift-1">
         <div className="flex min-w-0 items-center gap-4">
           <img
             src={frame.imageUrl}
             alt={`Frame ${frame.name}`}
-            className="size-16 shrink-0 border border-line bg-sunken object-contain"
+            className="size-16 shrink-0 rounded-[var(--radius)] border-2 border-ink bg-butter object-contain"
           />
           <div className="min-w-0">
-            <p className="text-h3 font-semibold">{frame.name}</p>
-            <p className="mt-1 font-mono text-label tracking-[0.16em] uppercase text-meta">
+            <p className="font-display text-h3 font-extrabold">{frame.name}</p>
+            <p className="mt-1 font-display text-label font-bold tracking-[0.08em] text-ink-meta">
               {LAYOUTS[layoutType]?.label ?? frame.layoutType} /{" "}
               {frame.eventTitle ?? "tanpa event"}
             </p>
@@ -136,22 +136,22 @@ function FrameItem({
               setEditing(true);
             }}
             aria-label={`Ubah frame ${frame.name}`}
-            className="inline-flex size-10 items-center justify-center border border-line text-ink transition-colors hover:border-ink hover:text-accent"
+            className="pressable inline-flex size-11 items-center justify-center rounded-[var(--radius)] border-2 border-ink bg-elev text-ink shadow-lift-1 hover:bg-butter"
           >
-            <IconPencil size={18} stroke={1.75} aria-hidden="true" />
+            <IconPencil size={18} stroke={2.5} aria-hidden="true" />
           </button>
           <button
             type="button"
             onClick={remove}
             disabled={busy}
             aria-label={`Hapus frame ${frame.name}`}
-            className="inline-flex size-10 items-center justify-center border border-line text-ink transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+            className="pressable inline-flex size-11 items-center justify-center rounded-[var(--radius)] border-2 border-ink bg-elev text-ink shadow-lift-1 hover:bg-pink disabled:opacity-45"
           >
-            <IconTrash size={18} stroke={1.75} aria-hidden="true" />
+            <IconTrash size={18} stroke={2.5} aria-hidden="true" />
           </button>
         </div>
 
-        {error && <p className="w-full text-small text-accent">{error}</p>}
+        {error && <p className="w-full rounded-[var(--radius)] border-2 border-ink bg-pink px-3 py-2 text-small font-semibold text-ink">{error}</p>}
       </div>
     );
   }
@@ -162,31 +162,31 @@ function FrameItem({
         <img
           src={frame.imageUrl}
           alt={`Frame ${frame.name}`}
-          className="size-20 shrink-0 border border-line bg-sunken object-contain"
+          className="size-20 shrink-0 rounded-[var(--radius)] border-2 border-ink bg-butter object-contain"
         />
 
         <div className="grid flex-1 gap-4 sm:grid-cols-3">
           <div>
-            <label htmlFor={`frame-name-${frame.id}`} className="label">
+            <label htmlFor={`frame-name-${frame.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
               Nama
             </label>
             <input
               id={`frame-name-${frame.id}`}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-2 w-full border border-line bg-sunken px-3 py-2 text-small outline-none focus:border-accent"
+              className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 text-small font-semibold text-ink outline-none focus:bg-butter"
             />
           </div>
 
           <div>
-            <label htmlFor={`frame-layout-${frame.id}`} className="label">
+            <label htmlFor={`frame-layout-${frame.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
               Layout
             </label>
             <select
               id={`frame-layout-${frame.id}`}
               value={layoutType}
               onChange={(e) => setLayoutType(e.target.value as LayoutType)}
-              className="mt-2 w-full border border-line bg-sunken px-3 py-2 text-small outline-none focus:border-accent"
+              className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 text-small font-semibold text-ink outline-none focus:bg-butter"
             >
               {LAYOUT_ORDER.map((key) => (
                 <option key={key} value={key}>
@@ -197,14 +197,14 @@ function FrameItem({
           </div>
 
           <div>
-            <label htmlFor={`frame-event-${frame.id}`} className="label">
+            <label htmlFor={`frame-event-${frame.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
               Event
             </label>
             <select
               id={`frame-event-${frame.id}`}
               value={eventId}
               onChange={(e) => setEventId(e.target.value)}
-              className="mt-2 w-full border border-line bg-sunken px-3 py-2 text-small outline-none focus:border-accent"
+              className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 text-small font-semibold text-ink outline-none focus:bg-butter"
             >
               <option value="">Tanpa event</option>
               {eventOptions.map((option) => (
@@ -217,16 +217,16 @@ function FrameItem({
         </div>
       </div>
 
-      {error && <p className="mt-3 text-small text-accent">{error}</p>}
+      {error && <p className="mt-3 rounded-[var(--radius)] border-2 border-ink bg-pink px-3 py-2 text-small font-semibold text-ink">{error}</p>}
 
       <div className="mt-4 flex gap-2">
         <button
           type="button"
           onClick={save}
           disabled={busy || name.trim().length === 0}
-          className="inline-flex items-center gap-2 border border-accent bg-accent px-4 py-2 text-small font-medium text-on-accent transition-colors hover:bg-accent-hover disabled:opacity-50"
+          className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-mint px-5 py-2.5 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-butter disabled:opacity-45"
         >
-          <IconCheck size={18} stroke={1.75} aria-hidden="true" />
+          <IconCheck size={18} stroke={2.5} aria-hidden="true" />
           Simpan
         </button>
         <button
@@ -235,9 +235,9 @@ function FrameItem({
             reset();
             setEditing(false);
           }}
-          className="inline-flex items-center gap-2 border border-line-strong px-4 py-2 text-small font-medium text-ink transition-colors hover:border-ink"
+          className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-5 py-2.5 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-sunken"
         >
-          <IconX size={18} stroke={1.75} aria-hidden="true" />
+          <IconX size={18} stroke={2.5} aria-hidden="true" />
           Batal
         </button>
       </div>

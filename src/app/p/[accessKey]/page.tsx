@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { IconDownload, IconQrcode, IconTrash } from "@tabler/icons-react";
+import { IconCamera, IconDownload, IconQrcode, IconTrash } from "@tabler/icons-react";
 import QRCode from "qrcode";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -70,28 +70,36 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
   return (
     <Shell title="Fotomu sudah jadi">
       <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
-        <div className="border border-line bg-sunken p-4">
+        <div
+          className="rounded-[var(--radius-xl)] border-2 border-ink bg-ink p-3 shadow-lift-3"
+          style={{ transform: "rotate(-0.8deg)" }}
+        >
           <img
             src={session.finalPhotoUrl}
             alt="Strip foto hasil"
-            className="mx-auto max-h-[70vh] w-auto border border-line"
+            className="mx-auto max-h-[70vh] w-auto rounded-[6px]"
           />
         </div>
 
-        <div className="flex flex-col gap-8">
-          <div className="border border-line bg-elev p-6">
-            <div className="flex items-start gap-4">
+        <div className="flex flex-col gap-6">
+          <div
+            className="rounded-[var(--radius-lg)] border-2 border-ink bg-butter p-6 shadow-lift-2"
+            style={{ transform: "rotate(0.8deg)" }}
+          >
+            <div className="flex items-start gap-5">
               <img
                 src={qrDataUrl}
                 alt={`QR untuk ${shareUrl}`}
-                className="size-40 shrink-0 border border-line"
+                className="size-40 shrink-0 rounded-[var(--radius)] border-2 border-ink bg-elev"
               />
               <div>
-                <p className="label">Bagikan</p>
-                <p className="mt-2 text-ink-body">
+                <p className="font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase">
+                  Bagikan
+                </p>
+                <p className="mt-2 font-semibold text-ink">
                   Pindai QR ini untuk membuka lagi strip fotomu di HP lain.
                 </p>
-                <p className="mt-3 break-all font-mono text-label text-meta">
+                <p className="mt-3 break-all rounded-[10px] border-2 border-ink bg-elev px-3 py-2 font-display text-label font-bold text-ink">
                   {shareUrl}
                 </p>
               </div>
@@ -101,30 +109,43 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
           <div className="flex flex-col gap-3">
             <a
               href={`/api/sessions/${accessKey}/download`}
-              className="inline-flex items-center justify-center gap-2 border border-accent bg-accent px-6 py-3 text-body font-medium text-on-accent transition-colors duration-150 hover:bg-accent-hover"
+              className="pressable inline-flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-pink px-6 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-[var(--mix-coral)]"
             >
-              <IconDownload size={20} stroke={1.75} aria-hidden="true" />
+              <IconDownload size={22} stroke={2.5} aria-hidden="true" />
               Unduh PNG
             </a>
-            <p className="font-mono text-label tracking-[0.16em] uppercase text-meta">
+            <Link
+              href="/booth"
+              className="pressable inline-flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-6 py-4 font-display text-lead font-bold text-ink shadow-lift-2 hover:bg-mint"
+            >
+              <IconCamera size={22} stroke={2.5} aria-hidden="true" />
+              Boleh jepret lagi?
+            </Link>
+            <p className="font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
               {session.downloadCount} kali diunduh
             </p>
           </div>
 
-          <dl className="grid gap-px border border-line bg-line">
-            <div className="bg-elev p-4">
-              <dt className="label">Layout</dt>
-              <dd className="mt-1 text-ink-body">{layout.label}</dd>
+          <dl className="grid gap-3">
+            <div className="rounded-[var(--radius)] border-2 border-ink bg-elev p-4 shadow-lift-1">
+              <dt className="font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
+                Layout
+              </dt>
+              <dd className="mt-1 font-semibold text-ink">{layout.label}</dd>
             </div>
             {session.eventTitle && (
-              <div className="bg-elev p-4">
-                <dt className="label">Event</dt>
-                <dd className="mt-1 text-ink-body">{session.eventTitle}</dd>
+              <div className="rounded-[var(--radius)] border-2 border-ink bg-elev p-4 shadow-lift-1">
+                <dt className="font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
+                  Event
+                </dt>
+                <dd className="mt-1 font-semibold text-ink">{session.eventTitle}</dd>
               </div>
             )}
-            <div className="bg-elev p-4">
-              <dt className="label">Berlaku sampai</dt>
-              <dd className="mt-1 text-ink-body">
+            <div className="rounded-[var(--radius)] border-2 border-ink bg-elev p-4 shadow-lift-1">
+              <dt className="font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
+                Berlaku sampai
+              </dt>
+              <dd className="mt-1 font-semibold text-ink">
                 {session.expiresAt.toLocaleString("id-ID", {
                   dateStyle: "long",
                   timeStyle: "short",
@@ -141,16 +162,18 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-1 flex-col">
-      <header className="border-b border-line">
-        <div className="shell flex h-16 items-center justify-between">
+      <header className="border-b-2 border-ink">
+        <div className="shell flex h-18 items-center justify-between py-2">
           <Link
             href="/"
-            className="font-mono text-label font-semibold tracking-[0.16em] uppercase"
+            className="font-display text-h3 font-extrabold"
           >
-            SNAPVIBE
+            <span className="rounded-[10px] bg-ink px-2.5 py-1 text-bg">
+              Snap<span className="misregister">Vibe</span>
+            </span>
           </Link>
-          <span className="inline-flex items-center gap-2 font-mono text-label tracking-[0.16em] uppercase text-meta">
-            <IconQrcode size={16} stroke={1.75} aria-hidden="true" />
+          <span className="inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
+            <IconQrcode size={16} stroke={2.5} aria-hidden="true" />
             Hasil
           </span>
         </div>
@@ -158,14 +181,14 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
 
       <main className="flex-1">
         <div className="shell py-[var(--section)]">
-          <h1 className="text-display font-semibold">{title}</h1>
-          <div className="mt-8">{children}</div>
+          <h1 className="text-display font-extrabold">{title}</h1>
+          <div className="mt-10">{children}</div>
         </div>
       </main>
 
-      <footer className="border-t border-line">
-        <div className="shell flex items-center gap-2 py-6 font-mono text-label tracking-[0.16em] uppercase text-meta">
-          <IconTrash size={16} stroke={1.75} aria-hidden="true" />
+      <footer className="border-t-2 border-ink bg-butter">
+        <div className="shell flex items-center gap-2 py-6 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
+          <IconTrash size={16} stroke={2.5} aria-hidden="true" />
           Foto dihapus otomatis setelah masa retensi habis
         </div>
       </footer>

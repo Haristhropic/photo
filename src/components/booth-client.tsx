@@ -7,16 +7,19 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  BURST_INTERVAL_MS,
   COUNTDOWN_FROM,
+  COUNTDOWN_STEP_MS,
   cameraErrorMessage,
   captureAspect,
+  captureFailedMessage,
   describeCameraError,
-  grabFrame,
-  sleep,
+  grabFrameWhenReady,
+  nextPaint,
+  sleepUntil,
   stopStream,
 } from "@/lib/capture";
 import { LAYOUTS, LAYOUT_ORDER, type LayoutType } from "@/lib/layouts";
@@ -29,12 +32,15 @@ export function BoothClient({ eventId }: { eventId?: string }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const runRef = useRef(0);
 
   const [status, setStatus] = useState<Status>("intro");
   const [layoutType, setLayoutType] = useState<LayoutType>("STRIP_3");
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [shotIndex, setShotIndex] = useState<number | null>(null);
   const [shots, setShots] = useState<string[]>([]);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<"camera" | "capture" | null>(null);
   const [aspect, setAspect] = useState(4 / 3);
   const [stream, setStream] = useState<MediaStream | null>(null);
 
@@ -43,7 +49,11 @@ export function BoothClient({ eventId }: { eventId?: string }) {
     status === "ready" || status === "countdown" || status === "burst";
 
   useEffect(() => {
-    return () => stopStream(streamRef.current);
+    return () => {
+      runRef.current += 1;
+      stopStream(streamRef.current);
+      streamRef.current = null;
+    };
   }, []);
 
   // The video element stays mounted across states, so the stream is attached
@@ -60,16 +70,22 @@ export function BoothClient({ eventId }: { eventId?: string }) {
   }, [stream, status]);
 
   const startCamera = useCallback(async () => {
+    runRef.current += 1;
     setStatus("requesting");
     setErrorText(null);
+    setErrorKind(null);
+    setCountdown(null);
+    setShotIndex(null);
 
     if (!window.isSecureContext) {
       setErrorText(cameraErrorMessage("insecure"));
+      setErrorKind("camera");
       setStatus("error");
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia) {
       setErrorText(cameraErrorMessage("unavailable"));
+      setErrorKind("camera");
       setStatus("error");
       return;
     }
@@ -84,48 +100,90 @@ export function BoothClient({ eventId }: { eventId?: string }) {
       setStatus("ready");
     } catch (error) {
       setErrorText(describeCameraError(error).message);
+      setErrorKind("camera");
       setStatus("error");
     }
   }, []);
 
-  const runBurst = useCallback(async () => {
+  const runSession = useCallback(async () => {
     const video = videoRef.current;
-    if (!video) return;
+    const stream = streamRef.current;
+    if (!video || !stream) return;
 
-    setStatus("burst");
+    const shotCount = preset.shotCount;
+    const run = ++runRef.current;
+    const isCurrent = () => runRef.current === run;
+
+    setShots([]);
+    setErrorText(null);
+    setErrorKind(null);
+
     const taken: string[] = [];
-    for (let i = 0; i < preset.shotCount; i += 1) {
-      const frame = grabFrame(video);
-      if (frame) taken.push(frame);
-      if (i < preset.shotCount - 1) await sleep(BURST_INTERVAL_MS);
+    try {
+      for (let shot = 0; shot < shotCount; shot += 1) {
+        setShotIndex(shot);
+
+        setStatus("countdown");
+        const endAt = performance.now() + COUNTDOWN_FROM * COUNTDOWN_STEP_MS;
+        for (let n = COUNTDOWN_FROM; n >= 1; n -= 1) {
+          setCountdown(n);
+          await sleepUntil(endAt - (n - 1) * COUNTDOWN_STEP_MS);
+          if (!isCurrent()) return;
+        }
+
+        setCountdown(null);
+        setStatus("burst");
+        // grabFrame is synchronous, so without yielding React coalesces the
+        // burst status away and the shutter feedback never paints.
+        await nextPaint();
+        const frame = await grabFrameWhenReady(video);
+        if (!frame) {
+          setShots([]);
+          setErrorText(captureFailedMessage(shotCount));
+          setErrorKind("capture");
+          setStatus("error");
+          return;
+        }
+        taken.push(frame);
+      }
+    } catch {
+      setShots([]);
+      setErrorText(captureFailedMessage(shotCount));
+      setErrorKind("capture");
+      setStatus("error");
+      return;
+    } finally {
+      // The stream must stay live for every grabFrame call, so it is released
+      // here instead. Guarded so a cancelled run cannot stop a newer stream
+      // that startCamera already installed.
+      stopStream(stream);
+      if (streamRef.current === stream) streamRef.current = null;
     }
 
+    if (!isCurrent()) return;
+    setShotIndex(null);
     setShots(taken);
-    stopStream(streamRef.current);
-    streamRef.current = null;
     setStatus("review");
   }, [preset.shotCount]);
 
-  const runCountdown = useCallback(async () => {
-    setStatus("countdown");
-    for (let n = COUNTDOWN_FROM; n >= 1; n -= 1) {
-      setCountdown(n);
-      await sleep(1000);
-    }
+  function cancelRun() {
+    runRef.current += 1;
     setCountdown(null);
-    await runBurst();
-  }, [runBurst]);
+    setShotIndex(null);
+  }
 
   function retake() {
+    cancelRun();
     setShots([]);
-    setCountdown(null);
     startCamera();
   }
 
   function backToLayout() {
+    cancelRun();
     setShots([]);
     setStatus("intro");
     setErrorText(null);
+    setErrorKind(null);
   }
 
   function proceed() {
@@ -139,21 +197,35 @@ export function BoothClient({ eventId }: { eventId?: string }) {
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="border-b border-line">
-        <div className="shell flex h-16 items-center justify-between">
-          <button
-            type="button"
-            onClick={backToLayout}
-            className="inline-flex items-center gap-2 font-mono text-label tracking-[0.16em] uppercase text-meta transition-colors hover:text-accent"
+      <header className="border-b-2 border-ink">
+        <div className="shell flex h-18 items-center justify-between gap-3 py-2">
+          <Link
+            href="/"
+            aria-label="SnapVibe, kembali ke beranda"
+            className="font-display text-h3 font-extrabold"
           >
-            <IconChevronLeft size={18} stroke={1.75} aria-hidden="true" />
-          </button>
-          <span className="font-mono text-label font-semibold tracking-[0.16em] uppercase">
-            Booth
-          </span>
-          <span className="font-mono text-label tracking-[0.16em] uppercase text-meta">
-            {preset.shotCount} bidikan
-          </span>
+            <span className="rounded-[10px] bg-ink px-2.5 py-1 text-bg">
+              Snap<span className="misregister">Vibe</span>
+            </span>
+          </Link>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={backToLayout}
+              aria-label="Ganti layout"
+              className="pressable inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
+            >
+              <IconChevronLeft size={18} stroke={2.5} aria-hidden="true" />
+              Layout
+            </button>
+            <span className="hidden rounded-[var(--radius-pill)] border-2 border-ink bg-butter px-4 py-1.5 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase sm:inline-flex">
+              Booth
+            </span>
+            <span className="rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
+              {preset.shotCount} bidikan
+            </span>
+          </div>
         </div>
       </header>
 
@@ -165,8 +237,8 @@ export function BoothClient({ eventId }: { eventId?: string }) {
         >
           <div className="mx-auto w-full max-w-3xl">
             <div
-              className="relative w-full overflow-hidden border border-line bg-board"
-              style={{ aspectRatio: `${aspect}` }}
+              className="relative w-full overflow-hidden rounded-[var(--radius-xl)] border-2 border-ink bg-board shadow-lift-3"
+              style={{ aspectRatio: `${aspect}`, transform: "rotate(-0.8deg)" }}
             >
               <video
                 ref={videoRef}
@@ -175,15 +247,30 @@ export function BoothClient({ eventId }: { eventId?: string }) {
                 className="size-full scale-x-[-1] object-cover"
               />
               {countdown !== null && (
-                <div className="absolute inset-0 grid place-items-center bg-scrim">
-                  <span className="font-mono text-display font-semibold text-board-ink">
+                <div className="absolute inset-0 grid place-items-center">
+                  <span
+                    key={countdown}
+                    data-testid="countdown"
+                    className="pop-count grid size-28 place-items-center rounded-full border-2 border-ink bg-butter font-display text-display font-extrabold text-ink shadow-lift-2"
+                  >
                     {countdown}
                   </span>
+                  {shotIndex !== null && (
+                    <span
+                      data-testid="shot-progress"
+                      className="absolute bottom-6 rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase"
+                    >
+                      Bidikan {shotIndex + 1} / {preset.shotCount}
+                    </span>
+                  )}
                 </div>
               )}
               {status === "burst" && (
-                <div className="absolute inset-x-0 bottom-0 bg-scrim p-3 text-center font-mono text-label tracking-[0.16em] uppercase text-board-ink">
-                  Mengambil bidikan
+                <div
+                  data-testid="burst"
+                  className="ink-splat-in absolute inset-x-4 bottom-4 rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-2.5 text-center font-display text-label font-extrabold tracking-[0.14em] text-ink uppercase shadow-lift-1"
+                >
+                  Jepret!
                 </div>
               )}
             </div>
@@ -191,12 +278,13 @@ export function BoothClient({ eventId }: { eventId?: string }) {
         </div>
         {status === "intro" && (
           <div className="shell flex flex-1 flex-col justify-center py-[var(--section)]">
-            <h1 className="text-display font-semibold">Pilih layout</h1>
+            <h1 className="text-display font-extrabold">Pilih layout</h1>
             <p className="mt-4 max-w-[var(--measure)] text-lead text-ink-body">
-              Kamu bisa ganti layout dan mengambil ulang foto sebelum menyimpan.
+              Ganti layout dan mengambil ulang foto sebanyak yang kamu mau sebelum
+              menyimpan.
             </p>
 
-            <div className="mt-10 grid gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {LAYOUT_ORDER.map((key) => {
                 const layout = LAYOUTS[key];
                 const active = key === layoutType;
@@ -206,31 +294,38 @@ export function BoothClient({ eventId }: { eventId?: string }) {
                     type="button"
                     onClick={() => setLayoutType(key)}
                     aria-pressed={active}
-                    className={`p-6 text-left transition-colors ${
-                      active ? "bg-wash" : "bg-elev hover:bg-sunken"
+                    className={`pressable rounded-[var(--radius-lg)] border-2 p-5 text-left ${
+                      active
+                        ? "border-ink bg-butter shadow-lift-2"
+                        : "border-ink bg-elev shadow-lift-1 hover:bg-butter/50"
                     }`}
                   >
-                    <div
-                      className="flex gap-1 border border-line bg-sunken p-2"
-                      style={{ aspectRatio: `${layout.canvas.w} / ${layout.canvas.h}` }}
-                    >
-                      {layout.slots.map((slot, i) => (
-                        <div
-                          key={i}
-                          className={`flex-1 border ${
-                            active ? "border-accent bg-elev" : "border-line-strong bg-elev"
-                          }`}
-                        />
-                      ))}
+                    <div className="grid h-36 place-items-center rounded-[10px] border-2 border-ink bg-sunken p-3">
+                      <div
+                        className="flex max-h-full gap-1"
+                        style={{
+                          aspectRatio: `${layout.canvas.w} / ${layout.canvas.h}`,
+                          height: "100%",
+                        }}
+                      >
+                        {layout.slots.map((slot, i) => (
+                          <div
+                            key={i}
+                            className={`flex-1 rounded-[2px] ${
+                              active ? "bg-pink ring-1 ring-ink/25" : "bg-elev ring-1 ring-ink/20"
+                            }`}
+                          />
+                        ))}
+                      </div>
                     </div>
                     <p
-                      className={`mt-5 text-h3 font-semibold ${
-                        active ? "text-accent" : ""
+                      className={`mt-5 font-display text-h3 font-extrabold ${
+                        active ? "text-ink" : "text-ink-meta"
                       }`}
                     >
                       {layout.label}
                     </p>
-                    <p className="mt-1 font-mono text-label tracking-[0.16em] uppercase text-meta">
+                    <p className="mt-1 font-display text-label font-bold tracking-[0.1em] text-ink-meta uppercase">
                       {layout.shotCount} bidikan
                     </p>
                   </button>
@@ -242,9 +337,9 @@ export function BoothClient({ eventId }: { eventId?: string }) {
               <button
                 type="button"
                 onClick={startCamera}
-                className="inline-flex items-center justify-center gap-2 border border-accent bg-accent px-6 py-3 text-body font-medium text-on-accent transition-colors duration-150 hover:bg-accent-hover"
+                className="pressable inline-flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-mint px-8 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-sky"
               >
-                <IconCamera size={20} stroke={1.75} aria-hidden="true" />
+                <IconCamera size={24} stroke={2.5} aria-hidden="true" />
                 Aktifkan kamera
               </button>
             </div>
@@ -253,25 +348,32 @@ export function BoothClient({ eventId }: { eventId?: string }) {
 
         {status === "error" && (
           <div className="shell flex flex-1 flex-col justify-center py-[var(--section)]">
-            <div className="max-w-[var(--measure)] border border-line bg-elev p-8">
-              <span className="grid size-12 place-items-center border border-line text-accent">
-                <IconX size={24} stroke={1.75} aria-hidden="true" />
+            <div className="max-w-[var(--measure)] rounded-[var(--radius-xl)] border-2 border-ink bg-elev p-8 shadow-lift-2">
+              <span
+                className="grid size-14 place-items-center rounded-[16px] border-2 border-ink bg-pink text-ink"
+                aria-hidden="true"
+              >
+                <IconX size={28} stroke={2.5} />
               </span>
-              <h1 className="mt-6 text-h2 font-semibold">Kamera belum aktif</h1>
+              <h1 className="mt-6 font-display text-h2 font-extrabold">
+                {errorKind === "capture"
+                  ? "Gagal mengambil bidikan"
+                  : "Kamera belum aktif"}
+              </h1>
               <p className="mt-3 text-lead text-ink-body">{errorText}</p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <button
                   type="button"
                   onClick={startCamera}
-                  className="inline-flex items-center gap-2 border border-accent bg-accent px-6 py-3 text-body font-medium text-on-accent transition-colors duration-150 hover:bg-accent-hover"
+                  className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-mint px-6 py-3 font-display text-body font-extrabold text-ink shadow-lift-1 hover:bg-sky"
                 >
-                  <IconRefresh size={20} stroke={1.75} aria-hidden="true" />
+                  <IconRefresh size={20} stroke={2.5} aria-hidden="true" />
                   Coba lagi
                 </button>
                 <button
                   type="button"
                   onClick={backToLayout}
-                  className="inline-flex items-center border border-line-strong px-6 py-3 text-body font-medium text-ink transition-colors duration-150 hover:border-ink"
+                  className="pressable inline-flex items-center rounded-[var(--radius)] border-2 border-ink bg-elev px-6 py-3 font-display text-body font-bold text-ink shadow-lift-1 hover:bg-butter"
                 >
                   Ganti layout
                 </button>
@@ -281,19 +383,19 @@ export function BoothClient({ eventId }: { eventId?: string }) {
         )}
 
         {(status === "ready" || status === "countdown" || status === "burst") && (
-          <div className="shell flex flex-1 flex-col justify-center py-10">
+          <div className="shell flex flex-1 flex-col justify-center pb-10">
             <div className="mx-auto w-full max-w-3xl">
-              <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-                <p className="font-mono text-label tracking-[0.16em] uppercase text-meta">
+              <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
+                <p className="font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
                   {preset.label} / {preset.shotCount} bidikan
                 </p>
                 <button
                   type="button"
-                  onClick={runCountdown}
+                  onClick={runSession}
                   disabled={status !== "ready"}
-                  className="inline-flex items-center gap-2 border border-accent bg-accent px-8 py-4 text-lead font-medium text-on-accent transition-colors duration-150 hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  className="pressable inline-flex items-center gap-2 rounded-[var(--radius-lg)] border-2 border-ink bg-pink px-10 py-5 font-display text-h3 font-extrabold text-ink shadow-lift-3 hover:bg-[var(--mix-coral)] disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  <IconCamera size={22} stroke={1.75} aria-hidden="true" />
+                  <IconCamera size={28} stroke={2.5} aria-hidden="true" />
                   Jepret
                 </button>
               </div>
@@ -302,38 +404,44 @@ export function BoothClient({ eventId }: { eventId?: string }) {
         )}
 
         {status === "review" && (
-          <div className="shell flex flex-1 flex-col justify-center py-10">
-            <h1 className="text-h2 font-semibold">Cek hasilnya</h1>
-            <p className="mt-3 text-lead text-ink-body">
-              Puas? Lanjut ke studio untuk ganti filter, tambah frame, lalu simpan.
+          <div data-testid="review" className="shell flex flex-1 flex-col justify-center py-10">
+            <h1 className="font-display text-h2 font-extrabold">Ini fotomu</h1>
+            <p className="mt-3 max-w-[var(--measure)] text-lead text-ink-body">
+              Puas? Lanjut ke studio untuk ganti filter, tambah stiker, lalu
+              simpan.
             </p>
 
-            <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
               {shots.map((shot, i) => (
-                <img
+                <div
                   key={i}
-                  src={shot}
-                  alt={`Bidikan ${i + 1}`}
-                  className="aspect-3/4 w-full border border-line object-cover"
-                />
+                  className="overflow-hidden rounded-[var(--radius)] border-2 border-ink bg-ink p-1.5 shadow-lift-2"
+                  style={{ transform: `rotate(${i % 2 === 0 ? -1.5 : 1.5}deg)` }}
+                >
+                  <img
+                    src={shot}
+                    alt={`Bidikan ${i + 1}`}
+                    className="aspect-3/4 w-full rounded-[6px] object-cover"
+                  />
+                </div>
               ))}
             </div>
 
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-10 flex flex-wrap gap-4">
               <button
                 type="button"
                 onClick={proceed}
                 disabled={shots.length === 0}
-                className="inline-flex items-center gap-2 border border-accent bg-accent px-6 py-3 text-body font-medium text-on-accent transition-colors duration-150 hover:bg-accent-hover disabled:opacity-50"
+                className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-pink px-7 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-[var(--mix-coral)] disabled:opacity-45"
               >
                 Lanjut ke studio
               </button>
               <button
                 type="button"
                 onClick={retake}
-                className="inline-flex items-center gap-2 border border-line-strong px-6 py-3 text-body font-medium text-ink transition-colors duration-150 hover:border-ink"
+                className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-7 py-4 font-display text-lead font-bold text-ink shadow-lift-2 hover:bg-butter"
               >
-                <IconRefresh size={20} stroke={1.75} aria-hidden="true" />
+                <IconRefresh size={22} stroke={2.5} aria-hidden="true" />
                 Ambil ulang
               </button>
             </div>
@@ -342,7 +450,9 @@ export function BoothClient({ eventId }: { eventId?: string }) {
 
         {status === "requesting" && (
           <div className="shell flex flex-1 flex-col justify-center py-[var(--section)]">
-            <p className="text-lead text-ink-body">Menunggu izin kamera...</p>
+            <p className="font-display text-lead font-bold text-ink-body">
+              Menunggu izin kamera...
+            </p>
           </div>
         )}
       </main>

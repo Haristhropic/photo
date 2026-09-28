@@ -61,9 +61,20 @@ Kalau auth atau object storage diaktifkan nanti, perintahnya lewat
 | `npm run db:migrate` | Terapkan file migrasi di `drizzle/` (pakai ini di produksi) |
 | `npm run db:seed` | Isi admin dan event contoh |
 | `npm run e2e` | Uji perjalanan booth sampai unduhan dengan kamera palsu |
+| `npm run e2e:timer` | Uji hitung mundur 3 detik per bidikan, pembatalan, dan(frame) gelap |
+| `npm run e2e:nav` | Uji semua rute, tautan, dan affordance navigasi |
+| `npm run capture` | Tangkapan layar desktop dan mobile untuk review desain |
 
 `npm run e2e` butuh dev server berjalan dan kamera Chromium palsu
 (`npx playwright install chromium`).
+
+**Port dev.** Skrip uji dan tangkapan screenshot memakai
+`E2E_BASE_URL`, default `http://localhost:3000`. Kalau port 3000 sudah dipakai
+project lain dan `next dev` pindah ke port berikutnya, arahkan manual:
+
+```bash
+E2E_BASE_URL=http://localhost:3001 npm run e2e
+```
 
 ## Migrasi database
 
@@ -156,8 +167,17 @@ dipakai di URL dan QR.
 `/api/files/[...path]`, yang menolak path di luar root. Untuk produksi,
 ganti dengan object storage (S3 atau sejenis) dan ganti `src/lib/storage.ts`.
 
-**Radius 0.** Token desain mengunci semua sudut menjadi 0, ditegakkan di
-`globals.css` pada `@layer base`.
+**Sistem visual.** Arah desainnya playful/cute bergaya `cetak layar`
+(screenprint Indonesia): permukaan kertas krem, tinta candy bermSATA tinggi
+(pink `#FF3D8B`, orange `#FF7A1A`, butter `#FFD23F`, mint `#3DD9A0`,
+sky `#3DA5F5`, plum `#7B2D8E`), bentuk rounded, dan bayangan stiker
+offset keras. Sudut tidak lagi dikunci 0; skala radius ada di
+`globals.css` (`--radius-sm` sampai `--radius-xl` plus `--radius-pill`).
+Font display `Baloo 2` dengan teks `Nunito`. Ikon memakai Tabler, bukan
+emoji. Semua token warna, radius, bayangan, dan font diekspor lewat
+`@theme`, jadi utility Tailwind (`bg-pink`, `rounded-[var(--radius)]`,
+`shadow-lift-2`, `font-display`) tersedia langsung. Semuanya
+dokumentasi lengkap di `DESIGN.md`.
 
 **Tailwind dan symlink.** `globals.css` memakai `source(none)` lalu
 `@source "../"`. Pemindaian otomatis Tailwind v4 akan menelusuri seluruh

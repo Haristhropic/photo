@@ -6,92 +6,153 @@
 
 /* ==========================================================================
    SnapVibe design tokens
-   Ported from the original static prototype, so the design system matches the
-   approved photo-lab look.
+   World: a cetak layar (screenprinting) shop. Translucent candy spot-colours
+   over warm paper, printed slightly off-register, where two overlapping inks
+   mix into a colour neither ink owns. Indonesia-first, cake-bright.
 
-   Radius lock : 0 everywhere, enforced in the base layer below.
-   Accent lock : single vermilion hue, one value per colour scheme.
+   Ink      : five spot colours, full saturation, used at page scale.
+   Mixing   : overlaps are the point, not a side effect.
+   Elevation: hard offset sticker shadow, never a soft blur halo.
+   Radius   : rounded everywhere. The old radius-0 lock is gone.
    ========================================================================== */
 
 :root {
   --gutter: clamp(1.25rem, 4vw, 2.5rem);
-  --section: clamp(4.5rem, 8vw, 7.5rem);
-  --measure: 62ch;
+  --section: clamp(4rem, 7.5vw, 7rem);
+  --measure: 66ch;
   --shell: 1240px;
 
-  --ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --dur: 0.55s;
-  --dur-fast: 0.18s;
+  --ease: cubic-bezier(0.2, 0.9, 0.25, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur: 0.42s;
+  --dur-fast: 0.16s;
 
-  --bg: #f6f6f7;
-  --bg-elev: #ffffff;
-  --bg-sunken: #ebebee;
-  --ink: #111114;
-  --ink-body: #46464f;
-  --ink-meta: #63636d;
-  --line: #dcdce2;
-  --line-strong: #b9b9c3;
+  /* Paper: a screenprint sheet, never a neutral grey. */
+  --bg: #fdf3e3;
+  --bg-elev: #fffdf8;
+  --bg-sunken: #f7e7cd;
 
-  --accent: #c2361c;
-  --accent-hover: #a02c16;
-  --on-accent: #ffffff;
-  --accent-wash: rgba(194, 54, 28, 0.09);
+  /* Ink on paper. Body text is a deep warm plum, not grey. */
+  --ink: #241428;
+  --ink-body: #52405a;
+  --ink-meta: #7d6a86;
 
-  --shadow-card: 0 1px 2px rgba(17, 17, 20, 0.05),
-    0 16px 40px rgba(17, 17, 20, 0.08);
-  --board: #16161a;
-  --board-ink: #f4f4f6;
-  --scrim: rgba(17, 17, 20, 0.55);
+  --line: #e6d2b4;
+  --line-strong: #c9ac85;
+
+  /* The five spot colours. */
+  --pink: #ff3d8b;
+  --orange: #ff7a1a;
+  --butter: #ffd23f;
+  --mint: #3dd9a0;
+  --sky: #3da5f5;
+  --plum: #7b2d8e;
+
+  /* Mixing table: where two inks overlap, the mix is the new colour. */
+  --mix-coral: #ff5f5f;
+  --mix-plum: #a63a9a;
+
+  --accent: var(--pink);
+  --accent-hover: #e62b76;
+  --on-accent: #fffdf8;
+  --accent-wash: rgba(255, 61, 139, 0.14);
+
+  --radius-sm: 8px;
+  --radius: 16px;
+  --radius-lg: 26px;
+  --radius-xl: 34px;
+  --radius-pill: 999px;
+
+  /* Sticker elevation: offset + blur, never a zero-blur costume block. */
+  --lift-1: 2px 3px 0 var(--line-strong);
+  --lift-2: 4px 6px 0 var(--line-strong);
+  --lift-3: 6px 9px 0 var(--line-strong);
+  --lift-ink: 4px 6px 0 var(--ink);
+
+  --board: #241428;
+  --board-ink: #fdf3e3;
+  --scrim: rgba(36, 20, 40, 0.6);
 
   color-scheme: light;
 }
 
+/* Night event: cream inks on deep mulberry, so candy still reads. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0c0c0f;
-    --bg-elev: #141417;
-    --bg-sunken: #08080a;
-    --ink: #f5f5f7;
-    --ink-body: #b6b6bf;
-    --ink-meta: #8b8b95;
-    --line: #26262c;
-    --line-strong: #3a3a42;
+    --bg: #181021;
+    --bg-elev: #241733;
+    --bg-sunken: #120b1c;
 
-    --accent: #f05a34;
-    --accent-hover: #ff7554;
-    --on-accent: #150f0c;
-    --accent-wash: rgba(240, 90, 52, 0.14);
+    --ink: #fdf3e3;
+    --ink-body: #d9c8e2;
+    --ink-meta: #a894b5;
 
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5),
-      0 18px 44px rgba(0, 0, 0, 0.55);
-    --board: #050506;
-    --board-ink: #f5f5f7;
-    --scrim: rgba(0, 0, 0, 0.62);
+    --line: #3a2850;
+    --line-strong: #5a4079;
+
+    --pink: #ff6ba4;
+    --orange: #ff9a4d;
+    --butter: #ffe27a;
+    --mint: #6ff0c0;
+    --sky: #7cc4ff;
+    --plum: #c98be0;
+
+    --mix-coral: #ff8a8a;
+    --mix-plum: #d06ad0;
+
+    --accent: var(--pink);
+    --accent-hover: #ff8abc;
+    --on-accent: #1a0f22;
+    --accent-wash: rgba(255, 107, 164, 0.18);
+
+    --lift-1: 2px 3px 0 var(--line-strong);
+    --lift-2: 4px 6px 0 var(--line-strong);
+    --lift-3: 6px 9px 0 var(--line-strong);
+    --lift-ink: 4px 6px 0 #0d0714;
+
+    --board: #0d0714;
+    --board-ink: #fdf3e3;
+    --scrim: rgba(13, 7, 20, 0.68);
 
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #0c0c0f;
-  --bg-elev: #141417;
-  --bg-sunken: #08080a;
-  --ink: #f5f5f7;
-  --ink-body: #b6b6bf;
-  --ink-meta: #8b8b95;
-  --line: #26262c;
-  --line-strong: #3a3a42;
+  --bg: #181021;
+  --bg-elev: #241733;
+  --bg-sunken: #120b1c;
 
-  --accent: #f05a34;
-  --accent-hover: #ff7554;
-  --on-accent: #150f0c;
-  --accent-wash: rgba(240, 90, 52, 0.14);
+  --ink: #fdf3e3;
+  --ink-body: #d9c8e2;
+  --ink-meta: #a894b5;
 
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5),
-    0 18px 44px rgba(0, 0, 0, 0.55);
-  --board: #050506;
-  --board-ink: #f5f5f7;
-  --scrim: rgba(0, 0, 0, 0.62);
+  --line: #3a2850;
+  --line-strong: #5a4079;
+
+  --pink: #ff6ba4;
+  --orange: #ff9a4d;
+  --butter: #ffe27a;
+  --mint: #6ff0c0;
+  --sky: #7cc4ff;
+  --plum: #c98be0;
+
+  --mix-coral: #ff8a8a;
+  --mix-plum: #d06ad0;
+
+  --accent: var(--pink);
+  --accent-hover: #ff8abc;
+  --on-accent: #1a0f22;
+  --accent-wash: rgba(255, 107, 164, 0.18);
+
+  --lift-1: 2px 3px 0 var(--line-strong);
+  --lift-2: 4px 6px 0 var(--line-strong);
+  --lift-3: 6px 9px 0 var(--line-strong);
+  --lift-ink: 4px 6px 0 #0d0714;
+
+  --board: #0d0714;
+  --board-ink: #fdf3e3;
+  --scrim: rgba(13, 7, 20, 0.68);
 
   color-scheme: dark;
 }
@@ -112,31 +173,39 @@
   --color-board: var(--board);
   --color-board-ink: var(--board-ink);
 
-  --font-sans: var(--font-space-grotesk), ui-sans-serif, system-ui,
-    -apple-system, "Segoe UI", sans-serif;
-  --font-mono: var(--font-ibm-plex-mono), ui-monospace, SFMono-Regular,
-    Menlo, monospace;
+  --color-pink: var(--pink);
+  --color-orange: var(--orange);
+  --color-butter: var(--butter);
+  --color-mint: var(--mint);
+  --color-sky: var(--sky);
+  --color-plum: var(--plum);
+  --color-coral: var(--mix-coral);
+  --color-orchid: var(--mix-plum);
 
-  --text-display: clamp(2.25rem, 1.15rem + 3.9vw, 3.5rem);
-  --text-h2: clamp(1.7rem, 1.1rem + 2.2vw, 2.6rem);
-  --text-h3: clamp(1.05rem, 1rem + 0.3vw, 1.2rem);
-  --text-lead: clamp(1.05rem, 0.98rem + 0.35vw, 1.2rem);
-  --text-small: 0.875rem;
-  --text-label: 0.75rem;
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-display: var(--font-baloo), var(--font-nunito), ui-sans-serif,
+    system-ui, sans-serif;
 
-  --shadow-card: var(--shadow-card);
+  --text-display: clamp(2.5rem, 1.1rem + 5vw, 4.5rem);
+  --text-h2: clamp(1.85rem, 1.2rem + 2.4vw, 3rem);
+  --text-h3: clamp(1.1rem, 1.02rem + 0.35vw, 1.3rem);
+  --text-lead: clamp(1.1rem, 1rem + 0.4vw, 1.3rem);
+  --text-small: 0.9rem;
+  --text-label: 0.78rem;
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  --shadow-lift-1: var(--lift-1);
+  --shadow-lift-2: var(--lift-2);
+  --shadow-lift-3: var(--lift-3);
 }
 
 @layer base {
-  /* Radius lock: hard edges only, like a cut photo-paper border. */
-  *,
-  *::before,
-  *::after {
-    border-radius: 0;
-  }
-
   html {
-    scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
   }
 
@@ -144,34 +213,68 @@
     background-color: var(--bg);
     color: var(--ink);
     font-family: var(--font-sans);
-    line-height: 1.65;
+    line-height: 1.6;
     -webkit-font-smoothing: antialiased;
-  }
-
-  ::selection {
-    background: var(--accent);
-    color: var(--on-accent);
-  }
-
-  :focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
   }
 
   h1,
   h2,
   h3 {
-    line-height: 0.98;
-    letter-spacing: -0.032em;
+    font-family: var(--font-display);
+    line-height: 1;
+    letter-spacing: -0.028em;
     text-wrap: balance;
+    font-weight: 800;
+  }
+
+  ::selection {
+    background: var(--butter);
+    color: var(--ink);
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--sky);
+    outline-offset: 3px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Browser chrome that ships with no design system of its own. */
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  ::-webkit-scrollbar {
+    width: 14px;
+    height: 14px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-sunken);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border: 3px solid var(--bg-sunken);
+    border-radius: var(--radius-pill);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--pink);
+  }
+
+  ::placeholder {
+    color: var(--ink-meta);
+    opacity: 1;
   }
 }
 
 @utility label {
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
   font-size: var(--text-label);
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
+  font-weight: 700;
   color: var(--ink-meta);
 }
 
@@ -182,11 +285,95 @@
   padding-inline: var(--gutter);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
+/* Sticker press: the sheet lifts and settles. One authored moment, reused. */
+@utility pressable {
+  transition:
+    transform var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
 
+  &:hover {
+    transform: translate(-1px, -1px);
+  }
+  &:active {
+    transform: translate(2px, 3px);
+    box-shadow: 0 0 0 var(--line-strong);
+  }
+}
+
+/* Slight off-register, the way a hand-pulled print sits. */
+@utility misregister {
+  text-shadow: 1.5px 1.5px 0 var(--sky);
+}
+
+@utility ink-underline {
+  text-decoration-line: underline;
+  text-decoration-thickness: 3px;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--butter);
+}
+
+/* Registration cross: this world's drawn icon, not an emoji. */
+@utility reg-cross {
+  position: relative;
+
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    background: currentColor;
+  }
+  &::before {
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1.5px;
+    transform: translateX(-50%);
+  }
+  &::after {
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1.5px;
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes ink-splat {
+  0% {
+    transform: scale(0.86);
+    opacity: 0.4;
+  }
+  60% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@utility ink-splat-in {
+  animation: ink-splat var(--dur) var(--ease-out) both;
+}
+
+@keyframes pop-count {
+  0% {
+    transform: scale(1.35) rotate(-3deg);
+  }
+  55% {
+    transform: scale(0.94) rotate(1.5deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@utility pop-count {
+  animation: pop-count 1s var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {

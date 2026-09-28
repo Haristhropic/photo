@@ -1,5 +1,12 @@
-export const BURST_INTERVAL_MS = 700;
 export const COUNTDOWN_FROM = 3;
+export const COUNTDOWN_STEP_MS = 1000;
+
+/**
+ * A null from grabFrame is usually transient (video not sized yet, or no 2d
+ * context), so callers retry a few times before treating it as a real failure.
+ */
+export const FRAME_RETRY_ATTEMPTS = 3;
+export const FRAME_RETRY_DELAY_MS = 120;
 
 export type CameraErrorKind =
   | "insecure"
@@ -84,4 +91,32 @@ export function grabFrame(video: HTMLVideoElement): string | null {
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => resolve());
+    else setTimeout(resolve, 16);
+  });
+}
+
+export function sleepUntil(deadline: number): Promise<void> {
+  const remaining = deadline - performance.now();
+  return sleep(remaining > 0 ? remaining : 0);
+}
+
+export async function grabFrameWhenReady(
+  video: HTMLVideoElement,
+  attempts: number = FRAME_RETRY_ATTEMPTS,
+): Promise<string | null> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const frame = grabFrame(video);
+    if (frame) return frame;
+    await sleep(FRAME_RETRY_DELAY_MS);
+  }
+  return null;
+}
+
+export function captureFailedMessage(shotCount: number): string {
+  return `Kamera tidak berhasil menghasilkan ${shotCount} bidikan. Ambil ulang foto atau ganti layout.`;
 }

@@ -38,7 +38,10 @@ export function EventJoinClient({ slug }: { slug: string }) {
 
   return (
     <form onSubmit={submit} className="max-w-[var(--measure)]">
-      <label htmlFor="event-code" className="label">
+      <label
+        htmlFor="event-code"
+        className="font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase"
+      >
         Kode event
       </label>
       <div className="mt-3 flex flex-col gap-3 sm:flex-row">
@@ -51,14 +54,14 @@ export function EventJoinClient({ slug }: { slug: string }) {
           autoCapitalize="characters"
           spellCheck={false}
           placeholder="Masukkan kode dari organizer"
-          className="w-full border border-line bg-elev px-4 py-3 text-body text-ink outline-none placeholder:text-meta focus:border-accent"
+          className="w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-4 py-3 font-semibold text-ink outline-none placeholder:text-meta focus:bg-butter"
         />
         <button
           type="submit"
           disabled={checking || code.trim().length === 0}
-          className="inline-flex shrink-0 items-center justify-center gap-2 border border-accent bg-accent px-6 py-3 text-body font-medium text-on-accent transition-colors duration-150 hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className="pressable inline-flex shrink-0 items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-pink px-7 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-[var(--mix-coral)] disabled:cursor-not-allowed disabled:opacity-45"
         >
-          <IconLock size={20} stroke={1.75} aria-hidden="true" />
+          <IconLock size={22} stroke={2.5} aria-hidden="true" />
           {checking ? "Memeriksa..." : "Masuk"}
         </button>
       </div>
@@ -66,7 +69,7 @@ export function EventJoinClient({ slug }: { slug: string }) {
       {error && (
         <p
           role="alert"
-          className="mt-4 border border-line bg-elev px-4 py-3 text-small text-ink"
+          className="mt-4 rounded-[var(--radius)] border-2 border-ink bg-pink px-4 py-3 font-semibold text-ink"
         >
           {error}
         </p>

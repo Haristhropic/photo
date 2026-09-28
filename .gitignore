@@ -48,3 +48,7 @@ next-env.d.ts
 
 .omo/
 .neon
+
+# local design-review screenshots (regenerate with npm run capture)
+.impeccable/review/
+

@@ -45,12 +45,12 @@ export function ThemeToggle() {
       onClick={toggle}
       aria-label={isDark ? "Ganti ke mode terang" : "Ganti ke mode gelap"}
       title={isDark ? "Mode terang" : "Mode gelap"}
-      className="inline-flex size-10 items-center justify-center border border-line bg-elev text-ink transition-colors duration-150 ease-[var(--ease)] hover:border-line-strong hover:text-accent"
+      className="pressable inline-flex size-11 items-center justify-center rounded-[var(--radius)] border-2 border-ink bg-elev text-ink shadow-lift-1 hover:bg-butter"
     >
       {isDark ? (
-        <IconSun size={20} stroke={1.75} aria-hidden="true" />
+        <IconSun size={20} stroke={2.5} aria-hidden="true" />
       ) : (
-        <IconMoon size={20} stroke={1.75} aria-hidden="true" />
+        <IconMoon size={20} stroke={2.5} aria-hidden="true" />
       )}
     </button>
   );

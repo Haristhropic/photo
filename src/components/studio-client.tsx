@@ -6,6 +6,7 @@ import {
   IconDownload,
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 import {
@@ -113,7 +114,9 @@ export function StudioClient() {
 
       const data = (await response.json()) as { accessKey: string };
       clearDraft();
-      router.push(`/p/${data.accessKey}`);
+      // The draft is already cleared, so /studio must not stay in history or
+      // Back lands on an empty studio. replace keeps Back pointing at /booth.
+      router.replace(`/p/${data.accessKey}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Foto gagal disimpan");
       setSaving(false);
@@ -131,17 +134,19 @@ export function StudioClient() {
   if (!draft) {
     return (
       <main className="shell flex flex-1 flex-col justify-center py-[var(--section)]">
-        <div className="max-w-[var(--measure)] border border-line bg-elev p-8">
-          <h1 className="text-h2 font-semibold">Belum ada foto</h1>
+        <div className="max-w-[var(--measure)] rounded-[var(--radius-xl)] border-2 border-ink bg-elev p-8 shadow-lift-2">
+          <h1 className="font-display text-h2 font-extrabold text-ink">
+            Belum ada foto
+          </h1>
           <p className="mt-3 text-lead text-ink-body">
             Studio hanya bisa dibuka setelah kamu mengambil foto di booth.
           </p>
           <button
             type="button"
             onClick={() => router.push("/booth")}
-            className="mt-8 inline-flex items-center gap-2 border border-accent bg-accent px-6 py-3 text-body font-medium text-on-accent transition-colors duration-150 hover:bg-accent-hover"
+            className="pressable mt-8 inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-mint px-7 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-sky"
           >
-            <IconArrowLeft size={20} stroke={1.75} aria-hidden="true" />
+            <IconArrowLeft size={22} stroke={2.5} aria-hidden="true" />
             Buka booth
           </button>
         </div>
@@ -153,20 +158,30 @@ export function StudioClient() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="border-b border-line">
-        <div className="shell flex h-16 items-center justify-between">
+      <header className="border-b-2 border-ink">
+        <div className="shell flex h-18 items-center justify-between gap-3 py-2">
+          <Link
+            href="/"
+            aria-label="SnapVibe, kembali ke beranda"
+            className="font-display text-h3 font-extrabold"
+          >
+            <span className="rounded-[10px] bg-ink px-2.5 py-1 text-bg">
+              Snap<span className="misregister">Vibe</span>
+            </span>
+          </Link>
           <button
             type="button"
             onClick={() => router.push("/booth")}
-            className="inline-flex items-center gap-2 font-mono text-label tracking-[0.16em] uppercase text-meta transition-colors hover:text-accent"
+            aria-label="Kembali ke booth"
+            className="pressable inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
           >
-            <IconArrowLeft size={18} stroke={1.75} aria-hidden="true" />
+            <IconArrowLeft size={18} stroke={2.5} aria-hidden="true" />
             Booth
           </button>
-          <span className="font-mono text-label font-semibold tracking-[0.16em] uppercase">
+          <span className="hidden rounded-[var(--radius-pill)] border-2 border-ink bg-butter px-4 py-1.5 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase sm:inline-flex">
             Studio
           </span>
-          <span className="font-mono text-label tracking-[0.16em] uppercase text-meta">
+          <span className="rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
             {layout.label}
           </span>
         </div>
@@ -174,16 +189,19 @@ export function StudioClient() {
 
       <main className="flex-1">
         <div className="shell grid gap-10 py-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
-          <div className="border border-line bg-sunken p-4">
+          <div
+            className="rounded-[var(--radius-xl)] border-2 border-ink bg-ink p-3 shadow-lift-3"
+            style={{ transform: "rotate(-0.7deg)" }}
+          >
             {preview ? (
               <img
                 src={preview}
                 alt="Pratinjau strip foto"
-                className="mx-auto max-h-[70vh] w-auto border border-line"
+                className="mx-auto max-h-[70vh] w-auto rounded-[6px]"
               />
             ) : (
-              <div className="grid aspect-3/4 place-items-center border border-line text-meta">
-                <span className="font-mono text-label tracking-[0.16em] uppercase">
+              <div className="grid aspect-3/4 place-items-center rounded-[6px] bg-sunken text-ink-meta">
+                <span className="font-display text-label font-bold tracking-[0.14em] uppercase">
                   Merender
                 </span>
               </div>
@@ -192,18 +210,20 @@ export function StudioClient() {
 
           <div className="flex flex-col gap-8">
             <fieldset>
-              <legend className="label">Filter</legend>
-              <div className="mt-3 grid grid-cols-3 gap-px border border-line bg-line">
+              <legend className="font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase">
+                Filter
+              </legend>
+              <div className="mt-3 grid grid-cols-3 gap-3">
                 {FILTER_ORDER.map((key) => (
                   <button
                     key={key}
                     type="button"
                     onClick={() => setFilterKey(key)}
                     aria-pressed={key === filterKey}
-                    className={`px-3 py-3 text-small transition-colors ${
+                    className={`pressable rounded-[var(--radius)] border-2 px-3 py-3 font-display text-small font-bold ${
                       key === filterKey
-                        ? "bg-wash font-medium text-accent"
-                        : "bg-elev text-ink-body hover:bg-sunken"
+                        ? "border-ink bg-butter text-ink shadow-lift-1"
+                        : "border-ink bg-elev text-ink-body shadow-lift-1 hover:bg-sunken"
                     }`}
                   >
                     {FILTERS[key].label}
@@ -213,16 +233,18 @@ export function StudioClient() {
             </fieldset>
 
             <fieldset>
-              <legend className="label">Stiker</legend>
-              <div className="mt-3 grid grid-cols-4 gap-px border border-line bg-line">
+              <legend className="font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase">
+                Stiker
+              </legend>
+              <div className="mt-3 grid grid-cols-4 gap-3">
                 <button
                   type="button"
                   onClick={() => setSticker(null)}
                   aria-pressed={sticker === null}
-                  className={`px-3 py-3 text-small transition-colors ${
+                  className={`pressable rounded-[var(--radius)] border-2 px-3 py-3 font-display text-small font-bold ${
                     sticker === null
-                      ? "bg-wash font-medium text-accent"
-                      : "bg-elev text-ink-body hover:bg-sunken"
+                      ? "border-ink bg-butter text-ink shadow-lift-1"
+                      : "border-ink bg-elev text-ink-body shadow-lift-1 hover:bg-sunken"
                   }`}
                 >
                   Tanpa
@@ -233,10 +255,10 @@ export function StudioClient() {
                     type="button"
                     onClick={() => setSticker(key)}
                     aria-pressed={key === sticker}
-                    className={`px-3 py-3 font-mono text-label tracking-[0.16em] uppercase transition-colors ${
+                    className={`pressable rounded-[var(--radius)] border-2 px-3 py-3 font-display text-label font-extrabold tracking-[0.1em] uppercase ${
                       key === sticker
-                        ? "bg-wash font-semibold text-accent"
-                        : "bg-elev text-ink-body hover:bg-sunken"
+                        ? "border-ink bg-pink text-ink shadow-lift-1"
+                        : "border-ink bg-elev text-ink-body shadow-lift-1 hover:bg-sunken"
                     }`}
                   >
                     {STICKER_TEXT[key]}
@@ -246,7 +268,7 @@ export function StudioClient() {
             </fieldset>
 
             {error && (
-              <p className="border border-line bg-elev p-4 text-small text-ink">
+              <p className="rounded-[var(--radius)] border-2 border-ink bg-pink px-4 py-3 text-small font-semibold text-ink">
                 {error}
               </p>
             )}
@@ -256,13 +278,13 @@ export function StudioClient() {
                 type="button"
                 onClick={save}
                 disabled={!preview || saving}
-                className="inline-flex items-center gap-2 border border-accent bg-accent px-6 py-3 text-body font-medium text-on-accent transition-colors duration-150 hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-pink px-7 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-[var(--mix-coral)] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {saving ? (
                   "Menyimpan..."
                 ) : (
                   <>
-                    <IconCheck size={20} stroke={1.75} aria-hidden="true" />
+                    <IconCheck size={22} stroke={2.5} aria-hidden="true" />
                     Simpan dan buat QR
                   </>
                 )}
@@ -270,14 +292,14 @@ export function StudioClient() {
               <button
                 type="button"
                 onClick={() => router.push("/booth")}
-                className="inline-flex items-center gap-2 border border-line-strong px-6 py-3 text-body font-medium text-ink transition-colors duration-150 hover:border-ink"
+                className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-7 py-4 font-display text-lead font-bold text-ink shadow-lift-2 hover:bg-butter"
               >
-                <IconDownload size={20} stroke={1.75} aria-hidden="true" />
+                <IconDownload size={22} stroke={2.5} aria-hidden="true" />
                 Ambil ulang
               </button>
             </div>
 
-            <p className="font-mono text-label tracking-[0.16em] uppercase text-meta">
+            <p className="font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
               {draft.shots.length} bidikan / {layout.canvas.w} x {layout.canvas.h}
             </p>
           </div>
