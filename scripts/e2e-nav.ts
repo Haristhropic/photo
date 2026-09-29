@@ -85,7 +85,9 @@ async function main() {
 
   const homeFromBooth = await page.goto(`${BASE}/booth`, { waitUntil: "domcontentloaded" });
   void homeFromBooth;
-  await page.getByRole("link", { name: /kembali ke beranda/i }).click();
+  await page
+    .getByRole("link", { name: "Kembali ke beranda", exact: true })
+    .click();
   await page.waitForURL(`${BASE}/`, { timeout: 10000 });
   log("booth -> home via header link", page.url());
 
@@ -102,14 +104,91 @@ async function main() {
   log("studio recovery affordances", `${studioCtas} link(s), ${studioButtons} button(s)`);
   if (studioCtas + studioButtons === 0) bad.push("/studio with no draft offers no way back to /booth");
 
+  // The back-to-layout control is only meaningful once the guest is past the
+  // layout picker, so the camera has to be live before it should exist.
   const chevronNamed = await page.goto(`${BASE}/booth`, { waitUntil: "domcontentloaded" });
   void chevronNamed;
+  const introBtn = await page.evaluate(() => {
+    const btn = document.querySelector("header button");
+    return btn ? btn.getAttribute("aria-label") || btn.textContent?.trim() || "" : "";
+  });
+  log("booth header button on layout picker", introBtn || "(none, as expected)");
+
+  const startCamera = page.getByRole("button", { name: /Aktifkan kamera/i });
+  await startCamera.click({ timeout: 10000 });
+  await startCamera.waitFor({ state: "detached", timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(1500);
+
   const unnamed = await page.evaluate(() => {
     const btn = document.querySelector("header button");
     return btn ? btn.getAttribute("aria-label") || btn.textContent?.trim() || "" : "";
   });
-  log("booth header button accessible name", unnamed || "(none)");
-  if (!unnamed) bad.push("/booth header button has no accessible name");
+  log("booth header button past layout picker", unnamed || "(none)");
+  if (!unnamed) bad.push("/booth offers no way back to the layout picker once the camera is live");
+
+  // The header back control must exist on every screen and name where it
+  // returns to. The trailing cases are open-redirect attempts: `from` is
+  // user-supplied, so a crafted value must never escape the site.
+  const backCases: Array<[string, string, string]> = [
+    ["/booth", "/", "Kembali ke beranda"],
+    ["/booth?from=studio", "/studio", "Kembali ke studio"],
+    ["/booth?from=e/acara", "/e/acara", "Kembali ke event"],
+    ["/booth?from=p/abc123", "/p/abc123", "Kembali ke foto"],
+    ["/booth?from=https://evil.example", "/", "Kembali ke beranda"],
+    ["/booth?from=//evil.example", "/", "Kembali ke beranda"],
+    ["/booth?from=e/../../evil", "/", "Kembali ke beranda"],
+  ];
+  for (const [url, wantHref, wantLabel] of backCases) {
+    await page.goto(`${BASE}${url}`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(600);
+    const got = await page.evaluate(() => {
+      const el = document.querySelector('header a[aria-label^="Kembali ke"]');
+      if (!el) return null;
+      return {
+        href: el.getAttribute("href") ?? "",
+        label: el.getAttribute("aria-label") ?? "",
+      };
+    });
+    if (!got) {
+      bad.push(`/booth has no header back control on ${url}`);
+      continue;
+    }
+    if (got.href !== wantHref || got.label !== wantLabel) {
+      bad.push(`/booth back control on ${url} -> ${got.href} / ${got.label}, want ${wantHref} / ${wantLabel}`);
+    } else {
+      log("booth back control", `${url} -> ${got.href} (${got.label})`);
+    }
+  }
+
+  // A late-resolving permission prompt must not yank the guest out of the
+  // layout picker they just navigated to.
+  const raceCtx = await browser.newContext({
+    permissions: ["camera"],
+    viewport: { width: 1440, height: 900 },
+  });
+  await raceCtx.addInitScript(`(() => {
+    const md = navigator.mediaDevices;
+    if (!md || !md.getUserMedia) return;
+    const real = md.getUserMedia.bind(md);
+    md.getUserMedia = (c) => new Promise((res, rej) => {
+      setTimeout(() => { real(c).then(res, rej); }, 3000);
+    });
+  })()`);
+  const racePage = await raceCtx.newPage();
+  await racePage.goto(`${BASE}/booth`, { waitUntil: "domcontentloaded" });
+  await racePage.waitForTimeout(1200);
+  await racePage.getByRole("button", { name: /Aktifkan kamera/i }).click();
+  await racePage.waitForTimeout(300);
+  await racePage.getByRole("button", { name: /Ganti layout/i }).click({ timeout: 10000 });
+  await racePage.waitForTimeout(4500);
+  const stillOnPicker = await racePage.evaluate(
+    `document.querySelector("h1")?.textContent?.includes("Pilih layout") ?? false`,
+  );
+  log("booth holds layout picker through a late permission", String(stillOnPicker));
+  if (!stillOnPicker) {
+    bad.push("/booth dropped the guest back into the camera after a late permission grant");
+  }
+  await raceCtx.close();
 
   // The admin dashboard only renders its links once authenticated.
   const email = process.env.ADMIN_EMAIL;

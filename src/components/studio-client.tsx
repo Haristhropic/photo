@@ -143,7 +143,7 @@ export function StudioClient() {
           </p>
           <button
             type="button"
-            onClick={() => router.push("/booth")}
+            onClick={() => router.push("/booth?from=studio")}
             className="pressable mt-8 inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-mint px-7 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-sky"
           >
             <IconArrowLeft size={22} stroke={2.5} aria-hidden="true" />
@@ -169,21 +169,23 @@ export function StudioClient() {
               Snap<span className="misregister">Vibe</span>
             </span>
           </Link>
-          <button
-            type="button"
-            onClick={() => router.push("/booth")}
-            aria-label="Kembali ke booth"
-            className="pressable inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
-          >
-            <IconArrowLeft size={18} stroke={2.5} aria-hidden="true" />
-            Booth
-          </button>
-          <span className="hidden rounded-[var(--radius-pill)] border-2 border-ink bg-butter px-4 py-1.5 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase sm:inline-flex">
-            Studio
-          </span>
-          <span className="rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
-            {layout.label}
-          </span>
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => router.push("/booth?from=studio")}
+              aria-label="Kembali ke booth"
+              className="pressable inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
+            >
+              <IconArrowLeft size={18} stroke={2.5} aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">Booth</span>
+            </button>
+            <span className="hidden rounded-[var(--radius-pill)] border-2 border-ink bg-butter px-4 py-1.5 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase sm:inline-flex">
+              Studio
+            </span>
+            <span className="min-w-0 truncate rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
+              {layout.label}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -291,7 +293,7 @@ export function StudioClient() {
               </button>
               <button
                 type="button"
-                onClick={() => router.push("/booth")}
+                onClick={() => router.push("/booth?from=studio")}
                 className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-7 py-4 font-display text-lead font-bold text-ink shadow-lift-2 hover:bg-butter"
               >
                 <IconDownload size={22} stroke={2.5} aria-hidden="true" />

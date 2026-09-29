@@ -68,7 +68,7 @@ export default async function EventPage(props: PageProps<"/e/[slug]">) {
             <EventJoinClient slug={slug} />
           ) : (
             <Link
-              href={`/booth?event=${event.id}`}
+              href={`/booth?event=${event.id}&from=e/${encodeURIComponent(slug)}`}
               className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-pink px-8 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-[var(--mix-coral)]"
             >
               <IconCamera size={24} stroke={2.5} aria-hidden="true" />

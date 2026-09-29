@@ -25,11 +25,41 @@ import {
 import { LAYOUTS, LAYOUT_ORDER, type LayoutType } from "@/lib/layouts";
 
 const DRAFT_KEY = "snapvibe.draft";
+const BOOTH_KEY = "snapvibe.boothrun";
+
+type BoothRun = { layoutType: LayoutType; shots: string[] };
+
+/** Event slugs and access keys are `[a-z0-9-]`; anything else cannot be a real
+ *  segment, so a crafted `from` cannot smuggle `//host` or `..` into the href. */
+const SAFE_SEGMENT = /^[a-z0-9][a-z0-9-]*$/;
+
+function resolveBackTarget(from: string | undefined): { href: string; label: string } {
+  if (from) {
+    const [kind, value] = from.split("/");
+    if (kind === "e" && value && SAFE_SEGMENT.test(value)) {
+      return { href: `/e/${value}`, label: "Kembali ke event" };
+    }
+    if (kind === "p" && value && SAFE_SEGMENT.test(value)) {
+      return { href: `/p/${value}`, label: "Kembali ke foto" };
+    }
+    if (kind === "studio" && !value) {
+      return { href: "/studio", label: "Kembali ke studio" };
+    }
+  }
+  return { href: "/", label: "Kembali ke beranda" };
+}
 
 type Status = "intro" | "requesting" | "ready" | "countdown" | "burst" | "review" | "error";
 
-export function BoothClient({ eventId }: { eventId?: string }) {
+export function BoothClient({
+  eventId,
+  from,
+}: {
+  eventId?: string;
+  from?: string;
+}) {
   const router = useRouter();
+  const back = resolveBackTarget(from);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const runRef = useRef(0);
@@ -43,6 +73,47 @@ export function BoothClient({ eventId }: { eventId?: string }) {
   const [errorKind, setErrorKind] = useState<"camera" | "capture" | null>(null);
   const [aspect, setAspect] = useState(4 / 3);
   const [stream, setStream] = useState<MediaStream | null>(null);
+
+  // The booth keeps its run in memory only, so a back/forward (an accidental
+  // tap, a browser swipe) silently discarded the layout choice and every photo
+  // already taken. Mirroring the run to sessionStorage makes that navigation
+  // non-destructive. The first pass restores instead of persisting, otherwise
+  // the persist would delete the key it is about to read.
+  const firstRunRef = useRef(true);
+  /* eslint-disable react-hooks/set-state-in-effect -- seeding from a
+     persisted run has no render-time source; this is one-time hydration. */
+  useEffect(() => {
+    if (firstRunRef.current) {
+      firstRunRef.current = false;
+      try {
+        const raw = sessionStorage.getItem(BOOTH_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as BoothRun;
+          if (Array.isArray(parsed?.shots) && parsed.shots.length > 0) {
+            if (parsed.layoutType) setLayoutType(parsed.layoutType);
+            setShots(parsed.shots);
+            setStatus("review");
+          } else {
+            sessionStorage.removeItem(BOOTH_KEY);
+          }
+        }
+      } catch {
+        sessionStorage.removeItem(BOOTH_KEY);
+      }
+      return;
+    }
+
+    try {
+      if (shots.length === 0) {
+        sessionStorage.removeItem(BOOTH_KEY);
+        return;
+      }
+      sessionStorage.setItem(BOOTH_KEY, JSON.stringify({ layoutType, shots }));
+    } catch {
+      // Storage can be full or blocked; the run still works in memory.
+    }
+  }, [layoutType, shots]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const preset = LAYOUTS[layoutType];
   const showPreview =
@@ -70,7 +141,7 @@ export function BoothClient({ eventId }: { eventId?: string }) {
   }, [stream, status]);
 
   const startCamera = useCallback(async () => {
-    runRef.current += 1;
+    const run = ++runRef.current;
     setStatus("requesting");
     setErrorText(null);
     setErrorKind(null);
@@ -95,10 +166,18 @@ export function BoothClient({ eventId }: { eventId?: string }) {
         video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 960 } },
         audio: false,
       });
+      // The permission prompt can still be open when the guest navigates away.
+      // Without this guard the late resolution overwrites the screen they chose
+      // and drops them back into the camera they just left.
+      if (runRef.current !== run) {
+        stopStream(stream);
+        return;
+      }
       streamRef.current = stream;
       setStream(stream);
       setStatus("ready");
     } catch (error) {
+      if (runRef.current !== run) return;
       setErrorText(describeCameraError(error).message);
       setErrorKind("camera");
       setStatus("error");
@@ -184,6 +263,11 @@ export function BoothClient({ eventId }: { eventId?: string }) {
     setStatus("intro");
     setErrorText(null);
     setErrorKind(null);
+    try {
+      sessionStorage.removeItem(BOOTH_KEY);
+    } catch {
+      // Nothing to clean up if storage is unavailable.
+    }
   }
 
   function proceed() {
@@ -192,6 +276,11 @@ export function BoothClient({ eventId }: { eventId?: string }) {
       DRAFT_KEY,
       JSON.stringify({ shots, layoutType, eventId: eventId ?? null }),
     );
+    try {
+      sessionStorage.removeItem(BOOTH_KEY);
+    } catch {
+      // The draft is already written, so a stale booth run is harmless.
+    }
     router.push("/studio");
   }
 
@@ -210,19 +299,30 @@ export function BoothClient({ eventId }: { eventId?: string }) {
           </Link>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <button
-              type="button"
-              onClick={backToLayout}
-              aria-label="Ganti layout"
-              className="pressable inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
+            <Link
+              href={back.href}
+              aria-label={back.label}
+              title={back.label}
+              className="pressable inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
             >
               <IconChevronLeft size={18} stroke={2.5} aria-hidden="true" />
-              Layout
-            </button>
+              <span className="sr-only sm:not-sr-only">{back.label}</span>
+            </Link>
+            {status !== "intro" && (
+              <button
+                type="button"
+                onClick={backToLayout}
+                aria-label="Ganti layout"
+                className="pressable inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
+              >
+                <IconRefresh size={18} stroke={2.5} aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">Layout</span>
+              </button>
+            )}
             <span className="hidden rounded-[var(--radius-pill)] border-2 border-ink bg-butter px-4 py-1.5 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase sm:inline-flex">
               Booth
             </span>
-            <span className="rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
+            <span className="hidden shrink-0 rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase sm:inline-flex">
               {preset.shotCount} bidikan
             </span>
           </div>

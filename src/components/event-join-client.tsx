@@ -29,7 +29,9 @@ export function EventJoinClient({ slug }: { slug: string }) {
         throw new Error(data?.error ?? "Kode event salah");
       }
 
-      router.push(`/booth?event=${data.eventId}`);
+      router.push(
+        `/booth?event=${encodeURIComponent(data.eventId)}&from=e/${encodeURIComponent(slug)}`,
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Kode event salah");
       setChecking(false);

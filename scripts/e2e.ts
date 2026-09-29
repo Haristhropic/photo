@@ -104,9 +104,49 @@ async function main() {
 
     await page.screenshot({ path: `${SHOTS_DIR}/e2e-review.png` });
 
+    // Back/forward must not discard an in-progress run.
+    await page.goBack();
+    await page.waitForTimeout(1500);
+    await page.goForward();
+    await page.waitForTimeout(2000);
+    const restoredShots = await page.locator('img[alt^="Bidikan"]').count();
+    log("review survived back/forward", `${restoredShots} shot(s)`);
+    if (restoredShots !== reviewShots) {
+      throw new Error(
+        `back/forward lost the run: expected ${reviewShots} shots, got ${restoredShots}`,
+      );
+    }
+
     await page.getByRole("button", { name: /Lanjut ke studio/i }).click();
     await page.waitForURL("**/studio", { timeout: 15000 });
     log("studio entered", page.url());
+
+    // The header must keep the brand and the control cluster as two siblings.
+    // Extra direct children let `justify-between` space every pill across the
+    // full width, which reads as a broken navbar.
+    const studioHeader = await page.evaluate(() => {
+      const bar = document.querySelector("header > div");
+      if (!bar) return null;
+      const kids = [...bar.children];
+      const de = document.documentElement;
+      return {
+        childCount: kids.length,
+        overflow: de.scrollWidth - de.clientWidth,
+        hasCluster: kids[1]?.tagName === "DIV",
+      };
+    });
+    if (!studioHeader) {
+      throw new Error("/studio header did not render");
+    }
+    log("studio header grouped", `${studioHeader.childCount} child(ren)`);
+    if (!studioHeader.hasCluster || studioHeader.childCount !== 2) {
+      throw new Error(
+        `/studio header is not grouped (${studioHeader.childCount} direct children)`,
+      );
+    }
+    if (studioHeader.overflow > 0) {
+      throw new Error(`/studio header overflows by ${studioHeader.overflow}px`);
+    }
 
     await page.getByRole("button", { name: "Punch" }).click();
     await page.getByRole("button", { name: "EVENT" }).click();

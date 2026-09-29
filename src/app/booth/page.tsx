@@ -11,6 +11,8 @@ export default async function BoothPage(props: PageProps<"/booth">) {
   const searchParams = await props.searchParams;
   const eventId =
     typeof searchParams.event === "string" ? searchParams.event : undefined;
+  const from =
+    typeof searchParams.from === "string" ? searchParams.from : undefined;
 
-  return <BoothClient eventId={eventId} />;
+  return <BoothClient eventId={eventId} from={from} />;
 }
