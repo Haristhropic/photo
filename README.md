@@ -105,6 +105,41 @@ sudah ikut di-commit.
 | `NEXT_PUBLIC_BASE_URL` | URL dasar untuk QR dan tautan berbagi |
 | `SESSION_SECRET` | Kunci HMAC untuk cookie sesi admin |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Kredensial admin untuk `db:seed` |
+| `CLOUDINARY_URL` | Kredensial Cloudinary, mis. `cloudinary://KEY:SECRET@CLOUD_NAME`. Tanpa kurung sudut di sekitar key atau secret, kalau tidak `src/lib/cloudinary.ts` menolaknya |
+| `CLOUDINARY_FOLDER` | Folder tujuan aset di dalam cloud, default `photo` |
+
+`CLOUDINARY_URL` hanya dibaca di server. Secret-nya ada di dalam URL, jadi
+jangan pernah memberi awalan `NEXT_PUBLIC_` dan jangan commit `.env` yang sudah
+terisi.
+
+## Galeri publik
+
+Tamu boleh mencentang **"Tampilkan di galeri publik"** di studio. Kalau dicentang,
+`POST /api/sessions` juga mengunggah PNG yang sama ke Cloudinary dan
+mengisi `published_at`, `cloudinary_public_id`, dan `cloudinary_url` di baris
+yang sama. Kalau `CLOUDINARY_URL` belum diatur atau upload ditolak, sesi tetap
+dibuat dan `published=false` dikembalikan; studio lalu memberi tahu tamu bahwa
+fotonya tersimpan tapi gagal masuk galeri.
+
+`GET /api/gallery` hanya mengembalikan baris dengan `published_at` dan
+`cloudinary_url` yang tidak null, dengan proyeksi yang sengaja tidak memuat
+`accessKey`, `finalPhotoUrl`, maupun `expiresAt`. Halaman `/gallery` (dan
+seksi galeri di beranda) memakai feed itu.
+
+**`public_id` Cloudinary memakai `id` baris, bukan `accessKey`.** `accessKey` adalah
+kapabilitas yang membuka `/p/[accessKey]` dan endpoint unduh, sedangkan URL
+aset yang sudah dipublikasikan bersifat publik dan bisa di-cache permanen, jadi
+memasukkan `accessKey` ke sana akan menyerahkan kapabilitas itu ke siapa pun yang
+menyalin tautan gambarnya.
+
+**Foto publik tidak pernah kedaluwarsa.** `POST /api/cron/cleanup` hanya
+menghapus sesi yang `published_at`-nya null, jadi galeri hanya tumbuh dan
+`cloudinary_public_id` selalu punya baris yang cocok. Responsnya melaporkan
+`publishedKept` supaya Retention yang melewati foto publik terlihat disengaja,
+bukan terlewat. Kalau kamu ingin galeri bisa kedaluwarsa, ubah `expiredCutoff`
+di `src/app/api/cron/cleanup/route.ts` dan panggil `destroyAsset` dari
+`src/lib/cloudinary.ts` saat baris dihapus, supaya folder `photo` tidak menumpuk
+aset yatim.
 
 ## Alur
 
@@ -116,7 +151,8 @@ sudah ikut di-commit.
    dengan `accessKey` acak 20 karakter.
 4. `/p/[accessKey]` menampilkan strip, QR ke halaman yang sama, dan tombol unduh
    yang menambah `download_count`.
-5. `/api/cron/cleanup` menghapus sesi kedaluwarsa beserta filenya.
+5. `/api/cron/cleanup` menghapus sesi kedaluwarsa beserta filenya. Sesi yang
+   sudah dipublikasikan ke galeri dilewati, jadi fotonya tetap tampil.
 
 Admin membuat event di `/admin`, opsional dengan kode akses, dan mengunggah
 frame PNG. Event terkunci hanya bisa dibuka lewat `/e/[slug]` dengan kode yang

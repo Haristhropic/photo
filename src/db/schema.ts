@@ -83,11 +83,18 @@ export const photoSessions = pgTable(
     filterKey: varchar("filter_key", { length: 32 }).notNull().default("original"),
     downloadCount: integer("download_count").notNull().default(0),
     expiresAt: timestamp("expires_at", { withTimezone: false }).notNull(),
+    // Publishing is opt-in per guest. `publishedAt` is the single source of
+    // truth for gallery membership so a photo can never appear publicly
+    // because some other column happens to be set.
+    publishedAt: timestamp("published_at", { withTimezone: false }),
+    cloudinaryPublicId: varchar("cloudinary_public_id", { length: 191 }),
+    cloudinaryUrl: text("cloudinary_url"),
     createdAt: createdAt(),
   },
   (table) => [
     index("sessions_event_idx").on(table.eventId),
     index("sessions_expires_idx").on(table.expiresAt),
+    index("sessions_published_idx").on(table.publishedAt),
   ],
 );
 

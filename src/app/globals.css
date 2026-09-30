@@ -56,6 +56,9 @@
   --accent-hover: #e62b76;
   --on-accent: #fffdf8;
   --accent-wash: rgba(255, 61, 139, 0.14);
+  /* Butter is a light yellow in the night theme too, so its paired foreground
+     stays a fixed dark ink instead of a --ink that would flip to cream. */
+  --on-butter: #241428;
 
   --radius-sm: 8px;
   --radius: 16px;
@@ -169,6 +172,7 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-on-accent: var(--on-accent);
+  --color-on-butter: var(--on-butter);
   --color-wash: var(--accent-wash);
   --color-board: var(--board);
   --color-board-ink: var(--board-ink);

@@ -83,17 +83,19 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/fram
     }
   }
 
-  await db
+  const [updated] = await db
     .update(frames)
     .set({
       ...(name ? { name: name.trim() } : {}),
       ...(layoutType ? { layoutType } : {}),
       ...(eventId !== undefined ? { eventId: eventId ?? null } : {}),
     })
-    .where(eq(frames.id, id));
+    .where(eq(frames.id, id))
+    .returning();
 
-  // MySQL has no RETURNING, so the row is read back to report persisted state.
-  const [updated] = await db.select().from(frames).where(eq(frames.id, id)).limit(1);
+  if (!updated) {
+    return Response.json({ error: "Frame tidak ditemukan" }, { status: 404 });
+  }
 
   return Response.json({
     id: updated.id,

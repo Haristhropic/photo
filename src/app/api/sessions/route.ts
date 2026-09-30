@@ -6,6 +6,10 @@ import { z } from "zod";
 import { db } from "@/db";
 import { events, photoSessions } from "@/db/schema";
 import { createAccessKey } from "@/lib/access-key";
+import {
+  isCloudinaryConfigured,
+  uploadStripPng,
+} from "@/lib/cloudinary";
 import { isFilterKey, isLayoutType } from "@/lib/layouts";
 import { savePng } from "@/lib/storage";
 
@@ -19,6 +23,7 @@ const bodySchema = z.object({
   layoutType: z.string(),
   filterKey: z.string(),
   eventId: z.string().uuid().nullish(),
+  publish: z.boolean().optional().default(false),
 });
 
 function decodePng(dataUrl: string): Buffer | null {
@@ -42,7 +47,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Data tidak valid" }, { status: 400 });
   }
 
-  const { image, layoutType, filterKey, eventId } = parsed.data;
+  const { image, layoutType, filterKey, eventId, publish } = parsed.data;
   if (!isLayoutType(layoutType) || !isFilterKey(filterKey)) {
     return Response.json({ error: "Layout atau filter tidak dikenal" }, { status: 400 });
   }
@@ -75,6 +80,33 @@ export async function POST(request: Request) {
 
   const id = randomUUID();
 
+  let publishedAt: Date | null = null;
+  let cloudinaryPublicId: string | null = null;
+  let cloudinaryUrl: string | null = null;
+
+  // A guest ticking "publish" wants their strip in the public gallery, so a
+  // Cloudinary failure must not silently drop the session. The photo is
+  // already on disk at this point, so we still return 201 with published=false
+  // and let the client tell the guest it did not make the gallery.
+  if (publish) {
+    if (!isCloudinaryConfigured()) {
+      console.error("publish requested but CLOUDINARY_URL is not set");
+    } else {
+      try {
+        // Keyed on the row id, never the accessKey. accessKey is the capability
+        // that reaches /p/[accessKey] and the download endpoint, and a published
+        // asset's URL is permanently public and cacheable, so embedding it there
+        // would hand that capability to anyone who copies the image link.
+        const uploaded = await uploadStripPng(bytes, id);
+        publishedAt = new Date();
+        cloudinaryPublicId = uploaded.publicId;
+        cloudinaryUrl = uploaded.secureUrl;
+      } catch (error) {
+        console.error("cloudinary upload failed:", error);
+      }
+    }
+  }
+
   await db.insert(photoSessions).values({
     id,
     eventId: eventId ?? null,
@@ -83,6 +115,9 @@ export async function POST(request: Request) {
     layoutType,
     filterKey,
     expiresAt,
+    publishedAt,
+    cloudinaryPublicId,
+    cloudinaryUrl,
   });
 
   return Response.json(
@@ -90,6 +125,7 @@ export async function POST(request: Request) {
       id,
       accessKey,
       url,
+      published: publishedAt !== null,
       expiresAt: expiresAt.toISOString(),
     },
     { status: 201 },

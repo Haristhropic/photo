@@ -71,7 +71,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/even
     }
   }
 
-  await db
+  const [updated] = await db
     .update(events)
     .set({
       ...(title ? { title: title.trim(), slug } : {}),
@@ -80,10 +80,12 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/even
         : {}),
       ...(retentionHours !== undefined ? { retentionHours } : {}),
     })
-    .where(eq(events.id, id));
+    .where(eq(events.id, id))
+    .returning();
 
-  // MySQL has no RETURNING, so the row is read back to report persisted state.
-  const [updated] = await db.select().from(events).where(eq(events.id, id)).limit(1);
+  if (!updated) {
+    return Response.json({ error: "Event tidak ditemukan" }, { status: 404 });
+  }
 
   return Response.json({
     id: updated.id,

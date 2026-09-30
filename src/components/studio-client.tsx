@@ -68,6 +68,8 @@ export function StudioClient() {
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [publish, setPublish] = useState(false);
+  const [publishNotice, setPublishNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!draft) return;
@@ -104,6 +106,7 @@ export function StudioClient() {
           layoutType: draft.layoutType,
           filterKey,
           eventId: draft.eventId,
+          publish,
         }),
       });
 
@@ -112,7 +115,17 @@ export function StudioClient() {
         throw new Error(detail?.error ?? "Foto gagal disimpan");
       }
 
-      const data = (await response.json()) as { accessKey: string };
+      const data = (await response.json()) as {
+        accessKey: string;
+        published: boolean;
+      };
+      // The guest asked for the gallery, so say so plainly when Cloudinary
+      // rejected the upload. The photo itself is saved either way.
+      if (publish && !data.published) {
+        setPublishNotice(
+          "Fotomu tersimpan, tapi gagal masuk galeri publik. Coba lagi nanti.",
+        );
+      }
       clearDraft();
       // The draft is already cleared, so /studio must not stay in history or
       // Back lands on an empty studio. replace keeps Back pointing at /booth.
@@ -121,7 +134,7 @@ export function StudioClient() {
       setError(cause instanceof Error ? cause.message : "Foto gagal disimpan");
       setSaving(false);
     }
-  }, [draft, preview, saving, filterKey, router]);
+  }, [draft, preview, saving, filterKey, publish, router]);
 
   if (!hydrated) {
     return (
@@ -300,6 +313,40 @@ export function StudioClient() {
                 Ambil ulang
               </button>
             </div>
+
+            {publishNotice && (
+              <p
+                role="status"
+                className="rounded-[var(--radius)] border-2 border-ink bg-butter p-4 text-small font-bold text-ink"
+              >
+                {publishNotice}
+              </p>
+            )}
+
+            <label className="pressable relative flex cursor-pointer items-start rounded-[var(--radius-lg)] border-2 border-ink bg-sunken p-4 pl-17 text-ink shadow-lift-1 has-[:checked]:bg-butter has-[:checked]:text-on-butter">
+              <input
+                type="checkbox"
+                checked={publish}
+                onChange={(event) => setPublish(event.target.checked)}
+                className="peer absolute left-4 top-4 size-9 cursor-pointer appearance-none rounded-[var(--radius-sm)] border-2 border-ink bg-elev checked:bg-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky"
+              />
+              <IconCheck
+                size={22}
+                stroke={3.5}
+                aria-hidden="true"
+                className="pointer-events-none absolute left-4 top-4 size-9 p-[7px] text-bg opacity-0 transition-opacity peer-checked:opacity-100"
+              />
+              <span className="flex flex-col gap-1">
+                <span className="font-display text-label font-extrabold tracking-[0.1em] uppercase">
+                  Tampilkan di galeri publik
+                </span>
+                <span className="text-small opacity-80">
+                  Centang untuk mengunggah foto ini ke Cloudinary supaya
+                  bisa dilihat semua orang di galeri SnapVibe. Biarkan
+                  kosong kalau fotomu hanya untukmu.
+                </span>
+              </span>
+            </label>
 
             <p className="font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
               {draft.shots.length} bidikan / {layout.canvas.w} x {layout.canvas.h}

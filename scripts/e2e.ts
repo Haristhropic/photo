@@ -164,6 +164,13 @@ async function main() {
     log("preview rendered", `${Math.round(previewSrc.length / 1024)}kb data url`);
     await page.screenshot({ path: `${SHOTS_DIR}/e2e-studio.png` });
 
+    // The checkbox is the consent gate, so the test has to exercise the
+    // published path rather than the default private one.
+    const publishBox = page.getByRole("checkbox");
+    await publishBox.waitFor({ state: "visible", timeout: 10000 });
+    if (!(await publishBox.isChecked())) await publishBox.check();
+    log("consent", "publish checkbox ticked");
+
     const saveResponse = page.waitForResponse(
       (r) => r.request().method() === "POST" && r.url().includes("/api/sessions"),
       { timeout: 30000 },
@@ -176,6 +183,16 @@ async function main() {
     if (!saved.ok()) {
       const body = await saved.text().catch(() => "");
       throw new Error(`save failed: ${saved.status()} ${body.slice(0, 300)}`);
+    }
+    const savedBody = (await saved.json()) as { published: boolean };
+    log("publish flag honoured", `published=${savedBody.published}`);
+
+    // The guest ticked "publish", so the strip must reach Cloudinary. If this
+    // ever reports false the feature is silently broken end to end.
+    if (!savedBody.published) {
+      throw new Error(
+        "guest asked to publish but the API reported published=false",
+      );
     }
     await page.waitForURL("**/p/**", { timeout: 20000 });
     const accessKey = page.url().split("/").pop() ?? "";
@@ -229,6 +246,43 @@ async function main() {
       `${BASE}/api/sessions/${accessKey}/download`,
     );
     log("download endpoint", `${download.status()} ${download.headers()["content-disposition"] ?? ""}`);
+
+    // The published strip must now be publicly listed, and the listing must not
+    // hand out the access key that reaches the private photo.
+    const gallery = await page.request.get(`${BASE}/api/gallery`);
+    if (!gallery.ok()) {
+      throw new Error(`gallery feed failed: ${gallery.status()}`);
+    }
+    const galleryBody = (await gallery.json()) as {
+      photos: Array<{ id: string; cloudinaryUrl: string }>;
+    };
+    const listed = galleryBody.photos.find((p) => p.cloudinaryUrl.length > 0);
+    if (!listed) {
+      throw new Error("gallery feed is empty after a published save");
+    }
+    if (!listed.cloudinaryUrl.startsWith("https://res.cloudinary.com/")) {
+      throw new Error(
+        `gallery url is not a cloudinary asset: ${listed.cloudinaryUrl.slice(0, 80)}`,
+      );
+    }
+    if (JSON.stringify(galleryBody).includes(accessKey)) {
+      throw new Error("gallery feed leaked the private accessKey");
+    }
+    log("gallery feed", `${galleryBody.photos.length} photo(s), no accessKey leak`);
+
+    await page.goto(`${BASE}/gallery`, { waitUntil: "domcontentloaded" });
+    const galleryImg = page.locator('img[src^="https://res.cloudinary.com/"]');
+    await galleryImg.first().waitFor({ state: "visible", timeout: 20000 });
+    const loaded = await galleryImg.first().evaluate(async (node) => {
+      const img = node as HTMLImageElement;
+      await img.decode();
+      return { w: img.naturalWidth, h: img.naturalHeight };
+    });
+    if (loaded.w === 0 || loaded.h === 0) {
+      throw new Error("gallery image did not load from cloudinary");
+    }
+    log("gallery page", `image ${loaded.w}x${loaded.h}`);
+    await page.screenshot({ path: `${SHOTS_DIR}/e2e-gallery.png`, fullPage: true });
 
     console.log(`\nE2E_OK accessKey=${accessKey}`);
     if (consoleErrors.length > 0) {

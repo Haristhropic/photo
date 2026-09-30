@@ -11,6 +11,7 @@ import {
 } from "@tabler/icons-react";
 import Link from "next/link";
 
+import { GalleryGrid } from "@/components/gallery-grid";
 import { LiveStrip } from "@/components/live-strip";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LAYOUTS, LAYOUT_ORDER } from "@/lib/layouts";
@@ -373,6 +374,30 @@ export default function Home() {
 
         <section>
           <div className="shell py-[var(--section)]">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h2 className="text-h2 font-extrabold text-ink">
+                  Galeri publik
+                </h2>
+                <p className="mt-3 max-w-[var(--measure)] text-lead text-ink-body">
+                  Foto yang para tamu pilih untuk dibagikan ke semua orang.
+                </p>
+              </div>
+              <Link
+                href="/gallery"
+                className="pressable inline-flex items-center rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-5 py-2 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
+              >
+                Lihat semua
+              </Link>
+            </div>
+            <div className="mt-8">
+              <GalleryGrid />
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <div className="shell pb-[var(--section)]">
             <div
               className="rounded-[var(--radius-xl)] border-2 border-ink bg-pink p-9 shadow-lift-3 sm:p-14"
               style={{ transform: "rotate(-0.5deg)" }}
@@ -410,6 +435,12 @@ export default function Home() {
               className="rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-4 py-1.5 font-display text-small font-bold text-ink transition-colors hover:bg-mint"
             >
               Booth
+            </Link>
+            <Link
+              href="/gallery"
+              className="rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-4 py-1.5 font-display text-small font-bold text-ink transition-colors hover:bg-mint"
+            >
+              Galeri
             </Link>
             <Link
               href="/admin"
