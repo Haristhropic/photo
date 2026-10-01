@@ -61,6 +61,7 @@ Kalau auth atau object storage diaktifkan nanti, perintahnya lewat
 | `npm run db:migrate` | Terapkan file migrasi di `drizzle/` (pakai ini di produksi) |
 | `npm run db:seed` | Isi admin dan event contoh |
 | `npm run e2e` | Uji perjalanan booth sampai unduhan dengan kamera palsu |
+| `npm run e2e:retake` | Uji bahwa studio selalu memakai draft terakhir, bukan foto run sebelumnya |
 | `npm run e2e:timer` | Uji hitung mundur 3 detik per bidikan, pembatalan, dan(frame) gelap |
 | `npm run e2e:nav` | Uji semua rute, tautan, dan affordance navigasi |
 | `npm run capture` | Tangkapan layar desktop dan mobile untuk review desain |
@@ -198,6 +199,20 @@ aplikasi, bukan koneksi langsung.
 **Primary key.** Semua id bertipe `uuid` dengan default `gen_random_uuid()`,
 kecuali `photo_sessions.access_key` yang sengaja varchar 32 karakter karena
 dipakai di URL dan QR.
+
+**Draft studio.** Draft run berada di `sessionStorage` dengan kunci
+`snapvibe.draft`, dan `src/lib/draft-store.ts` adalah satu-satunya tempat yang
+membaca dan menulisnya. Booth dan studio adalah komponen terpisah yang masing-masing
+dimount ulang saat pindah halaman, jadi snapshot-nya harus stabil secara referensial
+buat `useSyncExternalStore`; karena itu hasil `JSON.parse` di-memoisikan **terhadap
+string mentahnya**, bukan disimpan sekali lalu dibekukan. Cache yang hanya di-reset
+setelah simpan akan terus mengembalikan foto run pertama, atau `null` yang membuat
+studio menampilkan "belum ada foto" padahal tamu baru saja jepret.
+Draft juga dianggap tidak sah kalau jumlah bidikan kurang dari `shotCount` layout-nya,
+supaya strip tidak pernah dirender dengan slot kosong. Pratinjau disimpan bersama
+asal render-nya (draft, filter, stiker) dan validity-nya diturunkan saat dibaca,
+jadi pratinjau milik run lama tidak bisa diunggah ke database. `npm run e2e:retake`
+menjaga semua itu.
 
 **Penyimpanan file.** Foto ditulis ke `STORAGE_DIR` dan disajikan lewat
 `/api/files/[...path]`, yang menolak path di luar root. Untuk produksi,

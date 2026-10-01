@@ -22,9 +22,9 @@ import {
   sleepUntil,
   stopStream,
 } from "@/lib/capture";
+import { writeDraft } from "@/lib/draft-store";
 import { LAYOUTS, LAYOUT_ORDER, type LayoutType } from "@/lib/layouts";
 
-const DRAFT_KEY = "snapvibe.draft";
 const BOOTH_KEY = "snapvibe.boothrun";
 
 type BoothRun = { layoutType: LayoutType; shots: string[] };
@@ -272,10 +272,7 @@ export function BoothClient({
 
   function proceed() {
     if (shots.length === 0) return;
-    sessionStorage.setItem(
-      DRAFT_KEY,
-      JSON.stringify({ shots, layoutType, eventId: eventId ?? null }),
-    );
+    writeDraft({ shots, layoutType, eventId: eventId ?? null });
     try {
       sessionStorage.removeItem(BOOTH_KEY);
     } catch {

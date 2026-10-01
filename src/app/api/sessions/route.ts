@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { events, photoSessions } from "@/db/schema";
 import { createAccessKey } from "@/lib/access-key";
 import {
+  destroyAsset,
   isCloudinaryConfigured,
   uploadStripPng,
 } from "@/lib/cloudinary";
@@ -107,18 +108,32 @@ export async function POST(request: Request) {
     }
   }
 
-  await db.insert(photoSessions).values({
-    id,
-    eventId: eventId ?? null,
-    finalPhotoUrl: url,
-    accessKey,
-    layoutType,
-    filterKey,
-    expiresAt,
-    publishedAt,
-    cloudinaryPublicId,
-    cloudinaryUrl,
-  });
+  // A publish uploads to Cloudinary before the row exists. If the insert then
+  // fails, the asset would sit in the bucket forever with no row pointing at it
+  // and nothing in the retention job able to reclaim it, so roll it back.
+  try {
+    await db.insert(photoSessions).values({
+      id,
+      eventId: eventId ?? null,
+      finalPhotoUrl: url,
+      accessKey,
+      layoutType,
+      filterKey,
+      expiresAt,
+      publishedAt,
+      cloudinaryPublicId,
+      cloudinaryUrl,
+    });
+  } catch (error) {
+    if (cloudinaryPublicId) {
+      try {
+        await destroyAsset(cloudinaryPublicId);
+      } catch {
+        // Best effort: the guest's photo is already saved locally either way.
+      }
+    }
+    throw error;
+  }
 
   return Response.json(
     {

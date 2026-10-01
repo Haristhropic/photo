@@ -7,8 +7,18 @@ import {
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
+import {
+  clearDraft,
+  getDraftSnapshot,
+  subscribeDraft,
+} from "@/lib/draft-store";
 import {
   FILTERS,
   FILTER_ORDER,
@@ -20,37 +30,6 @@ import {
 } from "@/lib/layouts";
 import { renderStrip, type Draft } from "@/lib/render";
 
-const DRAFT_KEY = "snapvibe.draft";
-
-// useSyncExternalStore requires a referentially stable snapshot, so the parsed
-// draft is cached rather than re-parsed on every render.
-let cachedDraft: Draft | null | undefined;
-
-function readDraft(): Draft | null {
-  if (cachedDraft !== undefined) return cachedDraft;
-
-  const raw = sessionStorage.getItem(DRAFT_KEY);
-  if (!raw) {
-    cachedDraft = null;
-    return cachedDraft;
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as Draft;
-    cachedDraft =
-      Array.isArray(parsed.shots) && parsed.shots.length > 0 ? parsed : null;
-  } catch {
-    sessionStorage.removeItem(DRAFT_KEY);
-    cachedDraft = null;
-  }
-  return cachedDraft;
-}
-
-function clearDraft() {
-  cachedDraft = undefined;
-  sessionStorage.removeItem(DRAFT_KEY);
-}
-
 export function StudioClient() {
   const router = useRouter();
   const hydrated = useSyncExternalStore(
@@ -59,21 +38,39 @@ export function StudioClient() {
     () => false,
   );
   const draft = useSyncExternalStore(
-    () => () => undefined,
-    readDraft,
+    subscribeDraft,
+    getDraftSnapshot,
     () => null,
   );
   const [filterKey, setFilterKey] = useState<FilterKey>("original");
   const [sticker, setSticker] = useState<StickerKey | null>("snapvibe");
-  const [preview, setPreview] = useState<string | null>(null);
+  // The rendered strip is stored together with the exact inputs it came from.
+  // Validity is derived rather than cleared on every change, so a preview for a
+  // superseded draft, filter or sticker is simply not readable and can never be
+  // uploaded against inputs the guest has already moved on from.
+  const [rendered, setRendered] = useState<{
+    draft: Draft;
+    filterKey: FilterKey;
+    sticker: StickerKey | null;
+    dataUrl: string;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publish, setPublish] = useState(false);
   const [publishNotice, setPublishNotice] = useState<string | null>(null);
 
+  const preview =
+    rendered &&
+    rendered.draft === draft &&
+    rendered.filterKey === filterKey &&
+    rendered.sticker === sticker
+      ? rendered.dataUrl
+      : null;
+
   useEffect(() => {
     if (!draft) return;
     let cancelled = false;
+
     renderStrip({
       shots: draft.shots,
       layoutType: draft.layoutType,
@@ -82,10 +79,12 @@ export function StudioClient() {
       eventLabel: null,
     })
       .then((dataUrl) => {
-        if (!cancelled) setPreview(dataUrl);
+        if (cancelled) return;
+        setRendered({ draft, filterKey, sticker, dataUrl });
       })
       .catch(() => {
-        if (!cancelled) setError("Pratinjau tidak bisa dirender.");
+        if (cancelled) return;
+        setError("Pratinjau tidak bisa dirender.");
       });
     return () => {
       cancelled = true;
