@@ -63,6 +63,7 @@ Kalau auth atau object storage diaktifkan nanti, perintahnya lewat
 | `npm run e2e` | Uji perjalanan booth sampai unduhan dengan kamera palsu |
 | `npm run e2e:retake` | Uji bahwa studio selalu memakai draft terakhir, bukan foto run sebelumnya |
 | `npm run e2e:download` | Uji tally "kali diunduh" bertambah sendiri tanpa reload |
+| `npm run e2e:capture` | Uji bidikan yang tersimpan benar-benar bingkai kamera, bukan frame kosong atau duplikat |
 | `npm run e2e:timer` | Uji hitung mundur 3 detik per bidikan, pembatalan, dan(frame) gelap |
 | `npm run e2e:nav` | Uji semua rute, tautan, dan affordance navigasi |
 | `npm run capture` | Tangkapan layar desktop dan mobile untuk review desain |
@@ -200,6 +201,17 @@ aplikasi, bukan koneksi langsung.
 **Primary key.** Semua id bertipe `uuid` dengan default `gen_random_uuid()`,
 kecuali `photo_sessions.access_key` yang sengaja varchar 32 karakter karena
 dipakai di URL dan QR.
+
+**Bidikan kamera.** `grabFrame` menolak mengambil bingkai sampai
+`readyState >= HAVE_CURRENT_DATA`. `videoWidth` dan `videoHeight` muncul
+bersama metadata, yang bisa sebelum bingkai apa pun ter-decode, dan menggambar
+video di jendela itu menghasilkan kanvas kosong. Efek yang menempelkan stream ke
+`<video>` juga guarding `srcObject`: mengassign ulang `srcObject` memulai ulang
+media pipeline, dan karena efek itu ikut jalan pada setiap perubahan `status`,
+lompatan status tepat sebelum burst mengambil bingkai bisa menghasilkan frame
+yang belum ter-decode atau frame basi. `npm run e2e:capture` menjaga dua hal itu:
+setiap bingkai punya sebaran piksel nyata, ketiga bingkai berbeda satu sama
+lain, dan tiga slot pada file yang tersimpan juga berbeda.
 
 **Tally unduhan.** `/p/[accessKey]` adalah server component, jadi angka
 `download_count` yang dirender hanya benar saat halaman itu dibuat. Tombol unduh

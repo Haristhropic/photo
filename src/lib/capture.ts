@@ -67,10 +67,19 @@ export function stopStream(stream: MediaStream | null): void {
 }
 
 /**
+ * HTMLMediaElement.HAVE_CURRENT_DATA. videoWidth and videoHeight arrive with
+ * metadata, which can be before any frame has been decoded, and drawing the
+ * video in that window yields a blank canvas rather than the guest's photo.
+ */
+const HAVE_CURRENT_DATA = 2;
+
+/**
  * Grabs one frame at the video's native resolution and mirrors it so the saved
  * photo matches the selfie preview the guest just saw.
  */
 export function grabFrame(video: HTMLVideoElement): string | null {
+  if (video.readyState < HAVE_CURRENT_DATA) return null;
+
   const width = video.videoWidth;
   const height = video.videoHeight;
   if (!width || !height) return null;

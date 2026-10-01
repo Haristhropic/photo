@@ -133,7 +133,14 @@ export function BoothClient({
     const video = videoRef.current;
     if (!video || !stream) return;
 
-    video.srcObject = stream;
+    // Assigning srcObject again restarts the media pipeline, and this effect
+    // also runs on every status change. The burst grabs a frame right after
+    // flipping to "burst", so an unconditional reassignment is what let a
+    // frame be captured before the element had decoded one.
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+
     void video
       .play()
       .then(() => setAspect(captureAspect(video.videoWidth, video.videoHeight)))
