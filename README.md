@@ -62,6 +62,7 @@ Kalau auth atau object storage diaktifkan nanti, perintahnya lewat
 | `npm run db:seed` | Isi admin dan event contoh |
 | `npm run e2e` | Uji perjalanan booth sampai unduhan dengan kamera palsu |
 | `npm run e2e:retake` | Uji bahwa studio selalu memakai draft terakhir, bukan foto run sebelumnya |
+| `npm run e2e:download` | Uji tally "kali diunduh" bertambah sendiri tanpa reload |
 | `npm run e2e:timer` | Uji hitung mundur 3 detik per bidikan, pembatalan, dan(frame) gelap |
 | `npm run e2e:nav` | Uji semua rute, tautan, dan affordance navigasi |
 | `npm run capture` | Tangkapan layar desktop dan mobile untuk review desain |
@@ -199,6 +200,18 @@ aplikasi, bukan koneksi langsung.
 **Primary key.** Semua id bertipe `uuid` dengan default `gen_random_uuid()`,
 kecuali `photo_sessions.access_key` yang sengaja varchar 32 karakter karena
 dipakai di URL dan QR.
+
+**Tally unduhan.** `/p/[accessKey]` adalah server component, jadi angka
+`download_count` yang dirender hanya benar saat halaman itu dibuat. Tombol unduh
+karena itu jadi client component (`src/components/download-button.tsx`) yang
+menahan klik biasa: ia mengambil endpoint sebagai blob, handing-sel-nya ke browser
+dengan object URL, lalu membaca jumlah terbaru dari header `X-Download-Count`.
+`anchor` asli tetap ada, jadi middle-click, "buka di tab baru", dan jalur
+nativeketika JS gagal tetap mengunduh seperti biasa. Object URL baru di-*revoke*
+setelah jeda, karena mencabutnya seketika bisa membatalkan simpan yang masih
+sedang berjalan. Endpoint memakai `UPDATE ... RETURNING` supaya angka yang
+dikirim persis sama dengan yang tersimpan, bahkan kalau dua unduhan tumpang tindih.
+`npm run e2e:download` menjaga seluruh rangkaian ini.
 
 **Draft studio.** Draft run berada di `sessionStorage` dengan kunci
 `snapvibe.draft`, dan `src/lib/draft-store.ts` adalah satu-satunya tempat yang

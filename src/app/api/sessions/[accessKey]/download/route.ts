@@ -32,16 +32,22 @@ export async function GET(
     return Response.json({ error: "File tidak ditemukan" }, { status: 404 });
   }
 
-  await db
+  // Returning the incremented value keeps the number exact when two downloads
+  // overlap, where the client could not work it out for itself.
+  const [updated] = await db
     .update(photoSessions)
     .set({ downloadCount: sql`${photoSessions.downloadCount} + 1` })
-    .where(eq(photoSessions.id, session.id));
+    .where(eq(photoSessions.id, session.id))
+    .returning({ downloadCount: photoSessions.downloadCount });
 
   return new Response(new Uint8Array(bytes), {
     headers: {
       "Content-Type": contentTypeFor(filename),
       "Content-Length": String(bytes.byteLength),
       "Content-Disposition": `attachment; filename="snapvibe-${accessKey}.png"`,
+      // The result page reads this after the file lands so the tally updates
+      // without a reload.
+      "X-Download-Count": String(updated?.downloadCount ?? session.downloadCount + 1),
       "Cache-Control": "no-store",
     },
   });

@@ -15,7 +15,8 @@
     "e2e:nav": "tsx scripts/e2e-nav.ts",
     "e2e:timer": "tsx scripts/e2e-timer.ts",
     "capture": "tsx scripts/capture.mts",
-    "e2e:retake": "tsx scripts/e2e-retake.ts"
+    "e2e:retake": "tsx scripts/e2e-retake.ts",
+    "e2e:download": "tsx scripts/e2e-download.ts"
   },
   "dependencies": {
     "@neon/config": "^1.8.2",

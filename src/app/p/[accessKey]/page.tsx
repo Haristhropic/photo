@@ -1,9 +1,10 @@
 import { eq, sql } from "drizzle-orm";
-import { IconCamera, IconDownload, IconQrcode, IconTrash } from "@tabler/icons-react";
+import { IconCamera, IconQrcode, IconTrash } from "@tabler/icons-react";
 import QRCode from "qrcode";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { DownloadButton } from "@/components/download-button";
 import { db } from "@/db";
 import { events, photoSessions } from "@/db/schema";
 import { LAYOUTS } from "@/lib/layouts";
@@ -107,13 +108,11 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
           </div>
 
           <div className="flex flex-col gap-3">
-            <a
+            <DownloadButton
+              accessKey={accessKey}
               href={`/api/sessions/${accessKey}/download`}
-              className="pressable inline-flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-pink px-6 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-[var(--mix-coral)]"
-            >
-              <IconDownload size={22} stroke={2.5} aria-hidden="true" />
-              Unduh PNG
-            </a>
+              initialCount={session.downloadCount}
+            />
             <Link
               href={`/booth?from=p/${encodeURIComponent(accessKey)}`}
               className="pressable inline-flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-6 py-4 font-display text-lead font-bold text-ink shadow-lift-2 hover:bg-mint"
@@ -121,9 +120,6 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
               <IconCamera size={22} stroke={2.5} aria-hidden="true" />
               Boleh jepret lagi?
             </Link>
-            <p className="font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
-              {session.downloadCount} kali diunduh
-            </p>
           </div>
 
           <dl className="grid gap-3">
