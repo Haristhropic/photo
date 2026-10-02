@@ -11,6 +11,10 @@ type GalleryPhoto = {
   publishedAt: string | null;
 };
 
+// The gallery only ever shows a handful of strips by default so the page stays
+// a preview instead of a wall of every photo ever published.
+const PREVIEW_COUNT = 8;
+
 const LAYOUT_LABELS: Record<string, string> = {
   STRIP_3: "Strip 3",
   STRIP_4: "Strip 4",
@@ -35,6 +39,7 @@ export function GalleryGrid() {
   // "Coba lagi" bumps this instead of calling a loader, because the React
   // Compiler lint rule rejects setState written directly in an effect body.
   const [attempt, setAttempt] = useState(0);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -107,10 +112,13 @@ export function GalleryGrid() {
     );
   }
 
+  const visible = expanded ? photos : photos.slice(0, PREVIEW_COUNT);
+  const hidden = photos.length - visible.length;
+
   return (
     <>
       <ul className="mt-10 grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
-        {photos.map((photo, index) => (
+        {visible.map((photo, index) => (
           <li
             key={photo.id}
             className="overflow-hidden rounded-[var(--radius)] border-2 border-ink bg-elev shadow-lift-2"
@@ -135,6 +143,18 @@ export function GalleryGrid() {
           </li>
         ))}
       </ul>
+
+      {photos.length > PREVIEW_COUNT && (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          className="pressable mt-8 inline-flex items-center rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-6 py-3 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
+        >
+          {expanded ? "Tutup" : `Lihat semua (${hidden} lainnya)`}
+        </button>
+      )}
+
       <p className="mt-8 text-small text-ink-meta">
         {photos.length} foto publik. Foto tanpa centang tidak pernah muncul di
         sini.

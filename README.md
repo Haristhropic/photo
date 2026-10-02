@@ -145,6 +145,12 @@ di `src/app/api/cron/cleanup/route.ts` dan panggil `destroyAsset` dari
 `src/lib/cloudinary.ts` saat baris dihapus, supaya folder `photo` tidak menumpuk
 aset yatim.
 
+**Galeri menampilkan preview, bukan semuanya.** `GalleryGrid` merender 8 foto
+pertama lalu tombol `Lihat semua (N lainnya)`; menekannya menampilkan seluruh
+foto dan tombol berubah jadi `Tutup`. Angka total tetap dilaporkan di bawah
+grid. Kalau kamu ingin batasannya permanen, hapus blok tombol itu dan biarkan
+`slice(0, PREVIEW_COUNT)` berjalan.
+
 ## Alur
 
 1. `/booth` pilih layout (Strip 3, Strip 4, Grid 2x2, Single), aktifkan kamera,
