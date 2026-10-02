@@ -115,8 +115,17 @@ async function main() {
   log("booth header button on layout picker", introBtn || "(none, as expected)");
 
   const startCamera = page.getByRole("button", { name: /Aktifkan kamera/i });
-  await startCamera.click({ timeout: 10000 });
-  await startCamera.waitFor({ state: "detached", timeout: 15000 }).catch(() => {});
+  // domcontentloaded fires before React hydrates, and a click on an unhydrated
+  // button is a silent no-op. Click until the control actually leaves.
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    await startCamera.click({ timeout: 10000 });
+    try {
+      await startCamera.waitFor({ state: "detached", timeout: 2500 });
+      break;
+    } catch {
+      if (attempt === 5) throw new Error("camera start never took effect");
+    }
+  }
   await page.waitForTimeout(1500);
 
   const unnamed = await page.evaluate(() => {

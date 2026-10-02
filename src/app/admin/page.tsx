@@ -10,6 +10,7 @@ import { requireAdmin } from "@/lib/auth";
 export const metadata: Metadata = {
   title: "Admin: SnapVibe",
   description: "Kelola event, frame, dan retensi foto.",
+  robots: { index: false, follow: false },
 };
 
 export default async function AdminPage() {

@@ -164,6 +164,26 @@ benar.
 
 ## CRUD admin
 
+`/admin` sengaja tidak ditautkan dari mana pun di UI: tidak ada tombol di
+beranda maupun di footer, dan halamannya memasang `robots: noindex`. Masuk ke
+sana harus lewat URL langsung. Itu menyembunyikan pintunya, bukan menguncinya —
+yang mengunci adalah `requireAdmin()`; tanpa cookie sesi yang sah halaman itu
+hanya menampilkan form login, dan `POST /api/admin/login` menolak siapa pun yang
+bukan user ber-role `ADMIN`.
+
+Akun admin dibuat `npm run db:seed` dari `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+Seed bersifat upsert **berdasarkan email**, jadi:
+
+- Ganti `ADMIN_PASSWORD` lalu jalankan `npm run db:seed` untuk memperbarui
+  password akun yang sudah ada.
+- Ganti `ADMIN_EMAIL` akan **membuat akun admin kedua** dan meninggalkan akun
+  lama tetap aktif. Hapus dulu baris lama di tabel `users`, atau ubah email-nya
+  langsung di database.
+
+Kredensial default di `.env.example` (`admin@snapvibe.local` /
+`snapvibe-dev-admin`) hanya untuk lokal. Ganti keduanya sebelum deploy, karena
+akun itu ada di database yang sama dengan yang dipakai produksi.
+
 Semua endpoint di bawah butuh cookie sesi admin dari `POST /api/admin/login`.
 Tanpa cookie selalu dibalas `401`.
 

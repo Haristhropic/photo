@@ -412,12 +412,6 @@ export default function Home() {
                   <IconCamera size={22} stroke={2.25} aria-hidden="true" />
                   Buka Booth
                 </Link>
-                <Link
-                  href="/admin"
-                  className="pressable inline-flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-6 py-3 font-display text-body font-bold text-ink shadow-lift-1 hover:bg-butter"
-                >
-                  Kelola event
-                </Link>
               </div>
             </div>
           </div>
@@ -441,12 +435,6 @@ export default function Home() {
               className="rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-4 py-1.5 font-display text-small font-bold text-ink transition-colors hover:bg-mint"
             >
               Galeri
-            </Link>
-            <Link
-              href="/admin"
-              className="rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-4 py-1.5 font-display text-small font-bold text-ink transition-colors hover:bg-mint"
-            >
-              Admin
             </Link>
             <Link
               href="/privacy"
