@@ -74,8 +74,9 @@ export function stopStream(stream: MediaStream | null): void {
 const HAVE_CURRENT_DATA = 2;
 
 /**
- * Grabs one frame at the video's native resolution and mirrors it so the saved
- * photo matches the selfie preview the guest just saw.
+ * Grabs one frame at the video's native resolution, exactly as the sensor saw
+ * it. The frame is not flipped, so the saved photo matches what the guest saw
+ * in the unmirrored preview.
  */
 export function grabFrame(video: HTMLVideoElement): string | null {
   if (video.readyState < HAVE_CURRENT_DATA) return null;
@@ -91,8 +92,6 @@ export function grabFrame(video: HTMLVideoElement): string | null {
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
-  ctx.translate(width, 0);
-  ctx.scale(-1, 1);
   ctx.drawImage(video, 0, 0, width, height);
 
   return canvas.toDataURL("image/jpeg", 0.9);

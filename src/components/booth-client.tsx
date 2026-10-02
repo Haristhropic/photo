@@ -348,7 +348,7 @@ export function BoothClient({
                 ref={videoRef}
                 playsInline
                 muted
-                className="size-full scale-x-[-1] object-cover"
+                className="size-full object-cover"
               />
               {countdown !== null && (
                 <div className="absolute inset-0 grid place-items-center">

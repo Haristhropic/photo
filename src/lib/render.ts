@@ -15,7 +15,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-/** Draws a source image into a rect, cropping to fill and mirroring like the booth preview. */
 function drawCover(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
@@ -44,9 +43,7 @@ function drawCover(
   ctx.beginPath();
   ctx.rect(x, y, w, h);
   ctx.clip();
-  ctx.translate(x + w, y);
-  ctx.scale(-1, 1);
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
   ctx.restore();
 }
 

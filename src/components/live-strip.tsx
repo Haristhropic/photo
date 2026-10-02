@@ -111,7 +111,6 @@ export function LiveStrip() {
                   src={shot}
                   alt={shots.length > 0 ? `Bidikan yang baru saja diambil` : ""}
                   className="size-full object-cover"
-                  style={{ transform: "scaleX(-1)" }}
                 />
               ) : (
                 <div className="grid size-full place-items-center">

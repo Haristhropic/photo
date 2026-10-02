@@ -17,7 +17,8 @@
     "capture": "tsx scripts/capture.mts",
     "e2e:retake": "tsx scripts/e2e-retake.ts",
     "e2e:download": "tsx scripts/e2e-download.ts",
-    "e2e:capture": "tsx scripts/e2e-capture.ts"
+    "e2e:capture": "tsx scripts/e2e-capture.ts",
+    "e2e:mirror": "tsx scripts/e2e-mirror.ts"
   },
   "dependencies": {
     "@neon/config": "^1.8.2",

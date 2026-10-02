@@ -64,6 +64,7 @@ Kalau auth atau object storage diaktifkan nanti, perintahnya lewat
 | `npm run e2e:retake` | Uji bahwa studio selalu memakai draft terakhir, bukan foto run sebelumnya |
 | `npm run e2e:download` | Uji tally "kali diunduh" bertambah sendiri tanpa reload |
 | `npm run e2e:capture` | Uji bidikan yang tersimpan benar-benar bingkai kamera, bukan frame kosong atau duplikat |
+| `npm run e2e:mirror` | Uji foto yang tersimpan tidak terbalik kiri-kanan |
 | `npm run e2e:timer` | Uji hitung mundur 3 detik per bidikan, pembatalan, dan(frame) gelap |
 | `npm run e2e:nav` | Uji semua rute, tautan, dan affordance navigasi |
 | `npm run capture` | Tangkapan layar desktop dan mobile untuk review desain |
@@ -209,9 +210,17 @@ video di jendela itu menghasilkan kanvas kosong. Efek yang menempelkan stream ke
 `<video>` juga guarding `srcObject`: mengassign ulang `srcObject` memulai ulang
 media pipeline, dan karena efek itu ikut jalan pada setiap perubahan `status`,
 lompatan status tepat sebelum burst mengambil bingkai bisa menghasilkan frame
-yang belum ter-decode atau frame basi. `npm run e2e:capture` menjaga dua hal itu:
-setiap bingkai punya sebaran piksel nyata, ketiga bingkai berbeda satu sama
-lain, dan tiga slot pada file yang tersimpan juga berbeda.
+yang belum ter-decode atau frame basi.
+
+**Tidak ada cermin.** Foto disimpan apa adanya seperti sensor melihatnya, jadi
+tidak ada yang membalik kiri-kanan. Ada empat tempat yang dulu membalik dan
+harus tetap kosong: `grabFrame`, `drawCover` di `src/lib/render.ts`, kelas
+`<video>` di booth, dan thumbnail di `live-strip.tsx`. `drawCover` menggambar
+langsung di `(x, y)` slotnya; kalau suatu saat perlu membalik lagi, ingat bahwa
+`translate` di sana juga yang memposisikan gambar ke slot, bukan hanya bagian
+dari pembalikan. `npm run e2e:mirror` memasang stream uji separuh merah
+separuh biru dan memastikan merah tetap di kiri, baik di thumbnail maupun di
+file yang tersimpan.
 
 **Tally unduhan.** `/p/[accessKey]` adalah server component, jadi angka
 `download_count` yang dirender hanya benar saat halaman itu dibuat. Tombol unduh
