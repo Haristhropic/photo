@@ -11,10 +11,11 @@ import {
 } from "@tabler/icons-react";
 import Link from "next/link";
 
+import { Faq } from "@/components/faq";
 import { GalleryGrid } from "@/components/gallery-grid";
 import { LiveStrip } from "@/components/live-strip";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { LAYOUTS, LAYOUT_ORDER } from "@/lib/layouts";
+import { Logo } from "@/components/logo";
 
 const btnPrimary =
   "pressable inline-flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-pink px-7 py-4 font-display text-lead font-bold text-ink shadow-lift-2 hover:bg-[var(--mix-coral)]";
@@ -122,9 +123,7 @@ export default function Home() {
             href="/"
             className="font-display text-h3 font-extrabold tracking-tight transition-transform hover:-rotate-2"
           >
-            <span className="rounded-[10px] bg-ink px-2.5 py-1 text-bg">
-              Snap<span className="misregister">Vibe</span>
-            </span>
+            <Logo className="h-12 w-auto" />
           </Link>
           <nav className="flex items-center gap-1 sm:gap-2" aria-label="Utama">
             <Link
@@ -145,7 +144,6 @@ export default function Home() {
             >
               Buka Booth
             </Link>
-            <ThemeToggle />
           </nav>
         </div>
       </header>
@@ -349,26 +347,7 @@ export default function Home() {
         <section className="border-t-2 border-ink bg-elev">
           <div className="shell py-[var(--section)]">
             <h2 className="text-h2 font-extrabold">Pertanyaan umum</h2>
-            <div className="mt-10 grid gap-4 md:grid-cols-2">
-              {FAQ.map((item) => (
-                <div
-                  key={item.q}
-                  className="rounded-[var(--radius-lg)] border-2 border-ink bg-bg p-6"
-                  style={{ boxShadow: `var(--lift-1)` }}
-                >
-                  <span
-                    className="reg-cross mb-4 block size-5 text-ink/40"
-                    aria-hidden="true"
-                  />
-                  <h3 className="font-display text-h3 font-extrabold">
-                    {item.q}
-                  </h3>
-                  <p className="mt-2 max-w-[var(--measure)] text-ink-body">
-                    {item.a}
-                  </p>
-                </div>
-              ))}
-            </div>
+            <Faq items={FAQ} />
           </div>
         </section>
 
@@ -421,7 +400,7 @@ export default function Home() {
       <footer className="border-t-2 border-ink bg-butter">
         <div className="shell flex flex-col gap-4 py-8 sm:flex-row sm:items-center sm:justify-between">
           <p className="font-display text-h3 font-extrabold text-ink">
-            Snap<span className="misregister">Vibe</span>
+            <Logo className="h-10 w-auto" />
           </p>
           <nav className="flex flex-wrap gap-3" aria-label="Footer">
             <Link
