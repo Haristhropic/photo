@@ -79,87 +79,6 @@
   color-scheme: light;
 }
 
-/* Night event: cream inks on deep mulberry, so candy still reads. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #181021;
-    --bg-elev: #241733;
-    --bg-sunken: #120b1c;
-
-    --ink: #fdf3e3;
-    --ink-body: #d9c8e2;
-    --ink-meta: #a894b5;
-
-    --line: #3a2850;
-    --line-strong: #5a4079;
-
-    --pink: #ff6ba4;
-    --orange: #ff9a4d;
-    --butter: #ffe27a;
-    --mint: #6ff0c0;
-    --sky: #7cc4ff;
-    --plum: #c98be0;
-
-    --mix-coral: #ff8a8a;
-    --mix-plum: #d06ad0;
-
-    --accent: var(--pink);
-    --accent-hover: #ff8abc;
-    --on-accent: #1a0f22;
-    --accent-wash: rgba(255, 107, 164, 0.18);
-
-    --lift-1: 2px 3px 0 var(--line-strong);
-    --lift-2: 4px 6px 0 var(--line-strong);
-    --lift-3: 6px 9px 0 var(--line-strong);
-    --lift-ink: 4px 6px 0 #0d0714;
-
-    --board: #0d0714;
-    --board-ink: #fdf3e3;
-    --scrim: rgba(13, 7, 20, 0.68);
-
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme="dark"] {
-  --bg: #181021;
-  --bg-elev: #241733;
-  --bg-sunken: #120b1c;
-
-  --ink: #fdf3e3;
-  --ink-body: #d9c8e2;
-  --ink-meta: #a894b5;
-
-  --line: #3a2850;
-  --line-strong: #5a4079;
-
-  --pink: #ff6ba4;
-  --orange: #ff9a4d;
-  --butter: #ffe27a;
-  --mint: #6ff0c0;
-  --sky: #7cc4ff;
-  --plum: #c98be0;
-
-  --mix-coral: #ff8a8a;
-  --mix-plum: #d06ad0;
-
-  --accent: var(--pink);
-  --accent-hover: #ff8abc;
-  --on-accent: #1a0f22;
-  --accent-wash: rgba(255, 107, 164, 0.18);
-
-  --lift-1: 2px 3px 0 var(--line-strong);
-  --lift-2: 4px 6px 0 var(--line-strong);
-  --lift-3: 6px 9px 0 var(--line-strong);
-  --lift-ink: 4px 6px 0 #0d0714;
-
-  --board: #0d0714;
-  --board-ink: #fdf3e3;
-  --scrim: rgba(13, 7, 20, 0.68);
-
-  color-scheme: dark;
-}
-
 @theme inline {
   --color-bg: var(--bg);
   --color-elev: var(--bg-elev);
@@ -270,6 +189,38 @@
   ::placeholder {
     color: var(--ink-meta);
     opacity: 1;
+  }
+
+  /* Absolute-positioned canvases and decorative layers must never push a page
+     horizontally; normal content should size against its container. */
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  summary {
+    min-height: 2.75rem;
+  }
+
+  button,
+  a,
+  summary,
+  [role="button"] {
+    cursor: pointer;
   }
 }
 

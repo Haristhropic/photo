@@ -31,13 +31,11 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fdf3e3" },
-    { media: "(prefers-color-scheme: dark)", color: "#181021" },
-  ],
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [{ media: "(prefers-color-scheme: light)", color: "#fdf3e3" }],
 };
-
-const themeBootstrap = `(function(){try{var t=localStorage.getItem('snapvibe-theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
@@ -46,10 +44,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
       className={`${baloo.variable} ${nunito.variable} h-full`}
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
-      </head>
-      <body className="flex min-h-full flex-col antialiased">
+      <body
+        className="flex min-h-full flex-col antialiased"
+        suppressHydrationWarning
+      >
         {/* THESIS: a guest's own phone is the booth. The category default is a
         marketing page for a laptop-shaped booth you install and staff; this
         refuses that by running a real capture countdown in the first viewport.
