@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { GalleryGrid } from "@/components/gallery-grid";
+import { Logo } from "@/components/logo";
 
 export const metadata = {
   title: "Galeri: SnapVibe",
@@ -17,9 +18,7 @@ export default function GalleryPage() {
             aria-label="SnapVibe, kembali ke beranda"
             className="font-display text-h3 font-extrabold"
           >
-            <span className="rounded-[10px] bg-ink px-2.5 py-1 text-bg">
-              Snap<span className="misregister">Vibe</span>
-            </span>
+            <Logo className="h-12 w-auto" />
           </Link>
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <span className="hidden rounded-[var(--radius-pill)] border-2 border-ink bg-butter px-4 py-1.5 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase sm:inline-flex">

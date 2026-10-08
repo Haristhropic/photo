@@ -7,6 +7,7 @@ import { EventJoinClient } from "@/components/event-join-client";
 import { db } from "@/db";
 import { events, frames } from "@/db/schema";
 import { LAYOUTS } from "@/lib/layouts";
+import { Logo } from "@/components/logo";
 
 export const metadata: Metadata = {
   title: "Event: SnapVibe",
@@ -137,9 +138,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <header className="border-b-2 border-ink">
         <div className="shell flex h-18 items-center justify-between py-2">
           <Link href="/" className="font-display text-h3 font-extrabold">
-            <span className="rounded-[10px] bg-ink px-2.5 py-1 text-bg">
-              Snap<span className="misregister">Vibe</span>
-            </span>
+            <Logo className="h-12 w-auto" />
           </Link>
           <span className="rounded-[var(--radius-pill)] border-2 border-ink bg-sky px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
             Booth event

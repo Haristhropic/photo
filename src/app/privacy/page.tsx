@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Logo } from "@/components/logo";
 
 export const metadata: Metadata = {
   title: "Privasi: SnapVibe",
@@ -12,9 +13,7 @@ export default function PrivacyPage() {
       <header className="border-b-2 border-ink">
         <div className="shell flex h-18 items-center justify-between py-2">
           <Link href="/" className="font-display text-h3 font-extrabold">
-            <span className="rounded-[10px] bg-ink px-2.5 py-1 text-bg">
-              Snap<span className="misregister">Vibe</span>
-            </span>
+            <Logo className="h-12 w-auto" />
           </Link>
           <span className="rounded-[var(--radius-pill)] border-2 border-ink bg-plum px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-butter uppercase">
             Privasi

@@ -9,6 +9,7 @@ import { db } from "@/db";
 import { events, photoSessions } from "@/db/schema";
 import { LAYOUTS } from "@/lib/layouts";
 import { absoluteUrl } from "@/lib/site";
+import { Logo } from "@/components/logo";
 
 export const metadata: Metadata = {
   title: "Hasil fotomu: SnapVibe",
@@ -164,9 +165,7 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
             href="/"
             className="font-display text-h3 font-extrabold"
           >
-            <span className="rounded-[10px] bg-ink px-2.5 py-1 text-bg">
-              Snap<span className="misregister">Vibe</span>
-            </span>
+            <Logo className="h-12 w-auto" />
           </Link>
           <span className="inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
             <IconQrcode size={16} stroke={2.5} aria-hidden="true" />
