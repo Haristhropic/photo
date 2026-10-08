@@ -3,7 +3,7 @@
 import {
   IconArrowLeft,
   IconCheck,
-  IconDownload,
+  IconRefresh,
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -29,6 +29,7 @@ import {
   type StickerKey,
 } from "@/lib/layouts";
 import { renderStrip, type Draft } from "@/lib/render";
+import { Logo } from "@/components/logo";
 
 export function StudioClient() {
   const router = useRouter();
@@ -177,9 +178,7 @@ export function StudioClient() {
             aria-label="SnapVibe, kembali ke beranda"
             className="font-display text-h3 font-extrabold"
           >
-            <span className="rounded-[10px] bg-ink px-2.5 py-1 text-bg">
-              Snap<span className="misregister">Vibe</span>
-            </span>
+            <Logo className="h-12 w-auto" />
           </Link>
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <button
@@ -308,7 +307,7 @@ export function StudioClient() {
                 onClick={() => router.push("/booth?from=studio")}
                 className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-7 py-4 font-display text-lead font-bold text-ink shadow-lift-2 hover:bg-butter"
               >
-                <IconDownload size={22} stroke={2.5} aria-hidden="true" />
+                <IconRefresh size={22} stroke={2.5} aria-hidden="true" />
                 Ambil ulang
               </button>
             </div>

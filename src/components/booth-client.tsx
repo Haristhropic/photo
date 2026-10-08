@@ -24,6 +24,7 @@ import {
 } from "@/lib/capture";
 import { writeDraft } from "@/lib/draft-store";
 import { LAYOUTS, LAYOUT_ORDER, type LayoutType } from "@/lib/layouts";
+import { Logo } from "@/components/logo";
 
 const BOOTH_KEY = "snapvibe.boothrun";
 
@@ -297,9 +298,7 @@ export function BoothClient({
             aria-label="SnapVibe, kembali ke beranda"
             className="font-display text-h3 font-extrabold"
           >
-            <span className="rounded-[10px] bg-ink px-2.5 py-1 text-bg">
-              Snap<span className="misregister">Vibe</span>
-            </span>
+            <Logo className="h-12 w-auto" />
           </Link>
 
           <div className="flex items-center gap-2 sm:gap-3">

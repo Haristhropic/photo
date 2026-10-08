@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { AdminEventTable, type EventRow } from "@/components/admin-event-table";
 import { AdminFrameTable, type FrameRow } from "@/components/admin-frame-table";
+import { Logo } from "@/components/logo";
 import { LAYOUTS, LAYOUT_ORDER, type LayoutType } from "@/lib/layouts";
 
 export function AdminDashboard({
@@ -129,9 +130,7 @@ export function AdminDashboard({
     <div className="flex flex-1 flex-col">
       <header className="border-b-2 border-ink">
         <div className="shell flex h-18 items-center justify-between py-2">
-          <span className="rounded-[var(--radius-pill)] border-2 border-ink bg-butter px-4 py-1.5 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase">
-            SnapVibe Admin
-          </span>
+          <Logo className="h-11 w-auto" />
           <div className="flex items-center gap-4">
             <Link
               href="/"
