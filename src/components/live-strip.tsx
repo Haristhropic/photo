@@ -95,6 +95,16 @@ export function LiveStrip() {
 
   return (
     <div className="relative">
+      {/* The capture source. It must stay in the layout tree — `sr-only`
+          clips it rather than `display: none`, which would let the browser
+          stop decoding frames and hand `grabFrame` a blank canvas. */}
+      <video
+        ref={videoRef}
+        playsInline
+        muted
+        className="sr-only"
+        aria-hidden="true"
+      />
       <div
         className="relative overflow-hidden rounded-[var(--radius-xl)] border-2 border-ink bg-board shadow-lift-3"
         style={{ transform: "rotate(-1.2deg)" }}
