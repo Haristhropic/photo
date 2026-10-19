@@ -61,10 +61,11 @@ Kalau auth atau object storage diaktifkan nanti, perintahnya lewat
 | `npm run db:migrate` | Terapkan file migrasi di `drizzle/` (pakai ini di produksi) |
 | `npm run db:seed` | Isi admin dan event contoh |
 | `npm run e2e` | Uji perjalanan booth sampai unduhan dengan kamera palsu |
+| `npm run e2e:livestrip` | Uji strip di halaman depan benar-benar mengambil tiga bingkai kamera |
 | `npm run e2e:retake` | Uji bahwa studio selalu memakai draft terakhir, bukan foto run sebelumnya |
 | `npm run e2e:download` | Uji tally "kali diunduh" bertambah sendiri tanpa reload |
 | `npm run e2e:capture` | Uji bidikan yang tersimpan benar-benar bingkai kamera, bukan frame kosong atau duplikat |
-| `npm run e2e:mirror` | Uji foto yang tersimpan tidak terbalik kiri-kanan |
+| `npm run e2e:mirror` | Uji pratinjau dan foto tersimpan sama-sama bercermin |
 | `npm run e2e:timer` | Uji hitung mundur 3 detik per bidikan, pembatalan, dan(frame) gelap |
 | `npm run e2e:nav` | Uji semua rute, tautan, dan affordance navigasi |
 | `npm run capture` | Tangkapan layar desktop dan mobile untuk review desain |
@@ -238,15 +239,16 @@ media pipeline, dan karena efek itu ikut jalan pada setiap perubahan `status`,
 lompatan status tepat sebelum burst mengambil bingkai bisa menghasilkan frame
 yang belum ter-decode atau frame basi.
 
-**Tidak ada cermin.** Foto disimpan apa adanya seperti sensor melihatnya, jadi
-tidak ada yang membalik kiri-kanan. Ada empat tempat yang dulu membalik dan
-harus tetap kosong: `grabFrame`, `drawCover` di `src/lib/render.ts`, kelas
-`<video>` di booth, dan thumbnail di `live-strip.tsx`. `drawCover` menggambar
-langsung di `(x, y)` slotnya; kalau suatu saat perlu membalik lagi, ingat bahwa
+**Mode cermin (selfie).** Booth memakai tampilan cermin seperti kamera depan HP.
+Pratinjau `<video>` di-flip dengan `scaleX(-1)`, dan `grabFrame` membalik piksel
+dengan cara yang sama, jadi foto yang tersimpan persis seperti yang tamu lihat di
+pratinjau. Label teks di strip digambar setelah pembalikan, jadi tulisan tetap
+terbaca normal. `drawCover` di `src/lib/render.ts` menggambar langsung di
+`(x, y)` slotnya; kalau suatu saat perlu mengubah pembalikan, ingat bahwa
 `translate` di sana juga yang memposisikan gambar ke slot, bukan hanya bagian
-dari pembalikan. `npm run e2e:mirror` memasang stream uji separuh merah
-separuh biru dan memastikan merah tetap di kiri, baik di thumbnail maupun di
-file yang tersimpan.
+dari pembalikan. `npm run e2e:mirror` memasang stream uji separuh merah separuh
+biru dan memastikan merah pindah ke kanan, baik di transform pratinjau, thumbnail
+review, maupun file yang tersimpan.
 
 **Tally unduhan.** `/p/[accessKey]` adalah server component, jadi angka
 `download_count` yang dirender hanya benar saat halaman itu dibuat. Tombol unduh
