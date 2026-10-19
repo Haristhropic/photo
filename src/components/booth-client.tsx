@@ -343,11 +343,15 @@ export function BoothClient({
               className="relative w-full overflow-hidden rounded-[var(--radius-xl)] border-2 border-ink bg-board shadow-lift-3"
               style={{ aspectRatio: `${aspect}`, transform: "rotate(-0.8deg)" }}
             >
+              {/* Selfie-style preview: the guest sees themselves as in a
+                  mirror. `grabFrame` applies the same flip, so the saved photo
+                  matches this view. */}
               <video
                 ref={videoRef}
                 playsInline
                 muted
                 className="size-full object-cover"
+                style={{ transform: "scaleX(-1)" }}
               />
               {countdown !== null && (
                 <div className="absolute inset-0 grid place-items-center">

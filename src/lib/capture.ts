@@ -74,9 +74,12 @@ export function stopStream(stream: MediaStream | null): void {
 const HAVE_CURRENT_DATA = 2;
 
 /**
- * Grabs one frame at the video's native resolution, exactly as the sensor saw
- * it. The frame is not flipped, so the saved photo matches what the guest saw
- * in the unmirrored preview.
+ * Grabs one frame at the video's native resolution and mirrors it horizontally.
+ *
+ * The booth preview is mirrored with `scaleX(-1)` so the guest sees the
+ * selfie-camera view they expect. Flipping the pixels here keeps the saved
+ * photo identical to that preview instead of silently reversing it at download
+ * time. `npm run e2e:mirror` guards this orientation.
  */
 export function grabFrame(video: HTMLVideoElement): string | null {
   if (video.readyState < HAVE_CURRENT_DATA) return null;
@@ -92,6 +95,10 @@ export function grabFrame(video: HTMLVideoElement): string | null {
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
+  // Mirror in place: shift to the right edge, then flip the x axis so the
+  // draw lands back over the full frame, reversed.
+  ctx.translate(width, 0);
+  ctx.scale(-1, 1);
   ctx.drawImage(video, 0, 0, width, height);
 
   return canvas.toDataURL("image/jpeg", 0.9);

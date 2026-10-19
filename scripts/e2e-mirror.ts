@@ -43,8 +43,9 @@ async function main() {
 
   try {
     // Replace the camera with a stream whose left half is red and right half is
-    // blue. An unmirrored capture keeps red on the left; a mirrored one swaps
-    // them, so the orientation of the saved file is unambiguous.
+    // blue. SnapVibe mirrors by design, so the preview and the saved file must
+    // both swap them: red lands on the right. A regression to the old
+    // unmirrored behaviour puts red back on the left.
     await page.addInitScript(() => {
       const canvas = document.createElement("canvas");
       canvas.width = 640;
@@ -81,6 +82,21 @@ async function main() {
     }
     log("camera live", "asymmetric test stream");
 
+    // The live preview is mirrored with CSS, so its computed transform must be
+    // a horizontal flip. This is the view the guest sees before any capture.
+    const previewTransform = await page.evaluate(() => {
+      const video = document.querySelector("video");
+      return video ? getComputedStyle(video).transform : null;
+    });
+    const previewNumbers =
+      previewTransform?.match(/-?\d*\.?\d+/g)?.map(Number) ?? [];
+    log("preview transform", String(previewTransform));
+    if (previewNumbers[0] !== -1) {
+      throw new Error(
+        `live preview is not mirrored: computed transform ${previewTransform}`,
+      );
+    }
+
     await clickWhenSettled(page, 'button:has-text("Jepret")');
     const proceed = page.getByRole("button", { name: /Lanjut ke studio/i });
     await proceed.waitFor({ state: "visible", timeout: 40000 });
@@ -88,8 +104,8 @@ async function main() {
     if (shotCount !== 3) throw new Error(`expected 3 shots, got ${shotCount}`);
     log("burst captured", `${shotCount} shots`);
 
-    // The review thumbnails are the raw captured frames, so they show the
-    // orientation the camera actually produced.
+    // The review thumbnails are the captured frames, mirrored by grabFrame, so
+    // they must match the mirrored preview: red on the right.
     const review = await page.evaluate(() => {
       const img = document.querySelector(
         'img[alt^="Bidikan"]',
@@ -117,9 +133,9 @@ async function main() {
       "review thumbnail",
       `left red=${review.leftRed.toFixed(0)} right red=${review.rightRed.toFixed(0)}`,
     );
-    if (review.leftRed <= review.rightRed) {
+    if (review.leftRed >= review.rightRed) {
       throw new Error(
-        `review thumbnail is mirrored: left red ${review.leftRed.toFixed(0)} should exceed right red ${review.rightRed.toFixed(0)}`,
+        `review thumbnail is not mirrored: left red ${review.leftRed.toFixed(0)} should be below right red ${review.rightRed.toFixed(0)}`,
       );
     }
 
@@ -137,7 +153,7 @@ async function main() {
     log("saved", accessKey);
 
     // The stored file is what the guest downloads. Sample the middle of the
-    // first slot: red must be on the left, blue on the right.
+    // first slot: red must be on the right, blue on the left.
     const saved = await page.evaluate(async (key: string) => {
       const img = new Image();
       img.src = `/api/files/${key}.png`;
@@ -167,9 +183,9 @@ async function main() {
       "stored file slot 1",
       `left red=${saved.leftRed.toFixed(0)} right red=${saved.rightRed.toFixed(0)}`,
     );
-    if (saved.leftRed <= saved.rightRed) {
+    if (saved.leftRed >= saved.rightRed) {
       throw new Error(
-        `stored file is mirrored: left red ${saved.leftRed.toFixed(0)} should exceed right red ${saved.rightRed.toFixed(0)}`,
+        `stored file is not mirrored: left red ${saved.leftRed.toFixed(0)} should be below right red ${saved.rightRed.toFixed(0)}`,
       );
     }
 
