@@ -28,7 +28,25 @@ const btnInk =
 
 const STEP_INKS = ["var(--pink)", "var(--mint)", "var(--sky)"];
 const FEATURE_TILTS = [-1.1, 0.8, -0.7, 1, -0.9];
-const PRIVACY_INKS = [
+const PRIVACY_FRAMES = [
+  {
+    title: "Tanpa akun.",
+    body: "Cukup link acak 20 karakter.",
+    ink: "var(--mint)",
+  },
+  {
+    title: "Tanpa identitas.",
+    body: "Nggak ada nama atau nomor HP di strip.",
+    ink: "var(--sky)",
+  },
+  {
+    title: "Galeri itu pilihan.",
+    body: "Cuma kalau tamu membagikannya.",
+    ink: "var(--orange)",
+  },
+];
+
+const LAYOUT_INKS = [
   "var(--mix-coral)",
   "var(--mint)",
   "var(--butter)",
@@ -39,17 +57,17 @@ const STEPS: { icon: TablerIcon; title: string; body: string }[] = [
   {
     icon: IconCamera,
     title: "Buka linknya",
-    body: "Tamu buka link di HP sendiri. Nggak perlu install aplikasi, nggak perlu antre di depan laptop.",
+    body: "Buka SnapVibe di browser HP, lalu pilih layout. Nggak perlu install apa pun, cukup izinkan kamera sekali.",
   },
   {
     icon: IconBolt,
-    title: "Tiap 3 detik",
-    body: "Hitung mundur 3-2-1 di tiap bidikan, jadi setiap orang dapat salinan dengan posisi berbeda.",
+    title: "Jepret 3-2-1",
+    body: "Tekan Aktifkan kamera, lalu Jepret. Tiap bidikan punya hitung mundur 3 detik dan jumlahnya ikut layout yang kamu pilih, jadi kamu sempat atur pose.",
   },
   {
     icon: IconDownload,
-    title: "QR atau unduh",
-    body: "Setiap sesi dapat link sendiri. Pindai QR, unduh PNG, atau kirim ke grup chat.",
+    title: "Unduh dan bagikan",
+    body: "Atur filter dan stiker di studio, lalu tekan Simpan dan buat QR. Strip dan QR-nya langsung muncul, siap diunduh sebagai PNG atau dibuka di HP lain.",
   },
 ];
 
@@ -90,7 +108,7 @@ const FEATURES: {
   {
     icon: IconTrash,
     title: "Foto hilang sendiri",
-    body: "Dihapus otomatis 24 jam setelah diambil, atau 7 hari untuk mode event. Kamu nggak perlu inget.",
+    body: "Dihapus otomatis sesuai masa simpan event, default 24 jam. Kamu nggak perlu inget.",
     ink: "var(--orange)",
   },
 ];
@@ -102,7 +120,7 @@ const FAQ = [
   },
   {
     q: "Berapa lama foto tersimpan?",
-    a: "Default 24 jam sejak sesi dibuat. Untuk event, organizer bisa memilih 7 hari.",
+    a: "Default 24 jam sejak sesi dibuat. Organizer event bisa mengubahnya, dari 1 jam sampai 30 hari.",
   },
   {
     q: "Bisa dipakai untuk event perusahaan?",
@@ -180,14 +198,6 @@ export default function Home() {
                   Cara kerjanya
                 </Link>
               </div>
-              <div className="mt-8 flex flex-wrap items-center gap-2">
-                <span className="rounded-[var(--radius-pill)] border-2 border-ink bg-butter px-4 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase">
-                  Nggak perlu install
-                </span>
-                <span className="rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase">
-                  Foto auto terhapus
-                </span>
-              </div>
             </div>
 
             <div>
@@ -229,27 +239,71 @@ export default function Home() {
               tombol jepret.
             </p>
             <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {LAYOUT_ORDER.map((key) => {
+              {LAYOUT_ORDER.map((key, index) => {
                 const layout = LAYOUTS[key];
+                const ink = LAYOUT_INKS[index % LAYOUT_INKS.length];
                 return (
                   <article
                     key={key}
                     className="pressable flex flex-col rounded-[var(--radius-lg)] border-2 border-ink bg-elev p-5 shadow-lift-2"
                   >
-                    <div className="grid h-40 place-items-center rounded-[10px] border-2 border-ink bg-sunken p-3">
+                    <div className="flex h-44 items-center justify-center rounded-[10px] border-2 border-ink bg-sunken p-3">
+                      {/* A true-scale preview. Every slot sits where
+                          renderStrip actually draws it, so the card shows the
+                          real arrangement instead of a row of equal boxes. */}
                       <div
-                        className="flex max-h-full gap-1"
                         style={{
                           aspectRatio: `${layout.canvas.w} / ${layout.canvas.h}`,
                           height: "100%",
+                          transform: `rotate(${index % 2 === 0 ? -1 : 1}deg)`,
                         }}
                       >
-                        {layout.slots.map((slot, i) => (
-                          <div
-                            key={i}
-                            className="flex-1 rounded-[2px] bg-bg-elev ring-1 ring-ink/20"
+                        <svg
+                          viewBox={`0 0 ${layout.canvas.w} ${layout.canvas.h}`}
+                          style={{ display: "block", width: "100%", height: "100%" }}
+                          role="img"
+                          aria-label={`Contoh susunan ${layout.label}: ${layout.blurb}, ${layout.shotCount} bidikan`}
+                        >
+                          <rect
+                            width={layout.canvas.w}
+                            height={layout.canvas.h}
+                            rx={layout.canvas.w * 0.02}
+                            fill="var(--bg)"
+                            stroke="var(--ink)"
+                            strokeWidth="2"
+                            vectorEffect="non-scaling-stroke"
                           />
-                        ))}
+                          {layout.slots.map((slot, slotIndex) => {
+                            const cx = slot.x + slot.w / 2;
+                            const cy = slot.y + slot.h / 2;
+                            // The glyph is drawn in a 100-unit box, so scale it
+                            // to sit inside the slot with breathing room.
+                            const scale = (Math.min(slot.w, slot.h) * 0.62) / 100;
+                            return (
+                              <g key={slotIndex}>
+                                <rect
+                                  x={slot.x}
+                                  y={slot.y}
+                                  width={slot.w}
+                                  height={slot.h}
+                                  rx={layout.canvas.w * 0.012}
+                                  fill={ink}
+                                  stroke="var(--ink)"
+                                  strokeWidth="1.5"
+                                  vectorEffect="non-scaling-stroke"
+                                />
+                                <g
+                                  transform={`translate(${cx} ${cy}) scale(${scale})`}
+                                  fill="var(--ink)"
+                                  opacity="0.45"
+                                >
+                                  <circle cy="-20" r="20" />
+                                  <path d="M -42 46a42 34 0 0 1 84 0z" />
+                                </g>
+                              </g>
+                            );
+                          })}
+                        </svg>
                       </div>
                     </div>
                     <h3 className="mt-5 font-display text-h3 font-extrabold">{layout.label}</h3>
@@ -313,34 +367,74 @@ export default function Home() {
           </div>
         </section>
 
-        <section>
-          <div className="shell grid gap-10 py-[var(--section)] lg:grid-cols-[1fr_1fr]">
+        <section className="bg-butter">
+          <div className="shell grid gap-14 py-[var(--section)] lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-16">
             <div>
-              <h2 className="text-h2 font-extrabold">Privasi by default</h2>
-              <p className="mt-4 max-w-[var(--measure)] text-lead text-ink-body">
-                Foto punya access key unik, tidak bergantung pada nomor HP, dan
-                dihapus otomatis sesuai kebijakan retensi event.
+              <h2 className="text-[clamp(2.6rem,1.3rem_+_4.2vw,4.75rem)] leading-[0.92] font-extrabold tracking-[-0.03em]">
+                Fotonya cuma{" "}
+                <br />
+                <span className="relative inline-block">
+                  <span className="relative z-10">mampir.</span>
+                  <span
+                    aria-hidden="true"
+                    className="absolute -inset-x-2 bottom-[0.08em] z-0 h-[0.34em] -rotate-[1.4deg] rounded-[3px] bg-pink"
+                  />
+                </span>
+              </h2>
+              <p className="mt-6 max-w-[36ch] text-lead text-ink-body">
+                Disimpan <strong className="font-bold text-ink">24 jam</strong>,
+                lalu dihapus otomatis.{" "}
+                <span className="whitespace-nowrap">Link-nya</span> mati, filenya
+                hilang beneran.
               </p>
+              <div className="mt-7 inline-flex max-w-full -rotate-[1.6deg] items-start gap-2.5 rounded-[6px] border-2 border-ink bg-elev px-3.5 py-2.5 shadow-lift-1">
+                <span
+                  className="reg-cross mt-[0.3em] size-3 shrink-0"
+                  aria-hidden="true"
+                />
+                <p className="font-display text-label leading-[1.55] font-bold tracking-[0.12em] text-meta uppercase">
+                  Default 24 jam
+                  <br />
+                  <span className="whitespace-nowrap">1–30 hari</span> per event
+                </p>
+              </div>
             </div>
-            <dl className="grid gap-4 self-start">
-              {[
-                ["Akses", "QR dan access key acak 20 karakter"],
-                ["Penyimpanan", "File lokal, bisa dipindah ke object storage"],
-                ["Retensi", "24 jam default, 7 hari untuk mode event"],
-                ["Pembersihan", "Cron harian menghapus yang kedaluwarsa"],
-              ].map(([term, detail], i) => (
-                <div
-                  key={term}
-                  className="rounded-[var(--radius)] border-2 border-ink bg-elev p-5"
-                  style={{ background: PRIVACY_INKS[i] }}
-                >
-                  <dt className="font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase">
-                    {term}
-                  </dt>
-                  <dd className="mt-1 text-ink">{detail}</dd>
-                </div>
-              ))}
-            </dl>
+
+            <div className="relative mx-auto w-full max-w-[264px]">
+              <div className="-rotate-[2.5deg] rounded-[20px] border-2 border-ink bg-elev p-3 shadow-lift-3">
+                <ul className="grid gap-2">
+                  {PRIVACY_FRAMES.map((frame) => (
+                    <li
+                      key={frame.title}
+                      className="flex aspect-[4/3] flex-col justify-center rounded-[10px] border-2 border-ink p-4"
+                      style={{ background: frame.ink }}
+                    >
+                      <p className="font-display text-h3 font-extrabold text-ink">
+                        {frame.title}
+                      </p>
+                      <p className="mt-1 text-small font-semibold text-ink">
+                        {frame.body}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2.5 px-1 font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
+                  SnapVibe
+                </p>
+              </div>
+
+              <span
+                aria-hidden="true"
+                className="absolute -right-8 -bottom-6 rotate-[7deg] rounded-[6px] border-[3px] border-ink bg-pink px-3.5 py-2 text-center font-display uppercase shadow-lift-1"
+              >
+                <span className="block text-[0.6rem] font-extrabold tracking-[0.22em] text-ink">
+                  Kedaluwarsa
+                </span>
+                <span className="mt-0.5 block text-[1.35rem] leading-none font-extrabold tracking-tight text-ink">
+                  24 jam
+                </span>
+              </span>
+            </div>
           </div>
         </section>
 
