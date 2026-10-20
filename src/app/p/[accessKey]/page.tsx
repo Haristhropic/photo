@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { IconCamera, IconQrcode, IconTrash } from "@tabler/icons-react";
+import { IconCamera, IconHome, IconQrcode, IconTrash } from "@tabler/icons-react";
 import QRCode from "qrcode";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -160,17 +160,27 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
   return (
     <div className="flex flex-1 flex-col">
       <header className="border-b-2 border-ink">
-        <div className="shell flex h-18 items-center justify-between py-2">
+        <div className="shell flex h-18 items-center justify-between gap-3 py-2">
           <Link
             href="/"
             className="font-display text-h3 font-extrabold"
           >
             <Logo className="h-12 w-auto" />
           </Link>
-          <span className="inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
-            <IconQrcode size={16} stroke={2.5} aria-hidden="true" />
-            Hasil
-          </span>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link
+              href="/"
+              aria-label="Kembali ke beranda"
+              className="pressable inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1 hover:bg-butter"
+            >
+              <IconHome size={18} stroke={2.5} aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">Beranda</span>
+            </Link>
+            <span className="inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
+              <IconQrcode size={16} stroke={2.5} aria-hidden="true" />
+              Hasil
+            </span>
+          </div>
         </div>
       </header>
 
