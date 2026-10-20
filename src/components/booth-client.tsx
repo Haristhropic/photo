@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  IconArrowBackUp,
   IconCamera,
   IconChevronLeft,
   IconRefresh,
@@ -318,7 +319,7 @@ export function BoothClient({
                 aria-label="Ganti layout"
                 className="pressable inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
               >
-                <IconRefresh size={18} stroke={2.5} aria-hidden="true" />
+                <IconArrowBackUp size={18} stroke={2.5} aria-hidden="true" />
                 <span className="sr-only sm:not-sr-only">Layout</span>
               </button>
             )}
@@ -548,7 +549,7 @@ export function BoothClient({
                 onClick={retake}
                 className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-7 py-4 font-display text-lead font-bold text-ink shadow-lift-2 hover:bg-butter"
               >
-                <IconRefresh size={22} stroke={2.5} aria-hidden="true" />
+                <IconArrowBackUp size={22} stroke={2.5} aria-hidden="true" />
                 Ambil ulang
               </button>
             </div>

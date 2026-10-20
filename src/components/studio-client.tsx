@@ -1,9 +1,9 @@
 "use client";
 
 import {
+  IconArrowBackUp,
   IconArrowLeft,
   IconCheck,
-  IconRefresh,
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -307,7 +307,7 @@ export function StudioClient() {
                 onClick={() => router.push("/booth?from=studio")}
                 className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-7 py-4 font-display text-lead font-bold text-ink shadow-lift-2 hover:bg-butter"
               >
-                <IconRefresh size={22} stroke={2.5} aria-hidden="true" />
+                <IconArrowBackUp size={22} stroke={2.5} aria-hidden="true" />
                 Ambil ulang
               </button>
             </div>
