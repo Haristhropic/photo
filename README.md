@@ -61,7 +61,7 @@ Kalau auth atau object storage diaktifkan nanti, perintahnya lewat
 | `npm run db:migrate` | Terapkan file migrasi di `drizzle/` (pakai ini di produksi) |
 | `npm run db:seed` | Isi admin dan event contoh |
 | `npm run e2e` | Uji perjalanan booth sampai unduhan dengan kamera palsu |
-| `npm run e2e:livestrip` | Uji strip di halaman depan benar-benar mengambil tiga bingkai kamera |
+| `npm run e2e:hero` | Uji strip halaman depan beranimasi sendiri dan tidak pernah meminta kamera |
 | `npm run e2e:retake` | Uji bahwa studio selalu memakai draft terakhir, bukan foto run sebelumnya |
 | `npm run e2e:download` | Uji tally "kali diunduh" bertambah sendiri tanpa reload |
 | `npm run e2e:capture` | Uji bidikan yang tersimpan benar-benar bingkai kamera, bukan frame kosong atau duplikat |
@@ -249,6 +249,14 @@ terbaca normal. `drawCover` di `src/lib/render.ts` menggambar langsung di
 dari pembalikan. `npm run e2e:mirror` memasang stream uji separuh merah separuh
 biru dan memastikan merah pindah ke kanan, baik di transform pratinjau, thumbnail
 review, maupun file yang tersimpan.
+
+**Strip halaman depan.** Hero di `/` memakai `LiveStrip`, yang menjalankan
+irama aslinya — hitung mundur 3 detik, lalu satu bidikan masuk ke strip, tiga
+kali — dengan gambar placeholder, tanpa menyentuh kamera sama sekali. Halaman
+marketing tidak meminta kamera sebelum tamu memilih masuk booth; loop kamera
+sungguhan hanya ada di `/booth`. `npm run e2e:hero` menjaga kedua sisi kontrak
+itu: strip harus mengisi sendiri tiga slot lalu mengulang, dan tidak boleh ada
+satu pun panggilan `getUserMedia`, termasuk saat `prefers-reduced-motion`.
 
 **Tally unduhan.** `/p/[accessKey]` adalah server component, jadi angka
 `download_count` yang dirender hanya benar saat halaman itu dibuat. Tombol unduh

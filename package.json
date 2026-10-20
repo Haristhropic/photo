@@ -18,7 +18,7 @@
     "e2e:retake": "tsx scripts/e2e-retake.ts",
     "e2e:download": "tsx scripts/e2e-download.ts",
     "e2e:capture": "tsx scripts/e2e-capture.ts",
-    "e2e:livestrip": "tsx scripts/e2e-livestrip.ts",
+    "e2e:hero": "tsx scripts/e2e-hero.ts",
     "e2e:mirror": "tsx scripts/e2e-mirror.ts"
   },
   "dependencies": {
