@@ -8,6 +8,20 @@
       "when": 1790477949352,
       "tag": "0000_smart_umar",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790668595756,
+      "tag": "0001_add_public_gallery",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792658324561,
+      "tag": "0002_dynamic_frames",
+      "breakpoints": true
     }
   ]
 }

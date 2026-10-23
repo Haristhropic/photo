@@ -7,6 +7,8 @@ const CLOUDINARY_URL_PATTERN =
 
 export const GALLERY_FOLDER =
   process.env.CLOUDINARY_FOLDER?.trim() || "photo";
+export const FRAME_FOLDER =
+  process.env.CLOUDINARY_FRAME_FOLDER?.trim() || "snapvibe/frames";
 
 type CloudinaryConfig = { apiKey: string; apiSecret: string; cloud: string };
 
@@ -49,13 +51,11 @@ export class CloudinaryError extends Error {
   }
 }
 
-/**
- * Uploads a rendered strip into the `photo` folder. The caller owns the
- * `publicId` so a retry cannot silently create a second asset.
- */
-export async function uploadStripPng(
+async function uploadPng(
   bytes: Buffer,
   publicId: string,
+  folder: string,
+  overwrite: boolean,
 ): Promise<CloudinaryUpload> {
   const cfg = config();
   if (!cfg) {
@@ -68,9 +68,9 @@ export async function uploadStripPng(
     new Blob([new Uint8Array(bytes)], { type: "image/png" }),
     `${publicId}.png`,
   );
-  form.set("folder", GALLERY_FOLDER);
+  form.set("folder", folder);
   form.set("public_id", publicId);
-  form.set("overwrite", "false");
+  form.set("overwrite", overwrite ? "true" : "false");
 
   const response = await fetch(
     `https://api.cloudinary.com/v1_1/${cfg.cloud}/image/upload`,
@@ -121,7 +121,36 @@ export async function uploadStripPng(
   };
 }
 
-/** Removes a published asset. Best-effort: a 404 means it is already gone. */
+/**
+ * Uploads a rendered strip into the gallery folder. The caller owns the
+ * `publicId` so a retry cannot silently create a second asset.
+ */
+export async function uploadStripPng(
+  bytes: Buffer,
+  publicId: string,
+): Promise<CloudinaryUpload> {
+  return uploadPng(bytes, publicId, GALLERY_FOLDER, false);
+}
+
+/**
+ * Uploads an admin-managed frame overlay. Frames keep their transparency, so
+ * the original PNG is uploaded as-is. The deterministic public id lets the
+ * seed script replace the shipped RTS artwork without creating duplicates.
+ */
+export async function uploadFramePng(
+  bytes: Buffer,
+  publicId: string,
+  options: { overwrite?: boolean } = {},
+): Promise<CloudinaryUpload> {
+  return uploadPng(
+    bytes,
+    publicId,
+    FRAME_FOLDER,
+    options.overwrite ?? false,
+  );
+}
+
+/** Removes a published asset. A missing asset is already in the desired state. */
 export async function destroyAsset(publicId: string): Promise<boolean> {
   const cfg = config();
   if (!cfg) return false;
@@ -141,5 +170,18 @@ export async function destroyAsset(publicId: string): Promise<boolean> {
     },
   );
 
-  return response.ok;
+  if (!response.ok) return response.status === 404;
+
+  const payload = (await response.json().catch(() => null)) as {
+    result?: unknown;
+  } | null;
+
+  // Cloudinary reports a previously destroyed asset with HTTP 200 and
+  // result=not found, which is still the state we want.
+  return (
+    !payload ||
+    payload.result === undefined ||
+    payload.result === "ok" ||
+    payload.result === "not found"
+  );
 }

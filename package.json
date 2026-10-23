@@ -18,6 +18,8 @@
     "e2e:retake": "tsx scripts/e2e-retake.ts",
     "e2e:download": "tsx scripts/e2e-download.ts",
     "e2e:capture": "tsx scripts/e2e-capture.ts",
+    "e2e:draft": "tsx scripts/e2e-draft.ts",
+    "e2e:frame": "tsx scripts/e2e-frame.ts",
     "e2e:hero": "tsx scripts/e2e-hero.ts",
     "e2e:mirror": "tsx scripts/e2e-mirror.ts"
   },
@@ -34,6 +36,7 @@
     "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "sharp": "^0.35.5",
     "zod": "^4.6.5"
   },
   "devDependencies": {

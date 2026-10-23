@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { Logo } from "@/components/logo";
+import { SiteFooter } from "@/components/site-footer";
 
 export const metadata: Metadata = {
   title: "Privasi: SnapVibe",
@@ -11,18 +13,25 @@ export default function PrivacyPage() {
   return (
     <div className="flex flex-1 flex-col">
       <header className="border-b-2 border-ink">
-        <div className="shell flex h-18 items-center justify-between py-2">
-          <Link href="/" className="font-display text-h3 font-extrabold">
+        <div className="shell flex h-18 items-center justify-between gap-3 py-2">
+          <Link
+            href="/"
+            aria-label="SnapVibe, kembali ke beranda"
+            className="font-display text-h3 font-extrabold"
+          >
             <Logo className="h-12 w-auto" />
           </Link>
-          <span className="rounded-[var(--radius-pill)] border-2 border-ink bg-plum px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-butter uppercase">
-            Privasi
-          </span>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <BackLink href="/" label="Beranda" />
+            <span className="rounded-[var(--radius-pill)] border-2 border-ink bg-plum px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-butter uppercase">
+              Privasi
+            </span>
+          </div>
         </div>
       </header>
 
       <main className="flex-1">
-        <div className="shell py-[var(--section)] max-w-[var(--measure)]">
+        <div className="shell max-w-[var(--measure)] py-[var(--page)]">
           <h1 className="text-display font-extrabold">Privasi</h1>
 
           <div className="mt-10 flex flex-col gap-6 text-lead text-ink-body">
@@ -69,14 +78,10 @@ export default function PrivacyPage() {
             </section>
           </div>
 
-          <Link
-            href="/"
-            className="pressable mt-12 inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-mint px-7 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-sky"
-          >
-            Kembali ke beranda
-          </Link>
         </div>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

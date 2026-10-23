@@ -13,9 +13,11 @@ import Link from "next/link";
 
 import { Faq } from "@/components/faq";
 import { GalleryGrid } from "@/components/gallery-grid";
-import { LiveStrip } from "@/components/live-strip";
+import { HeroStrip } from "@/components/hero-strip";
+import { LayoutPreview } from "@/components/layout-preview";
 import { LAYOUTS, LAYOUT_ORDER } from "@/lib/layouts";
 import { Logo } from "@/components/logo";
+import { SiteFooter } from "@/components/site-footer";
 
 const btnPrimary =
   "pressable inline-flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-pink px-7 py-4 font-display text-lead font-bold text-ink shadow-lift-2 hover:bg-[var(--mix-coral)]";
@@ -57,7 +59,7 @@ const STEPS: { icon: TablerIcon; title: string; body: string }[] = [
   {
     icon: IconCamera,
     title: "Buka linknya",
-    body: "Buka SnapVibe di browser HP, lalu pilih layout. Nggak perlu install apa pun, cukup izinkan kamera sekali.",
+    body: "Buka SnapVibe di browser HP, lalu pilih layout. Cukup izinkan kamera sekali.",
   },
   {
     icon: IconBolt,
@@ -168,7 +170,7 @@ export default function Home() {
 
       <main className="flex-1">
         <section className="relative overflow-hidden">
-          <div className="shell relative grid gap-14 py-[clamp(3rem,7vw,6rem)] lg:grid-cols-[1fr_0.92fr] lg:items-center">
+          <div className="shell relative grid gap-10 py-[clamp(3rem,7vw,6rem)] md:grid-cols-[minmax(0,1fr)_minmax(260px,0.72fr)] md:items-center lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-14">
             <div>
               <h1 className="text-display font-extrabold">
                 Booth fotonya
@@ -201,7 +203,7 @@ export default function Home() {
             </div>
 
             <div>
-              <LiveStrip />
+              <HeroStrip />
             </div>
           </div>
         </section>
@@ -213,7 +215,7 @@ export default function Home() {
               {STEPS.map((step, i) => (
                 <article
                   key={step.title}
-                  className="pressable relative rounded-[var(--radius-lg)] border-2 border-ink bg-bg p-7 shadow-lift-2"
+                  className="relative rounded-[var(--radius-lg)] border-2 border-ink bg-bg p-7 shadow-lift-2"
                   style={{ transform: `rotate(${i === 0 ? -1 : i === 2 ? 1 : 0}deg)` }}
                 >
                   <span
@@ -245,12 +247,9 @@ export default function Home() {
                 return (
                   <article
                     key={key}
-                    className="pressable flex flex-col rounded-[var(--radius-lg)] border-2 border-ink bg-elev p-5 shadow-lift-2"
+                    className="flex flex-col rounded-[var(--radius-lg)] border-2 border-ink bg-elev p-5 shadow-lift-2"
                   >
                     <div className="flex h-44 items-center justify-center rounded-[10px] border-2 border-ink bg-sunken p-3">
-                      {/* A true-scale preview. Every slot sits where
-                          renderStrip actually draws it, so the card shows the
-                          real arrangement instead of a row of equal boxes. */}
                       <div
                         style={{
                           aspectRatio: `${layout.canvas.w} / ${layout.canvas.h}`,
@@ -258,52 +257,7 @@ export default function Home() {
                           transform: `rotate(${index % 2 === 0 ? -1 : 1}deg)`,
                         }}
                       >
-                        <svg
-                          viewBox={`0 0 ${layout.canvas.w} ${layout.canvas.h}`}
-                          style={{ display: "block", width: "100%", height: "100%" }}
-                          role="img"
-                          aria-label={`Contoh susunan ${layout.label}: ${layout.blurb}, ${layout.shotCount} bidikan`}
-                        >
-                          <rect
-                            width={layout.canvas.w}
-                            height={layout.canvas.h}
-                            rx={layout.canvas.w * 0.02}
-                            fill="var(--bg)"
-                            stroke="var(--ink)"
-                            strokeWidth="2"
-                            vectorEffect="non-scaling-stroke"
-                          />
-                          {layout.slots.map((slot, slotIndex) => {
-                            const cx = slot.x + slot.w / 2;
-                            const cy = slot.y + slot.h / 2;
-                            // The glyph is drawn in a 100-unit box, so scale it
-                            // to sit inside the slot with breathing room.
-                            const scale = (Math.min(slot.w, slot.h) * 0.62) / 100;
-                            return (
-                              <g key={slotIndex}>
-                                <rect
-                                  x={slot.x}
-                                  y={slot.y}
-                                  width={slot.w}
-                                  height={slot.h}
-                                  rx={layout.canvas.w * 0.012}
-                                  fill={ink}
-                                  stroke="var(--ink)"
-                                  strokeWidth="1.5"
-                                  vectorEffect="non-scaling-stroke"
-                                />
-                                <g
-                                  transform={`translate(${cx} ${cy}) scale(${scale})`}
-                                  fill="var(--ink)"
-                                  opacity="0.45"
-                                >
-                                  <circle cy="-20" r="20" />
-                                  <path d="M -42 46a42 34 0 0 1 84 0z" />
-                                </g>
-                              </g>
-                            );
-                          })}
-                        </svg>
+                        <LayoutPreview type={key} slotFill={ink} />
                       </div>
                     </div>
                     <h3 className="mt-5 font-display text-h3 font-extrabold">{layout.label}</h3>
@@ -328,7 +282,7 @@ export default function Home() {
               {FEATURES.map((feature, i) => (
                 <article
                   key={feature.title}
-                  className={`pressable relative flex flex-col border-2 border-ink shadow-lift-2 ${
+                  className={`relative flex flex-col border-2 border-ink shadow-lift-2 ${
                     feature.hero
                       ? "justify-between rounded-[var(--radius-xl)] p-8 shadow-lift-3 lg:col-span-2 lg:row-span-2 lg:p-10"
                       : "rounded-[var(--radius-lg)] p-6"
@@ -425,7 +379,7 @@ export default function Home() {
 
               <span
                 aria-hidden="true"
-                className="absolute -right-8 -bottom-6 rotate-[7deg] rounded-[6px] border-[3px] border-ink bg-pink px-3.5 py-2 text-center font-display uppercase shadow-lift-1"
+                className="absolute -right-4 -bottom-6 rotate-[7deg] rounded-[6px] border-[3px] border-ink bg-pink px-3.5 py-2 text-center font-display uppercase shadow-lift-1 sm:-right-8"
               >
                 <span className="block text-[0.6rem] font-extrabold tracking-[0.22em] text-ink">
                   Kedaluwarsa
@@ -464,7 +418,7 @@ export default function Home() {
               </Link>
             </div>
             <div className="mt-8">
-              <GalleryGrid />
+              <GalleryGrid mobilePreviewCount={4} expandable={false} />
             </div>
           </div>
         </section>
@@ -491,33 +445,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t-2 border-ink bg-butter">
-        <div className="shell flex flex-col gap-4 py-8 sm:flex-row sm:items-center sm:justify-between">
-          <p className="font-display text-h3 font-extrabold text-ink">
-            <Logo className="h-10 w-auto" />
-          </p>
-          <nav className="flex flex-wrap gap-3" aria-label="Footer">
-            <Link
-              href="/booth"
-              className="rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-4 py-1.5 font-display text-small font-bold text-ink transition-colors hover:bg-mint"
-            >
-              Booth
-            </Link>
-            <Link
-              href="/gallery"
-              className="rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-4 py-1.5 font-display text-small font-bold text-ink transition-colors hover:bg-mint"
-            >
-              Galeri
-            </Link>
-            <Link
-              href="/privacy"
-              className="rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-4 py-1.5 font-display text-small font-bold text-ink transition-colors hover:bg-mint"
-            >
-              Privasi
-            </Link>
-          </nav>
-        </div>
-      </footer>
+      <SiteFooter />
     </>
   );
 }

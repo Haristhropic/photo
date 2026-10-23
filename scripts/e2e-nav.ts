@@ -59,7 +59,7 @@ async function main() {
   const context = await browser.newContext({ permissions: ["camera"], viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
 
-  const routes = ["/", "/booth", "/studio", "/privacy", "/admin", "/e/launch-party", "/p/nope-does-not-exist"];
+  const routes = ["/", "/booth", "/studio", "/privacy", "/gallery", "/admin", "/e/launch-party", "/p/nope-does-not-exist"];
   const bad: string[] = [];
 
   for (const route of routes) {
@@ -70,7 +70,40 @@ async function main() {
     if (status !== expected) bad.push(`${route} returned ${status}`);
   }
 
-  for (const route of ["/", "/booth", "/privacy", "/admin", "/e/launch-party"]) {
+  // Every non-home screen carries the same back affordance, and it always
+  // names the screen it returns to instead of relying on browser history.
+  const routeBackCases: Array<[string, string, string]> = [
+    ["/booth", "/", "Kembali ke beranda"],
+    ["/studio", "/", "Kembali ke beranda"],
+    ["/privacy", "/", "Kembali ke beranda"],
+    ["/gallery", "/", "Kembali ke beranda"],
+    ["/admin", "/", "Kembali ke beranda"],
+    ["/e/launch-party", "/", "Kembali ke beranda"],
+    ["/p/nope-does-not-exist", "/", "Kembali ke beranda"],
+  ];
+  for (const [url, wantHref, wantLabel] of routeBackCases) {
+    await page.goto(`${BASE}${url}`, { waitUntil: "domcontentloaded" });
+    const control = page.locator('header a[aria-label^="Kembali ke"]').first();
+    try {
+      await control.waitFor({ state: "visible", timeout: 10000 });
+    } catch {
+      bad.push(`${url} has no header back control`);
+      continue;
+    }
+    const got = await control.evaluate((element) => ({
+      href: element.getAttribute("href") ?? "",
+      label: element.getAttribute("aria-label") ?? "",
+    }));
+    if (got.href !== wantHref || got.label !== wantLabel) {
+      bad.push(
+        `${url} back control -> ${got.href} / ${got.label}, want ${wantHref} / ${wantLabel}`,
+      );
+    } else {
+      log("page back control", `${url} -> ${got.href} (${got.label})`);
+    }
+  }
+
+  for (const route of ["/", "/booth", "/privacy", "/gallery", "/admin", "/e/launch-party"]) {
     const links = await internalLinks(page, route);
     for (const href of links) {
       if (/^(https?:|mailto:|tel:|#)/.test(href)) continue;
@@ -209,10 +242,15 @@ async function main() {
     log("admin login", String(login.status()));
     if (!login.ok()) bad.push(`admin login failed (${login.status()})`);
     await page.goto(`${BASE}/admin`, { waitUntil: "domcontentloaded" });
-    const siteLinks = await page.getByRole("link", { name: /lihat situs/i }).count();
+    const siteLinks = await page
+      .getByRole("link", { name: "Kembali ke beranda", exact: true })
+      .count();
     log("admin -> public site link", `${siteLinks} found`);
     if (siteLinks === 0) bad.push("/admin offers no link back to the public site");
-    await page.getByRole("link", { name: /lihat situs/i }).first().click();
+    await page
+      .getByRole("link", { name: "Kembali ke beranda", exact: true })
+      .first()
+      .click();
     await page.waitForURL(`${BASE}/`, { timeout: 10000 });
     log("admin -> home", page.url());
   } else {

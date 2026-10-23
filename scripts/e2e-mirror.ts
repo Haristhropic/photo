@@ -56,6 +56,17 @@ async function main() {
       ctx.fillRect(0, 0, 320, 480);
       ctx.fillStyle = "#0000ff";
       ctx.fillRect(320, 0, 320, 480);
+      // A canvas stream only presents new frames when the canvas is painted.
+      // Bump one row so the booth's fresh-frame wait sees a live stream; the
+      // sampled slot remains a red/blue split.
+      let tick = 0;
+      setInterval(() => {
+        tick += 1;
+        ctx.fillStyle = tick % 2 === 0 ? "#ff0000" : "#fe0000";
+        ctx.fillRect(0, 0, 320, 1);
+        ctx.fillStyle = tick % 2 === 0 ? "#0000ff" : "#0000fe";
+        ctx.fillRect(320, 0, 320, 1);
+      }, 100);
       const stream = canvas.captureStream(30);
       navigator.mediaDevices.getUserMedia = () => Promise.resolve(stream);
     });
@@ -142,7 +153,7 @@ async function main() {
     await clickWhenSettled(page, 'button:has-text("Lanjut ke studio")');
     await page.waitForURL("**/studio", { timeout: 25000 });
     await page
-      .locator('img[alt="Pratinjau strip foto"]')
+      .locator('img[alt^="Pratinjau strip foto"]')
       .waitFor({ state: "visible", timeout: 25000 });
 
     const saveButton = page.getByRole("button", { name: /Simpan dan buat QR/i });

@@ -1,13 +1,15 @@
-import { eq } from "drizzle-orm";
-import { IconArrowRight, IconCamera, IconLock } from "@tabler/icons-react";
+import { eq, isNull, or } from "drizzle-orm";
+import { IconCamera, IconLock } from "@tabler/icons-react";
 import Link from "next/link";
 import type { Metadata } from "next";
 
+import { BackLink } from "@/components/back-link";
 import { EventJoinClient } from "@/components/event-join-client";
 import { db } from "@/db";
 import { events, frames } from "@/db/schema";
 import { LAYOUTS } from "@/lib/layouts";
 import { Logo } from "@/components/logo";
+import { SiteFooter } from "@/components/site-footer";
 
 export const metadata: Metadata = {
   title: "Event: SnapVibe",
@@ -38,12 +40,6 @@ export default async function EventPage(props: PageProps<"/e/[slug]">) {
           Tautan event ini tidak dikenali. Minta organizer memeriksa kembali
           link yang dibagikan.
         </p>
-        <Link
-          href="/"
-          className="pressable mt-8 inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-mint px-7 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-butter"
-        >
-          Kembali ke beranda
-        </Link>
       </Shell>
     );
   }
@@ -51,7 +47,7 @@ export default async function EventPage(props: PageProps<"/e/[slug]">) {
   const eventFrames = await db
     .select({ id: frames.id, name: frames.name })
     .from(frames)
-    .where(eq(frames.eventId, event.id));
+    .where(or(isNull(frames.eventId), eq(frames.eventId, event.id)));
 
   const locked = Boolean(event.accessCode);
 
@@ -111,22 +107,14 @@ export default async function EventPage(props: PageProps<"/e/[slug]">) {
           </div>
         </dl>
 
-        <div className="mt-8 flex flex-col items-start gap-5">
-          {locked && (
+        {locked && (
+          <div className="mt-8">
             <p className="inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-plum px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-butter uppercase">
               <IconLock size={16} stroke={2.5} aria-hidden="true" />
               Event terkunci
             </p>
-          )}
-
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 font-display text-small font-bold text-ink-body transition-colors hover:text-ink"
-          >
-            SnapVibe
-            <IconArrowRight size={16} stroke={2.5} aria-hidden="true" />
-          </Link>
-        </div>
+          </div>
+        )}
       </Shell>
 
   );
@@ -136,19 +124,28 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-1 flex-col">
       <header className="border-b-2 border-ink">
-        <div className="shell flex h-18 items-center justify-between py-2">
-          <Link href="/" className="font-display text-h3 font-extrabold">
+        <div className="shell flex h-18 items-center justify-between gap-3 py-2">
+          <Link
+            href="/"
+            aria-label="SnapVibe, kembali ke beranda"
+            className="font-display text-h3 font-extrabold"
+          >
             <Logo className="h-12 w-auto" />
           </Link>
-          <span className="rounded-[var(--radius-pill)] border-2 border-ink bg-sky px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
-            Booth event
-          </span>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <BackLink href="/" label="Beranda" />
+            <span className="hidden rounded-[var(--radius-pill)] border-2 border-ink bg-sky px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase sm:inline-flex">
+              Booth event
+            </span>
+          </div>
         </div>
       </header>
 
       <main className="flex-1">
-        <div className="shell py-[var(--section)]">{children}</div>
+        <div className="shell py-[var(--page)]">{children}</div>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

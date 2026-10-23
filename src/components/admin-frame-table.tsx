@@ -4,12 +4,23 @@ import { IconCheck, IconPencil, IconTrash, IconX } from "@tabler/icons-react";
 import { useState } from "react";
 
 import { adminRequest } from "@/lib/admin-api";
+import {
+  FRAME_CATEGORIES,
+  FRAME_CATEGORY_LABEL,
+  type FrameCategory,
+} from "@/lib/frames";
+import { adminThumbnailUrl } from "@/lib/image-url";
 import { LAYOUTS, LAYOUT_ORDER, type LayoutType } from "@/lib/layouts";
 
 export type FrameRow = {
   id: string;
   name: string;
   imageUrl: string;
+  imagePublicId: string | null;
+  imageWidth: number;
+  imageHeight: number;
+  windows: Array<{ x: number; y: number; w: number; h: number }>;
+  category: string;
   layoutType: string;
   eventId: string | null;
   eventTitle: string | null;
@@ -62,6 +73,9 @@ function FrameItem({
   const [layoutType, setLayoutType] = useState<LayoutType>(
     (frame.layoutType as LayoutType) ?? "STRIP_3",
   );
+  const [category, setCategory] = useState<FrameCategory>(
+    (frame.category as FrameCategory) ?? "cool",
+  );
   const [eventId, setEventId] = useState(frame.eventId ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +83,7 @@ function FrameItem({
   function reset() {
     setName(frame.name);
     setLayoutType((frame.layoutType as LayoutType) ?? "STRIP_3");
+    setCategory((frame.category as FrameCategory) ?? "cool");
     setEventId(frame.eventId ?? "");
     setError(null);
   }
@@ -81,7 +96,7 @@ function FrameItem({
     try {
       await adminRequest(`/api/admin/frames/${frame.id}`, {
         method: "PATCH",
-        body: { name, layoutType, eventId: eventId || null },
+        body: { name, layoutType, category, eventId: eventId || null },
       });
       setEditing(false);
       onChanged();
@@ -94,7 +109,7 @@ function FrameItem({
 
   async function remove() {
     const confirmed = window.confirm(
-      `Hapus frame "${frame.name}"? File PNG akan dihapus permanen.`,
+      `Hapus frame "${frame.name}"? File di Cloudinary akan dihapus permanen.`,
     );
     if (!confirmed || busy) return;
 
@@ -115,15 +130,31 @@ function FrameItem({
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-lg)] border-2 border-ink bg-elev p-6 shadow-lift-1">
         <div className="flex min-w-0 items-center gap-4">
           <img
-            src={frame.imageUrl}
+            src={adminThumbnailUrl(frame.imageUrl, 160)}
             alt={`Frame ${frame.name}`}
+            width={160}
+            height={160}
+            loading="lazy"
+            decoding="async"
             className="size-16 shrink-0 rounded-[var(--radius)] border-2 border-ink bg-butter object-contain"
           />
           <div className="min-w-0">
             <p className="font-display text-h3 font-extrabold">{frame.name}</p>
             <p className="mt-1 font-display text-label font-bold tracking-[0.08em] text-ink-meta">
               {LAYOUTS[layoutType]?.label ?? frame.layoutType} /{" "}
+              {FRAME_CATEGORY_LABEL[category] ?? category} /{" "}
               {frame.eventTitle ?? "tanpa event"}
+            </p>
+            <p className="mt-1 text-small font-semibold text-ink-body">
+              {frame.imageWidth} x {frame.imageHeight} / {frame.windows.length}{" "}
+              jendela /{" "}
+              <span
+                className={`inline-flex rounded-[var(--radius-pill)] border-2 border-ink px-2 py-0.5 font-display text-[11px] font-extrabold tracking-[0.08em] uppercase ${
+                  frame.imagePublicId ? "bg-mint" : "bg-butter"
+                }`}
+              >
+                {frame.imagePublicId ? "Cloudinary" : "Lokal"}
+              </span>
             </p>
           </div>
         </div>
@@ -160,12 +191,16 @@ function FrameItem({
     <div className="bg-elev p-6">
       <div className="flex flex-wrap items-start gap-4">
         <img
-          src={frame.imageUrl}
+          src={adminThumbnailUrl(frame.imageUrl, 160)}
           alt={`Frame ${frame.name}`}
+          width={160}
+          height={160}
+          loading="lazy"
+          decoding="async"
           className="size-20 shrink-0 rounded-[var(--radius)] border-2 border-ink bg-butter object-contain"
         />
 
-        <div className="grid flex-1 gap-4 sm:grid-cols-3">
+        <div className="grid flex-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label htmlFor={`frame-name-${frame.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
               Nama
@@ -191,6 +226,24 @@ function FrameItem({
               {LAYOUT_ORDER.map((key) => (
                 <option key={key} value={key}>
                   {LAYOUTS[key].label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor={`frame-category-${frame.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
+              Kategori
+            </label>
+            <select
+              id={`frame-category-${frame.id}`}
+              value={category}
+              onChange={(e) => setCategory(e.target.value as FrameCategory)}
+              className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 text-small font-semibold text-ink outline-none focus:bg-butter"
+            >
+              {FRAME_CATEGORIES.map((key) => (
+                <option key={key} value={key}>
+                  {FRAME_CATEGORY_LABEL[key]}
                 </option>
               ))}
             </select>

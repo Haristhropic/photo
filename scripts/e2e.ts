@@ -60,6 +60,35 @@ async function main() {
     await page.goto(`${BASE}/booth`, { waitUntil: "domcontentloaded" });
     log("booth loaded", page.url());
 
+    const expectedViewBoxes: Record<string, string> = {
+      STRIP_3: "0 0 900 1800",
+      STRIP_4: "0 0 900 2400",
+      GRID_4: "0 0 1200 1200",
+      SINGLE: "0 0 1000 1000",
+    };
+    const layoutPreviews = await page
+      .locator("[data-layout-preview]")
+      .evaluateAll((nodes) =>
+        nodes.map((node) => ({
+          type: node.getAttribute("data-layout-preview") ?? "",
+          viewBox: node.getAttribute("viewBox") ?? "",
+        })),
+      );
+    log(
+      "layout previews",
+      layoutPreviews.map((item) => `${item.type}:${item.viewBox}`).join(", "),
+    );
+    if (layoutPreviews.length !== 4) {
+      throw new Error(`expected 4 layout previews, found ${layoutPreviews.length}`);
+    }
+    for (const preview of layoutPreviews) {
+      if (expectedViewBoxes[preview.type] !== preview.viewBox) {
+        throw new Error(
+          `layout preview ${preview.type} has viewBox ${preview.viewBox}, expected ${expectedViewBoxes[preview.type]}`,
+        );
+      }
+    }
+
     const startButton = page.getByRole("button", { name: /Aktifkan kamera/i });
     await startButton.waitFor({ state: "visible", timeout: 20000 });
 
@@ -121,6 +150,16 @@ async function main() {
     await page.waitForURL("**/studio", { timeout: 15000 });
     log("studio entered", page.url());
 
+    const studioBack = page.locator('header a[aria-label="Kembali ke booth"]');
+    await studioBack.waitFor({ state: "visible", timeout: 10000 });
+    const studioBackHref = await studioBack.getAttribute("href");
+    if (studioBackHref !== "/booth?from=studio") {
+      throw new Error(
+        `studio back control points at ${studioBackHref}, want /booth?from=studio`,
+      );
+    }
+    log("studio back control", studioBackHref);
+
     // The header must keep the brand and the control cluster as two siblings.
     // Extra direct children let `justify-between` space every pill across the
     // full width, which reads as a broken navbar.
@@ -149,15 +188,14 @@ async function main() {
     }
 
     await page.getByRole("button", { name: "Punch" }).click();
-    await page.getByRole("button", { name: "EVENT" }).click();
+    await page.getByRole("button", { name: "Party", exact: true }).click();
     log("filter + sticker applied");
 
-    await page
-      .locator('img[alt="Pratinjau strip foto"]')
-      .waitFor({ state: "visible", timeout: 20000 });
-    const previewSrc = await page
-      .locator('img[alt="Pratinjau strip foto"]')
-      .getAttribute("src");
+    const preview = page.locator(
+      'img[alt="Pratinjau strip foto dengan stiker Party"]',
+    );
+    await preview.waitFor({ state: "visible", timeout: 20000 });
+    const previewSrc = await preview.getAttribute("src");
     if (!previewSrc?.startsWith("data:image/png;base64,")) {
       throw new Error("preview is not a rendered PNG data URL");
     }
@@ -199,6 +237,18 @@ async function main() {
     log("saved to database", `accessKey=${accessKey}`);
 
     await page.getByText("Fotomu sudah jadi").waitFor({ state: "visible", timeout: 15000 });
+
+    // The download screen's back control returns to the booth for a retake,
+    // not to the empty studio that was replaced when the session was saved.
+    const resultBack = page.locator('header a[aria-label="Kembali ke booth"]');
+    await resultBack.waitFor({ state: "visible", timeout: 10000 });
+    const resultBackHref = await resultBack.getAttribute("href");
+    if (resultBackHref !== `/booth?from=p/${accessKey}`) {
+      throw new Error(
+        `result back control points at ${resultBackHref}, want /booth?from=p/${accessKey}`,
+      );
+    }
+    log("result back control", resultBackHref);
 
     const qr = page.locator('img[alt^="QR untuk"]');
     await qr.waitFor({ state: "visible", timeout: 15000 });

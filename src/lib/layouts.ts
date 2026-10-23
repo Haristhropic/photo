@@ -84,15 +84,6 @@ export const FILTERS = {
 
 export const FILTER_ORDER = Object.keys(FILTERS) as FilterKey[];
 
-export const STICKER_KEYS = ["snapvibe", "event", "today"] as const;
-export type StickerKey = (typeof STICKER_KEYS)[number];
-
-export const STICKER_TEXT: Record<StickerKey, string> = {
-  snapvibe: "SNAPVIBE",
-  event: "EVENT",
-  today: "TODAY",
-};
-
 export function isLayoutType(value: unknown): value is LayoutType {
   return typeof value === "string" && value in LAYOUTS;
 }

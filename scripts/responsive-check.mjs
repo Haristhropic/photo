@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:3000';
 const routes = process.argv.slice(2).length ? process.argv.slice(2) : ['/', '/booth', '/privacy', '/gallery', '/studio', '/e/launch-party', '/p/invalid'];
-const sizes = [360, 390, 430, 768, 1024, 1280, 1440];
+const sizes = [320, 360, 390, 430, 768, 1024, 1280, 1440];
 
 const browser = await chromium.launch({ args: ['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required'] });
 console.log('width route issues');

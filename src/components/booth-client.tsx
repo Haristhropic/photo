@@ -3,7 +3,6 @@
 import {
   IconArrowBackUp,
   IconCamera,
-  IconChevronLeft,
   IconRefresh,
   IconX,
 } from "@tabler/icons-react";
@@ -22,10 +21,14 @@ import {
   nextPaint,
   sleepUntil,
   stopStream,
+  waitForVideoLive,
 } from "@/lib/capture";
 import { writeDraft } from "@/lib/draft-store";
 import { LAYOUTS, LAYOUT_ORDER, type LayoutType } from "@/lib/layouts";
+import { BackLink } from "@/components/back-link";
+import { LayoutPreview } from "@/components/layout-preview";
 import { Logo } from "@/components/logo";
+import { SiteFooter } from "@/components/site-footer";
 
 const BOOTH_KEY = "snapvibe.boothrun";
 
@@ -39,16 +42,16 @@ function resolveBackTarget(from: string | undefined): { href: string; label: str
   if (from) {
     const [kind, value] = from.split("/");
     if (kind === "e" && value && SAFE_SEGMENT.test(value)) {
-      return { href: `/e/${value}`, label: "Kembali ke event" };
+      return { href: `/e/${value}`, label: "Event" };
     }
     if (kind === "p" && value && SAFE_SEGMENT.test(value)) {
-      return { href: `/p/${value}`, label: "Kembali ke foto" };
+      return { href: `/p/${value}`, label: "Foto" };
     }
     if (kind === "studio" && !value) {
-      return { href: "/studio", label: "Kembali ke studio" };
+      return { href: "/studio", label: "Studio" };
     }
   }
-  return { href: "/", label: "Kembali ke beranda" };
+  return { href: "/", label: "Beranda" };
 }
 
 type Status = "intro" | "requesting" | "ready" | "countdown" | "burst" | "review" | "error";
@@ -65,6 +68,14 @@ export function BoothClient({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const runRef = useRef(0);
+  // Which run currently owns the live stream. A cancelled run must not stop a
+  // stream that a newer run has taken over.
+  const streamOwnerRef = useRef(0);
+  // StrictMode runs the mount effect's cleanup once in development, right after
+  // the first mount. Bumping runRef there used to invalidate a camera request
+  // the guest had just started, leaving the booth stuck on "Menunggu izin
+  // kamera". Track real unmounts separately so only navigation cancels work.
+  const mountedRef = useRef(true);
 
   const [status, setStatus] = useState<Status>("intro");
   const [layoutType, setLayoutType] = useState<LayoutType>("STRIP_3");
@@ -122,8 +133,9 @@ export function BoothClient({
     status === "ready" || status === "countdown" || status === "burst";
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
-      runRef.current += 1;
+      mountedRef.current = false;
       stopStream(streamRef.current);
       streamRef.current = null;
     };
@@ -170,6 +182,16 @@ export function BoothClient({
       return;
     }
 
+    // Release the previous stream before asking for a new one. Some devices
+    // refuse a second stream while the first is still open, and this also
+    // guarantees the run cannot accidentally reuse a stale camera.
+    if (streamRef.current) {
+      streamOwnerRef.current = 0;
+      stopStream(streamRef.current);
+      streamRef.current = null;
+      setStream(null);
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 960 } },
@@ -177,16 +199,18 @@ export function BoothClient({
       });
       // The permission prompt can still be open when the guest navigates away.
       // Without this guard the late resolution overwrites the screen they chose
-      // and drops them back into the camera they just left.
-      if (runRef.current !== run) {
+      // and drops them back into the camera they just left. A newer run also
+      // owns the camera now, so this one must release its stream.
+      if (!mountedRef.current || runRef.current !== run) {
         stopStream(stream);
         return;
       }
+      streamOwnerRef.current = 0;
       streamRef.current = stream;
       setStream(stream);
       setStatus("ready");
     } catch (error) {
-      if (runRef.current !== run) return;
+      if (!mountedRef.current || runRef.current !== run) return;
       setErrorText(describeCameraError(error).message);
       setErrorKind("camera");
       setStatus("error");
@@ -200,14 +224,30 @@ export function BoothClient({
 
     const shotCount = preset.shotCount;
     const run = ++runRef.current;
-    const isCurrent = () => runRef.current === run;
+    const isCurrent = () => mountedRef.current && runRef.current === run;
+    streamOwnerRef.current = run;
 
     setShots([]);
     setErrorText(null);
     setErrorKind(null);
+    setStatus("countdown");
 
     const taken: string[] = [];
     try {
+      // Wait for the current stream to present a decoded, non-blank frame
+      // before the first countdown. Without this, a slow camera (or a retake)
+      // can expose the previous stream's frozen frame, which was then saved as
+      // the "new" photo.
+      const live = await waitForVideoLive(video);
+      if (!isCurrent()) return;
+      if (!live) {
+        setShots([]);
+        setErrorText(captureFailedMessage(shotCount));
+        setErrorKind("capture");
+        setStatus("error");
+        return;
+      }
+
       for (let shot = 0; shot < shotCount; shot += 1) {
         setShotIndex(shot);
 
@@ -242,10 +282,12 @@ export function BoothClient({
       return;
     } finally {
       // The stream must stay live for every grabFrame call, so it is released
-      // here instead. Guarded so a cancelled run cannot stop a newer stream
-      // that startCamera already installed.
-      stopStream(stream);
-      if (streamRef.current === stream) streamRef.current = null;
+      // here instead. Only the run that still owns the stream may stop it, so
+      // a cancelled run cannot kill a newer run's camera.
+      if (streamOwnerRef.current === run) {
+        stopStream(stream);
+        if (streamRef.current === stream) streamRef.current = null;
+      }
     }
 
     if (!isCurrent()) return;
@@ -281,12 +323,15 @@ export function BoothClient({
 
   function proceed() {
     if (shots.length === 0) return;
-    writeDraft({ shots, layoutType, eventId: eventId ?? null });
+    // Free the booth snapshot before writing the draft. Both hold the same
+    // photo data, and on a nearly-full sessionStorage the draft write could
+    // otherwise fail with the previous run still in place.
     try {
       sessionStorage.removeItem(BOOTH_KEY);
     } catch {
-      // The draft is already written, so a stale booth run is harmless.
+      // A blocked storage does not affect the in-memory draft handoff.
     }
+    writeDraft({ shots, layoutType, eventId: eventId ?? null });
     router.push("/studio");
   }
 
@@ -303,15 +348,7 @@ export function BoothClient({
           </Link>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <Link
-              href={back.href}
-              aria-label={back.label}
-              title={back.label}
-              className="pressable inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
-            >
-              <IconChevronLeft size={18} stroke={2.5} aria-hidden="true" />
-              <span className="sr-only sm:not-sr-only">{back.label}</span>
-            </Link>
+            <BackLink href={back.href} label={back.label} />
             {status !== "intro" && (
               <button
                 type="button"
@@ -335,10 +372,11 @@ export function BoothClient({
 
       <main className="flex flex-1 flex-col">
         <div
-          className={`shell flex flex-1 flex-col justify-center py-10 ${
+          className={`shell flex flex-1 flex-col justify-center pt-[var(--page)] pb-6 ${
             showPreview ? "" : "hidden"
           }`}
         >
+          {showPreview && <h1 className="sr-only">Booth kamera</h1>}
           <div className="mx-auto w-full max-w-3xl">
             <div
               className="relative w-full overflow-hidden rounded-[var(--radius-xl)] border-2 border-ink bg-board shadow-lift-3"
@@ -385,7 +423,7 @@ export function BoothClient({
           </div>
         </div>
         {status === "intro" && (
-          <div className="shell flex flex-1 flex-col justify-center py-[var(--section)]">
+          <div className="shell flex flex-1 flex-col justify-center py-[var(--page)]">
             <h1 className="text-display font-extrabold">Pilih layout</h1>
             <p className="mt-4 max-w-[var(--measure)] text-lead text-ink-body">
               Ganti layout dan mengambil ulang foto sebanyak yang kamu mau sebelum
@@ -393,7 +431,7 @@ export function BoothClient({
             </p>
 
             <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {LAYOUT_ORDER.map((key) => {
+              {LAYOUT_ORDER.map((key, index) => {
                 const layout = LAYOUTS[key];
                 const active = key === layoutType;
                 return (
@@ -408,22 +446,20 @@ export function BoothClient({
                         : "border-ink bg-elev shadow-lift-1 hover:bg-butter/50"
                     }`}
                   >
-                    <div className="grid h-36 place-items-center rounded-[10px] border-2 border-ink bg-sunken p-3">
+                    <div className="flex h-44 items-center justify-center overflow-hidden rounded-[10px] border-2 border-ink bg-sunken p-3">
                       <div
-                        className="flex max-h-full gap-1"
                         style={{
                           aspectRatio: `${layout.canvas.w} / ${layout.canvas.h}`,
                           height: "100%",
+                          transform: `rotate(${index % 2 === 0 ? -1 : 1}deg)`,
                         }}
                       >
-                        {layout.slots.map((slot, i) => (
-                          <div
-                            key={i}
-                            className={`flex-1 rounded-[2px] ${
-                              active ? "bg-pink ring-1 ring-ink/25" : "bg-elev ring-1 ring-ink/20"
-                            }`}
-                          />
-                        ))}
+                        <LayoutPreview
+                          type={key}
+                          slotFill={active ? "var(--pink)" : "var(--bg-elev)"}
+                          markOpacity={active ? 0.7 : 0.4}
+                          decorative
+                        />
                       </div>
                     </div>
                     <p
@@ -455,7 +491,7 @@ export function BoothClient({
         )}
 
         {status === "error" && (
-          <div className="shell flex flex-1 flex-col justify-center py-[var(--section)]">
+          <div className="shell flex flex-1 flex-col justify-center py-[var(--page)]">
             <div className="max-w-[var(--measure)] rounded-[var(--radius-xl)] border-2 border-ink bg-elev p-8 shadow-lift-2">
               <span
                 className="grid size-14 place-items-center rounded-[16px] border-2 border-ink bg-pink text-ink"
@@ -491,7 +527,7 @@ export function BoothClient({
         )}
 
         {(status === "ready" || status === "countdown" || status === "burst") && (
-          <div className="shell flex flex-1 flex-col justify-center pb-10">
+          <div className="shell flex flex-1 flex-col justify-center pb-[var(--page)]">
             <div className="mx-auto w-full max-w-3xl">
               <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
                 <p className="font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
@@ -512,14 +548,22 @@ export function BoothClient({
         )}
 
         {status === "review" && (
-          <div data-testid="review" className="shell flex flex-1 flex-col justify-center py-10">
+          <div data-testid="review" className="shell flex flex-1 flex-col justify-center py-[var(--page)]">
             <h1 className="font-display text-h2 font-extrabold">Ini fotomu</h1>
             <p className="mt-3 max-w-[var(--measure)] text-lead text-ink-body">
               Puas? Lanjut ke studio untuk ganti filter, tambah stiker, lalu
               simpan.
             </p>
 
-            <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div
+              className={`mt-8 grid gap-4 ${
+                shots.length === 1
+                  ? "mx-auto w-full max-w-md grid-cols-1"
+                  : shots.length === 3
+                    ? "grid-cols-3"
+                    : "grid-cols-2 sm:grid-cols-4"
+              }`}
+            >
               {shots.map((shot, i) => (
                 <div
                   key={i}
@@ -557,13 +601,16 @@ export function BoothClient({
         )}
 
         {status === "requesting" && (
-          <div className="shell flex flex-1 flex-col justify-center py-[var(--section)]">
+          <div className="shell flex flex-1 flex-col justify-center py-[var(--page)]">
+            <h1 className="sr-only">Menyiapkan kamera</h1>
             <p className="font-display text-lead font-bold text-ink-body">
               Menunggu izin kamera...
             </p>
           </div>
         )}
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

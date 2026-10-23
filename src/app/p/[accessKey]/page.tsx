@@ -1,10 +1,13 @@
 import { eq, sql } from "drizzle-orm";
-import { IconCamera, IconHome, IconQrcode, IconTrash } from "@tabler/icons-react";
+import { IconCamera, IconHome, IconQrcode } from "@tabler/icons-react";
 import QRCode from "qrcode";
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 
+import { BackLink } from "@/components/back-link";
 import { DownloadButton } from "@/components/download-button";
+import { SiteFooter } from "@/components/site-footer";
 import { db } from "@/db";
 import { events, photoSessions } from "@/db/schema";
 import { LAYOUTS } from "@/lib/layouts";
@@ -70,31 +73,46 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
   const layout = LAYOUTS[session.layoutType];
 
   return (
-    <Shell title="Fotomu sudah jadi">
-      <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
+    <Shell
+      title="Fotomu sudah jadi"
+      back={{
+        href: `/booth?from=p/${encodeURIComponent(accessKey)}`,
+        label: "Booth",
+      }}
+    >
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start">
         <div
-          className="rounded-[var(--radius-xl)] border-2 border-ink bg-ink p-3 shadow-lift-3"
-          style={{ transform: "rotate(-0.8deg)" }}
+          className="w-full min-w-0 justify-self-center rounded-[var(--radius-xl)] border-2 border-ink bg-ink p-3 shadow-lift-3 lg:justify-self-end"
+          style={{
+            transform: "rotate(-0.8deg)",
+            maxWidth: `calc(${(70 * layout.canvas.w) / layout.canvas.h}vh + 1.5rem)`,
+          }}
         >
-          <img
+          <Image
             src={session.finalPhotoUrl}
             alt="Strip foto hasil"
-            className="mx-auto max-h-[70vh] w-auto rounded-[6px]"
+            width={layout.canvas.w}
+            height={layout.canvas.h}
+            sizes="(min-width: 1024px) 45vw, 90vw"
+            priority
+            className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-[6px]"
           />
         </div>
 
-        <div className="flex flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-6">
           <div
-            className="rounded-[var(--radius-lg)] border-2 border-ink bg-butter p-6 shadow-lift-2"
+            className="w-full rounded-[var(--radius-lg)] border-2 border-ink bg-butter p-6 shadow-lift-2"
             style={{ transform: "rotate(0.8deg)" }}
           >
-            <div className="flex items-start gap-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
               <img
                 src={qrDataUrl}
                 alt={`QR untuk ${shareUrl}`}
-                className="size-40 shrink-0 rounded-[var(--radius)] border-2 border-ink bg-elev"
+                width={160}
+                height={160}
+                className="size-40 shrink-0 self-center rounded-[var(--radius)] border-2 border-ink bg-elev sm:self-start"
               />
-              <div>
+              <div className="min-w-0">
                 <p className="font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase">
                   Bagikan
                 </p>
@@ -120,6 +138,13 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
             >
               <IconCamera size={22} stroke={2.5} aria-hidden="true" />
               Boleh jepret lagi?
+            </Link>
+            <Link
+              href="/"
+              className="pressable inline-flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-6 py-4 font-display text-lead font-bold text-ink shadow-lift-2 hover:bg-butter"
+            >
+              <IconHome size={22} stroke={2.5} aria-hidden="true" />
+              Kembali ke beranda
             </Link>
           </div>
 
@@ -156,26 +181,32 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
   );
 }
 
-function Shell({ title, children }: { title: string; children: React.ReactNode }) {
+function Shell({
+  title,
+  children,
+  back,
+}: {
+  title: string;
+  children: React.ReactNode;
+  back?: { href: string; label: string; ariaLabel?: string };
+}) {
   return (
     <div className="flex flex-1 flex-col">
       <header className="border-b-2 border-ink">
         <div className="shell flex h-18 items-center justify-between gap-3 py-2">
           <Link
             href="/"
+            aria-label="SnapVibe, kembali ke beranda"
             className="font-display text-h3 font-extrabold"
           >
             <Logo className="h-12 w-auto" />
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">
-            <Link
-              href="/"
-              aria-label="Kembali ke beranda"
-              className="pressable inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1 hover:bg-butter"
-            >
-              <IconHome size={18} stroke={2.5} aria-hidden="true" />
-              <span className="sr-only sm:not-sr-only">Beranda</span>
-            </Link>
+            <BackLink
+              href={back?.href ?? "/"}
+              label={back?.label ?? "Beranda"}
+              ariaLabel={back?.ariaLabel}
+            />
             <span className="inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
               <IconQrcode size={16} stroke={2.5} aria-hidden="true" />
               Hasil
@@ -185,18 +216,13 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
       </header>
 
       <main className="flex-1">
-        <div className="shell py-[var(--section)]">
+        <div className="shell py-[var(--page)]">
           <h1 className="text-display font-extrabold">{title}</h1>
           <div className="mt-10">{children}</div>
         </div>
       </main>
 
-      <footer className="border-t-2 border-ink bg-butter">
-        <div className="shell flex items-center gap-2 py-6 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
-          <IconTrash size={16} stroke={2.5} aria-hidden="true" />
-          Foto dihapus otomatis setelah masa retensi habis
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

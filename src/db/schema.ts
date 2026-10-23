@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -20,6 +21,9 @@ export const layoutEnum = pgEnum("layout_type", [
 
 export type Role = (typeof roleEnum.enumValues)[number];
 export type LayoutType = (typeof layoutEnum.enumValues)[number];
+
+/** A photo window inside a server-stored frame, in source-image pixels. */
+export type FrameWindow = { x: number; y: number; w: number; h: number };
 
 // Neon runs in UTC and timestamp-without-timezone keeps stored values naive, so
 // comparisons against now() stay unambiguous regardless of client timezone.
@@ -65,6 +69,15 @@ export const frames = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     name: varchar("name", { length: 120 }).notNull(),
     imageUrl: text("image_url").notNull(),
+    // Cloudinary public id. Null for legacy/local fallback files, which are
+    // resolved through /api/files instead of the Cloudinary destroy API.
+    imagePublicId: text("image_public_id"),
+    // Source artwork dimensions and the transparent photo windows detected at
+    // upload time. The studio uses these to paint photos into the overlay.
+    imageWidth: integer("image_width").notNull().default(0),
+    imageHeight: integer("image_height").notNull().default(0),
+    windows: jsonb("windows").$type<FrameWindow[]>().notNull().default([]),
+    category: varchar("category", { length: 24 }).notNull().default("cool"),
     layoutType: layoutEnum("layout_type").notNull(),
     eventId: uuid("event_id").references(() => events.id, { onDelete: "cascade" }),
     createdAt: createdAt(),

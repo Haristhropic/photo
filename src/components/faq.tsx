@@ -14,26 +14,39 @@ export function Faq({ items }: { items: FAQItem[] }) {
         return (
           <div
             key={item.q}
-            className="cursor-pointer rounded-[var(--radius-lg)] border-2 border-ink bg-bg p-6 text-left transition-colors hover:bg-butter/25"
+            className="relative rounded-[var(--radius-lg)] border-2 border-ink bg-bg text-left transition-colors hover:bg-butter/25"
             style={{ boxShadow: "var(--lift-1)" }}
           >
-            <span
-              className="reg-cross mb-4 block size-5 text-ink/40"
-              aria-hidden="true"
-            />
             <button
               type="button"
               onClick={() => setOpen(isOpen ? null : index)}
               aria-expanded={isOpen}
-              className="w-full cursor-pointer text-left"
-            >
-              <h3 className="font-display text-h3 font-extrabold">{item.q}</h3>
-            </button>
-            {isOpen && (
-              <p className="mt-2 max-w-[var(--measure)] text-ink-body">
-                {item.a}
-              </p>
-            )}
+              aria-controls={`faq-answer-${index}`}
+              aria-labelledby={`faq-question-${index}`}
+              className="absolute inset-0 z-10 h-full w-full cursor-pointer"
+            />
+            <div className="p-5 sm:p-6">
+              <span
+                className={`reg-cross mb-3 block size-5 text-ink/40 transition-transform ${
+                  isOpen ? "rotate-45" : ""
+                }`}
+                aria-hidden="true"
+              />
+              <h3
+                id={`faq-question-${index}`}
+                className="font-display text-h3 font-extrabold"
+              >
+                {item.q}
+              </h3>
+              {isOpen && (
+                <p
+                  id={`faq-answer-${index}`}
+                  className="mt-2 max-w-[var(--measure)] text-ink-body"
+                >
+                  {item.a}
+                </p>
+              )}
+            </div>
           </div>
         );
       })}

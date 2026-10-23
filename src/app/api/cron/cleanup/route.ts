@@ -1,9 +1,10 @@
 import { unlink } from "node:fs/promises";
 
-import { and, count, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, count, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { photoSessions } from "@/db/schema";
+import { destroyAsset, isCloudinaryConfigured } from "@/lib/cloudinary";
 import { resolveStoredPath } from "@/lib/storage";
 
 export const runtime = "nodejs";
@@ -13,8 +14,8 @@ export const runtime = "nodejs";
 //
 // published_at is deliberately excluded from expiry: a guest who ticked
 // "publish" expects their strip to stay in the public gallery, so those rows
-// are permanent. Their Cloudinary asset is the gallery's copy, which is why
-// destroying it here would leave the feed pointing at a dead URL.
+// are permanent. An admin can remove it from the gallery first, which makes the
+// row eligible again and lets this job reclaim both copies.
 const expiredCutoff = and(
   sql`${photoSessions.expiresAt} < (now() at time zone 'utc')`,
   isNull(photoSessions.publishedAt),
@@ -25,12 +26,45 @@ export async function POST() {
     .select({
       id: photoSessions.id,
       finalPhotoUrl: photoSessions.finalPhotoUrl,
+      cloudinaryPublicId: photoSessions.cloudinaryPublicId,
     })
     .from(photoSessions)
     .where(expiredCutoff);
 
+  // Keep a row when its Cloudinary copy could not be destroyed. Deleting the
+  // row would orphan the asset, and no admin screen could ever find it again.
+  const removableIds: string[] = [];
+  let cloudinaryRemoved = 0;
+  let cloudinaryFailed = 0;
+
+  for (const row of expired) {
+    if (!row.cloudinaryPublicId) {
+      removableIds.push(row.id);
+      continue;
+    }
+
+    if (!isCloudinaryConfigured()) {
+      cloudinaryFailed += 1;
+      continue;
+    }
+
+    try {
+      const removed = await destroyAsset(row.cloudinaryPublicId);
+      if (removed) {
+        cloudinaryRemoved += 1;
+        removableIds.push(row.id);
+      } else {
+        cloudinaryFailed += 1;
+      }
+    } catch {
+      cloudinaryFailed += 1;
+    }
+  }
+
   let filesRemoved = 0;
   for (const row of expired) {
+    if (!removableIds.includes(row.id)) continue;
+
     const filename = row.finalPhotoUrl.split("/").pop() ?? "";
     const target = resolveStoredPath(filename);
     if (target) {
@@ -43,9 +77,16 @@ export async function POST() {
     }
   }
 
-  await db
-    .delete(photoSessions)
-    .where(expiredCutoff);
+  if (removableIds.length > 0) {
+    await db
+      .delete(photoSessions)
+      .where(
+        and(
+          expiredCutoff,
+          inArray(photoSessions.id, removableIds),
+        ),
+      );
+  }
 
   // Surfaced so a retention run shows published photos were held back on
   // purpose rather than silently missed.
@@ -60,8 +101,10 @@ export async function POST() {
     );
 
   return Response.json({
-    sessionsRemoved: expired.length,
+    sessionsRemoved: removableIds.length,
     filesRemoved,
+    cloudinaryRemoved,
+    cloudinaryFailed,
     publishedKept: kept?.n ?? 0,
     ranAt: new Date().toISOString(),
   });

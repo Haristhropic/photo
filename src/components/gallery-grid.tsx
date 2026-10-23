@@ -3,13 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type GalleryPhoto = {
-  id: string;
-  cloudinaryUrl: string;
-  layoutType: string;
-  filterKey: string;
-  publishedAt: string | null;
-};
+import type { GalleryPhoto } from "@/lib/gallery";
+import { galleryThumbnailUrl } from "@/lib/image-url";
+import { LAYOUTS, type LayoutType } from "@/lib/layouts";
 
 // The gallery only ever shows a handful of strips by default so the page stays
 // a preview instead of a wall of every photo ever published.
@@ -33,8 +29,19 @@ function formatDate(value: string | null): string {
   });
 }
 
-export function GalleryGrid() {
-  const [photos, setPhotos] = useState<GalleryPhoto[] | null>(null);
+export function GalleryGrid({
+  initialPhotos,
+  mobilePreviewCount,
+  expandable = true,
+}: {
+  /** Server-rendered first page; omit to fetch after hydration. */
+  initialPhotos?: GalleryPhoto[];
+  mobilePreviewCount?: number;
+  expandable?: boolean;
+} = {}) {
+  const [photos, setPhotos] = useState<GalleryPhoto[] | null>(
+    initialPhotos ?? null,
+  );
   const [failed, setFailed] = useState(false);
   // "Coba lagi" bumps this instead of calling a loader, because the React
   // Compiler lint rule rejects setState written directly in an effect body.
@@ -42,6 +49,8 @@ export function GalleryGrid() {
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
+    if (initialPhotos !== undefined) return;
+
     const controller = new AbortController();
 
     const run = async () => {
@@ -63,7 +72,7 @@ export function GalleryGrid() {
 
     void run();
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, initialPhotos]);
 
   if (failed) {
     return (
@@ -118,38 +127,52 @@ export function GalleryGrid() {
   return (
     <>
       <ul className="mt-10 grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
-        {visible.map((photo, index) => (
-          <li
-            key={photo.id}
-            className="overflow-hidden rounded-[var(--radius)] border-2 border-ink bg-elev shadow-lift-2"
-            style={{
-              transform: `rotate(${index % 2 === 0 ? -0.7 : 0.7}deg)`,
-            }}
-          >
-            <img
-              src={photo.cloudinaryUrl}
-              alt={`Strip foto ${LAYOUT_LABELS[photo.layoutType] ?? photo.layoutType}`}
-              loading="lazy"
-              className="aspect-3/4 w-full bg-sunken object-cover"
-            />
-            <div className="flex items-center justify-between gap-2 border-t-2 border-ink bg-paper px-3 py-2">
-              <span className="truncate font-display text-label font-bold tracking-[0.08em] text-ink uppercase">
-                {LAYOUT_LABELS[photo.layoutType] ?? photo.layoutType}
-              </span>
-              <span className="shrink-0 font-display text-small font-bold tracking-[0.08em] text-ink-meta uppercase">
-                {formatDate(photo.publishedAt)}
-              </span>
-            </div>
-          </li>
-        ))}
+        {visible.map((photo, index) => {
+          const layout =
+            LAYOUTS[photo.layoutType as LayoutType] ?? LAYOUTS.STRIP_3;
+          return (
+            <li
+              key={photo.id}
+              className={`self-start overflow-hidden rounded-[var(--radius)] border-2 border-ink bg-elev shadow-lift-2 ${
+                !expanded &&
+                mobilePreviewCount !== undefined &&
+                index >= mobilePreviewCount
+                  ? "max-sm:hidden"
+                  : ""
+              }`}
+              style={{
+                transform: `rotate(${index % 2 === 0 ? -0.7 : 0.7}deg)`,
+              }}
+            >
+              <img
+                src={galleryThumbnailUrl(photo.cloudinaryUrl)}
+                alt={`Strip foto ${LAYOUT_LABELS[photo.layoutType] ?? photo.layoutType}`}
+                width={layout.canvas.w}
+                height={layout.canvas.h}
+                loading={index === 0 ? "eager" : "lazy"}
+                fetchPriority={index === 0 ? "high" : "auto"}
+                decoding={index === 0 ? "sync" : "async"}
+                className="h-auto w-full bg-sunken object-cover"
+              />
+              <div className="flex flex-col gap-0.5 border-t-2 border-ink bg-bg px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                <span className="truncate font-display text-label font-bold tracking-[0.08em] text-ink uppercase">
+                  {LAYOUT_LABELS[photo.layoutType] ?? photo.layoutType}
+                </span>
+                <span className="shrink-0 font-display text-small font-bold tracking-[0.08em] text-ink-meta uppercase">
+                  {formatDate(photo.publishedAt)}
+                </span>
+              </div>
+            </li>
+          );
+        })}
       </ul>
 
-      {photos.length > PREVIEW_COUNT && (
+      {expandable && photos.length > PREVIEW_COUNT && (
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
           aria-expanded={expanded}
-          className="pressable mt-8 inline-flex items-center rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-6 py-3 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
+          className="pressable mt-8 inline-flex self-start items-center rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-6 py-3 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
         >
           {expanded ? "Tutup" : `Lihat semua (${hidden} lainnya)`}
         </button>

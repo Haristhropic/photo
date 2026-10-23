@@ -2,7 +2,8 @@ import { chromium } from "playwright";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
-const FILLED = '[data-slot-state="filled"]';
+const HERO = '[data-hero-strip="strip-3"]';
+const SLOTS = "[data-hero-slot]";
 
 /** Records every `getUserMedia` call the page makes, from before any script runs. */
 const INSTRUMENT_CAMERA = `
@@ -17,18 +18,16 @@ const INSTRUMENT_CAMERA = `
 `;
 
 const READ_CAMERA_CALLS = "window.__cameraCalls";
-const COUNT_FILLED = `document.querySelectorAll('${FILLED}').length`;
 
 function log(step: string, detail = "") {
   console.log(`[hero] ${step}${detail ? ` -> ${detail}` : ""}`);
 }
 
 /**
- * The landing-page strip is a demo of the capture cadence, not a capture.
- * It used to open the guest's camera on page load and sample real frames, so the
- * marketing page held a live feed of whoever scrolled past. This guards the new
- * contract from both sides: the strip must animate itself to three shots, and
- * the page must never reach for the camera to do it.
+ * The landing page shows a static proof of Strip 3. It must never ask for the
+ * camera, never mount a video element, and never advertise a live capture
+ * countdown. The marketing page has no business holding a feed of whoever
+ * scrolled past it.
  */
 async function main() {
   const browser = await chromium.launch();
@@ -38,9 +37,8 @@ async function main() {
     await context.addInitScript(INSTRUMENT_CAMERA);
     const page = await context.newPage();
 
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
-    // Long enough to cover the boot path that used to call getUserMedia.
-    await page.waitForTimeout(2000);
+    await page.goto(BASE, { waitUntil: "networkidle" });
+    await page.waitForTimeout(800);
 
     const calls = (await page.evaluate(READ_CAMERA_CALLS)) as number;
     log("getUserMedia calls", `${calls}`);
@@ -50,17 +48,36 @@ async function main() {
     log("<video> elements", `${videos}`);
     if (videos !== 0) throw new Error(`expected no <video> on the landing page, found ${videos}`);
 
-    // Three shots land, one countdown cycle (~3s) apart.
-    await page.waitForFunction(`${COUNT_FILLED} === 3`, undefined, { timeout: 25000 });
-    log("strip filled", "3 shots");
+    await page.waitForSelector(HERO, { timeout: 10000 });
 
-    // Then it loops back to an empty strip for the next pass.
-    await page.waitForFunction(`${COUNT_FILLED} === 0`, undefined, { timeout: 25000 });
-    log("strip looped", "back to 0 shots");
+    const slots = await page.locator(`${HERO} ${SLOTS}`).count();
+    log("Strip 3 slots", `${slots}`);
+    if (slots !== 3) throw new Error(`expected 3 Strip 3 slots, found ${slots}`);
 
-    const loopCalls = (await page.evaluate(READ_CAMERA_CALLS)) as number;
-    if (loopCalls !== 0) {
-      throw new Error(`the full loop asked for the camera ${loopCalls} time(s)`);
+    const hero = page.locator(HERO);
+    const heroText = await hero.innerText();
+    if (!heroText.toLowerCase().includes("strip 3")) {
+      throw new Error("the hero does not identify the Strip 3 layout");
+    }
+    if (/\bbidikan\s+\d+\s+dari\s+\d+/i.test(heroText)) {
+      throw new Error("the hero still advertises a live capture countdown");
+    }
+
+    const aria = await hero.getByRole("img").getAttribute("aria-label");
+    log("hero label", aria ?? "(missing)");
+    if (!aria?.includes("Contoh Strip 3")) {
+      throw new Error("the hero image is not labelled as a Strip 3 sample");
+    }
+
+    // A static proof must hold still; there is no loop to wait for.
+    await page.waitForTimeout(2500);
+    const stillThere = await page.locator(`${HERO} ${SLOTS}`).count();
+    log("slots after hold", `${stillThere}`);
+    if (stillThere !== 3) throw new Error(`the static strip changed to ${stillThere} slots`);
+
+    const lateCalls = (await page.evaluate(READ_CAMERA_CALLS)) as number;
+    if (lateCalls !== 0) {
+      throw new Error(`the hero asked for the camera ${lateCalls} time(s) after load`);
     }
 
     await context.close();
@@ -71,31 +88,23 @@ async function main() {
   }
 }
 
-/**
- * With motion reduced the strip must hold its finished state rather than run
- * timers forever — and it still must not touch the camera.
- */
+/** Reduced motion still gets the same finished proof, with no camera fallback. */
 async function guardReducedMotion(browser: Awaited<ReturnType<typeof chromium.launch>>) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await context.addInitScript(INSTRUMENT_CAMERA);
   const page = await context.newPage();
 
   try {
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(BASE, { waitUntil: "networkidle" });
 
-    await page.waitForFunction(`${COUNT_FILLED} === 3`, undefined, { timeout: 10000 });
-
-    // No timers may be pending: the strip stays put instead of looping.
-    await page.waitForTimeout(4000);
-    const stillFilled = (await page.evaluate(COUNT_FILLED)) as number;
+    await page.waitForSelector(HERO, { timeout: 10000 });
+    const slots = await page.locator(`${HERO} ${SLOTS}`).count();
     const calls = (await page.evaluate(READ_CAMERA_CALLS)) as number;
-    log("reduced motion", `${stillFilled} shots held, ${calls} camera calls`);
-    if (stillFilled !== 3) {
-      throw new Error(`reduced motion looped instead of holding (${stillFilled} shots)`);
-    }
+    log("reduced motion", `${slots} slots, ${calls} camera calls`);
+    if (slots !== 3) throw new Error(`reduced motion expected 3 slots, found ${slots}`);
     if (calls !== 0) {
-      throw new Error(`reduced motion still asked for the camera ${calls} time(s)`);
+      throw new Error(`reduced motion asked for the camera ${calls} time(s)`);
     }
   } finally {
     await context.close();

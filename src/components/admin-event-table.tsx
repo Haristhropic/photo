@@ -93,10 +93,10 @@ function EventItem({ event, onChanged }: { event: EventRow; onChanged: () => voi
 
   if (!editing) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-lg)] border-2 border-ink bg-elev p-6 shadow-lift-1">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-4 rounded-[var(--radius-lg)] border-2 border-ink bg-elev p-6 shadow-lift-1">
         <div className="min-w-0">
           <p className="font-display text-h3 font-extrabold">{event.title}</p>
-          <p className="mt-1 font-display text-label font-bold tracking-[0.08em] text-ink-meta">
+          <p className="mt-1 font-display text-label font-bold tracking-[0.08em] break-words text-ink-meta">
             /e/{event.slug} / kode {event.accessCode ?? "terbuka"} / retensi{" "}
             {event.retentionHours} jam
           </p>
@@ -142,7 +142,7 @@ function EventItem({ event, onChanged }: { event: EventRow; onChanged: () => voi
   }
 
   return (
-    <div className="bg-elev p-6">
+    <div className="min-w-0 bg-elev p-6">
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
           <label htmlFor={`title-${event.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">

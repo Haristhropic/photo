@@ -1,5 +1,3 @@
-import { unlink } from "node:fs/promises";
-
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -7,7 +5,7 @@ import { db } from "@/db";
 import { events, frames, photoSessions } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { slugify } from "@/lib/access-key";
-import { resolveStoredPath } from "@/lib/storage";
+import { removeFrameAsset } from "@/lib/frame-assets";
 
 export const runtime = "nodejs";
 
@@ -21,8 +19,12 @@ const patchSchema = z
     message: "Tidak ada field yang diubah",
   });
 
-async function loadEvent(id: string) {
-  const [event] = await db.select().from(events).where(eq(events.id, id)).limit(1);
+async function loadEvent(id: string, adminId: string) {
+  const [event] = await db
+    .select()
+    .from(events)
+    .where(and(eq(events.id, id), eq(events.creatorId, adminId)))
+    .limit(1);
   return event;
 }
 
@@ -33,7 +35,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/even
   }
 
   const { id } = await ctx.params;
-  const existing = await loadEvent(id);
+  const existing = await loadEvent(id, admin.id);
   if (!existing) {
     return Response.json({ error: "Event tidak ditemukan" }, { status: 404 });
   }
@@ -106,28 +108,28 @@ export async function DELETE(
   }
 
   const { id } = await ctx.params;
-  const existing = await loadEvent(id);
+  const existing = await loadEvent(id, admin.id);
   if (!existing) {
     return Response.json({ error: "Event tidak ditemukan" }, { status: 404 });
   }
 
-  // Cascade drops the frame rows, so their files are removed first.
+  // Cascade drops the frame rows, so their Cloudinary assets or local files
+  // have to be removed first.
   const eventFrames = await db
-    .select({ imageUrl: frames.imageUrl })
+    .select({
+      imageUrl: frames.imageUrl,
+      imagePublicId: frames.imagePublicId,
+    })
     .from(frames)
     .where(eq(frames.eventId, id));
 
   let filesRemoved = 0;
   for (const frame of eventFrames) {
-    const filename = frame.imageUrl.split("/").pop() ?? "";
-    const target = resolveStoredPath(filename);
-    if (!target) continue;
-    try {
-      await unlink(target);
-      filesRemoved += 1;
-    } catch {
-      // The row must still go even if the file is already missing.
-    }
+    const removed = await removeFrameAsset(
+      frame.imagePublicId,
+      frame.imageUrl,
+    );
+    if (removed) filesRemoved += 1;
   }
 
   const sessionRows = await db

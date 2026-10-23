@@ -58,7 +58,7 @@ async function readDraftBadge(page: Page) {
 }
 
 async function readPreviewSize(page: Page) {
-  const preview = page.locator('img[alt="Pratinjau strip foto"]');
+  const preview = page.locator('img[alt^="Pratinjau strip foto"]');
   await preview.waitFor({ state: "visible", timeout: 25000 });
   return preview.evaluate(async (node) => {
     const img = node as HTMLImageElement;
@@ -156,16 +156,29 @@ async function main() {
       throw new Error(`expected 4 shots in the badge, got "${secondBadge}"`);
     }
 
-    // A third run on the original layout proves the cycle keeps working rather
-    // than only alternating once.
+    // A third run proves the 4-shot vertical strip also replaces the previous
+    // draft; then a fourth covers the single-shot layout.
     await clickWhenSettled(page, page.getByRole("button", { name: /Ambil ulang/i }));
     await page.waitForURL("**/booth**", { timeout: 20000 });
-    await shootRun(page, "Single", 1);
+    await shootRun(page, "Strip 4", 4);
     const thirdBadge = await readDraftBadge(page);
     const thirdPreview = await readPreviewSize(page);
     log("third run in studio", `${thirdBadge} | preview ${thirdPreview}`);
-    if (thirdPreview !== "1000x1000") {
-      throw new Error(`third run should render 1000x1000, got ${thirdPreview}`);
+    if (thirdPreview !== "900x2400") {
+      throw new Error(`third run should render 900x2400, got ${thirdPreview}`);
+    }
+    if (!/4 bidikan/i.test(thirdBadge)) {
+      throw new Error(`expected 4 shots in the third badge, got "${thirdBadge}"`);
+    }
+
+    await clickWhenSettled(page, page.getByRole("button", { name: /Ambil ulang/i }));
+    await page.waitForURL("**/booth**", { timeout: 20000 });
+    await shootRun(page, "Single", 1);
+    const fourthBadge = await readDraftBadge(page);
+    const fourthPreview = await readPreviewSize(page);
+    log("fourth run in studio", `${fourthBadge} | preview ${fourthPreview}`);
+    if (fourthPreview !== "1000x1000") {
+      throw new Error(`fourth run should render 1000x1000, got ${fourthPreview}`);
     }
 
     console.log("RETAKE_OK");

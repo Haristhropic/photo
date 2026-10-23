@@ -1,21 +1,21 @@
-import { unlink } from "node:fs/promises";
-
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
 import { events, frames } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
+import { removeFrameAsset } from "@/lib/frame-assets";
+import { isFrameCategory } from "@/lib/frames";
 import { isLayoutType } from "@/lib/layouts";
-import { resolveStoredPath } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
 const patchSchema = z
   .object({
-    name: z.string().min(1).max(120).optional(),
+    name: z.string().trim().min(1).max(120).optional(),
     layoutType: z.string().optional(),
     eventId: z.string().uuid().nullish(),
+    category: z.string().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Tidak ada field yang diubah",
@@ -27,6 +27,7 @@ async function loadOwnedFrame(id: string, adminId: string) {
       id: frames.id,
       name: frames.name,
       imageUrl: frames.imageUrl,
+      imagePublicId: frames.imagePublicId,
       layoutType: frames.layoutType,
       eventId: frames.eventId,
       ownerId: events.creatorId,
@@ -66,10 +67,13 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/fram
     return Response.json({ error: "Data frame tidak valid" }, { status: 400 });
   }
 
-  const { name, layoutType, eventId } = parsed.data;
+  const { name, layoutType, eventId, category } = parsed.data;
 
   if (layoutType !== undefined && !isLayoutType(layoutType)) {
     return Response.json({ error: "Layout tidak dikenal" }, { status: 400 });
+  }
+  if (category !== undefined && !isFrameCategory(category)) {
+    return Response.json({ error: "Kategori frame tidak dikenal" }, { status: 400 });
   }
 
   if (eventId) {
@@ -88,6 +92,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/fram
     .set({
       ...(name ? { name: name.trim() } : {}),
       ...(layoutType ? { layoutType } : {}),
+      ...(category ? { category } : {}),
       ...(eventId !== undefined ? { eventId: eventId ?? null } : {}),
     })
     .where(eq(frames.id, id))
@@ -102,6 +107,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/fram
     name: updated.name,
     imageUrl: updated.imageUrl,
     layoutType: updated.layoutType,
+    category: updated.category,
     eventId: updated.eventId,
   });
 }
@@ -123,17 +129,10 @@ export async function DELETE(
 
   await db.delete(frames).where(eq(frames.id, id));
 
-  const filename = existing.imageUrl.split("/").pop() ?? "";
-  const target = resolveStoredPath(filename);
-  let fileRemoved = false;
-  if (target) {
-    try {
-      await unlink(target);
-      fileRemoved = true;
-    } catch {
-      // The row is already gone; a missing file is not an error here.
-    }
-  }
+  const fileRemoved = await removeFrameAsset(
+    existing.imagePublicId,
+    existing.imageUrl,
+  );
 
   return Response.json({ ok: true, deletedFrame: id, fileRemoved });
 }

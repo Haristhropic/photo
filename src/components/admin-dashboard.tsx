@@ -1,13 +1,17 @@
 "use client";
 
-import { IconLogout, IconPlus, IconTrash, IconUpload } from "@tabler/icons-react";
+import { IconPlus, IconTrash, IconUpload } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useState } from "react";
 
 import { AdminEventTable, type EventRow } from "@/components/admin-event-table";
 import { AdminFrameTable, type FrameRow } from "@/components/admin-frame-table";
-import { Logo } from "@/components/logo";
+import { AdminHeader } from "@/components/admin-header";
+import {
+  FRAME_CATEGORIES,
+  FRAME_CATEGORY_LABEL,
+  type FrameCategory,
+} from "@/lib/frames";
 import { LAYOUTS, LAYOUT_ORDER, type LayoutType } from "@/lib/layouts";
 
 export function AdminDashboard({
@@ -30,6 +34,7 @@ export function AdminDashboard({
 
   const [frameName, setFrameName] = useState("");
   const [frameLayout, setFrameLayout] = useState<LayoutType>("STRIP_3");
+  const [frameCategory, setFrameCategory] = useState<FrameCategory>("cool");
   const [frameEvent, setFrameEvent] = useState("");
   const [frameFile, setFrameFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -80,6 +85,7 @@ export function AdminDashboard({
       form.append("file", frameFile);
       form.append("name", frameName || frameFile.name.replace(/\.png$/i, ""));
       form.append("layoutType", frameLayout);
+      form.append("category", frameCategory);
       if (frameEvent) form.append("eventId", frameEvent);
 
       const response = await fetch("/api/admin/frames", {
@@ -110,8 +116,12 @@ export function AdminDashboard({
       const response = await fetch("/api/cron/cleanup", { method: "POST" });
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.error ?? "Pembersihan gagal");
+      const failed =
+        typeof data.cloudinaryFailed === "number" && data.cloudinaryFailed > 0
+          ? ` ${data.cloudinaryFailed} aset Cloudinary gagal dihapus dan akan dicoba lagi.`
+          : "";
       setMessage(
-        `${data.sessionsRemoved} sesi dihapus, ${data.filesRemoved} file dihapus.`,
+        `${data.sessionsRemoved} sesi dihapus, ${data.filesRemoved} file lokal dihapus, ${data.cloudinaryRemoved ?? 0} aset Cloudinary dihapus.${failed}`,
       );
       router.refresh();
     } catch (cause) {
@@ -121,37 +131,11 @@ export function AdminDashboard({
     }
   }
 
-  async function logout() {
-    await fetch("/api/admin/logout", { method: "POST" });
-    router.refresh();
-  }
-
   return (
     <div className="flex flex-1 flex-col">
-      <header className="border-b-2 border-ink">
-        <div className="shell flex h-18 items-center justify-between py-2">
-          <Logo className="h-11 w-auto" />
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="pressable inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
-            >
-              Lihat situs
-            </Link>
-            <button
-              type="button"
-              onClick={logout}
-              className="inline-flex items-center gap-2 pressable inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
-            >
-              <IconLogout size={18} stroke={1.75} aria-hidden="true" />
-              Keluar
-            </button>
-          </div>
-        </div>
-      </header>
-
+      <AdminHeader active="dashboard" />
       <main className="flex-1">
-        <div className="shell py-[var(--section)]">
+        <div className="shell py-[var(--page)]">
           <h1 className="text-display font-extrabold">Dashboard</h1>
 
           <dl className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -257,9 +241,13 @@ export function AdminDashboard({
                   onChange={(event) => setFrameFile(event.target.files?.[0] ?? null)}
                   className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-4 py-3 text-small font-semibold text-ink outline-none focus:bg-butter"
                 />
+                <p className="mt-2 text-small text-ink-body">
+                  PNG transparan. Jendela foto dideteksi otomatis, lalu file
+                  diunggah ke Cloudinary dan barisnya disimpan di Neon.
+                </p>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                   <label htmlFor="frame-name" className="font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
                     Nama
@@ -284,6 +272,23 @@ export function AdminDashboard({
                     {LAYOUT_ORDER.map((key) => (
                       <option key={key} value={key}>
                         {LAYOUTS[key].label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="frame-category" className="font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
+                    Kategori
+                  </label>
+                  <select
+                    id="frame-category"
+                    value={frameCategory}
+                    onChange={(event) => setFrameCategory(event.target.value as FrameCategory)}
+                    className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-4 py-3 font-semibold text-ink outline-none focus:bg-butter"
+                  >
+                    {FRAME_CATEGORIES.map((key) => (
+                      <option key={key} value={key}>
+                        {FRAME_CATEGORY_LABEL[key]}
                       </option>
                     ))}
                   </select>

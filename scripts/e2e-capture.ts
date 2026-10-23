@@ -31,6 +31,7 @@ type SavedStats = {
   w: number;
   h: number;
   slotMeans: number[][];
+  slotPrints: string[];
   range: number;
   mean: number;
 };
@@ -145,7 +146,7 @@ async function main() {
     // The save button stays disabled until the strip has finished rendering,
     // so wait for the preview rather than racing it.
     await page
-      .locator('img[alt="Pratinjau strip foto"]')
+      .locator('img[alt^="Pratinjau strip foto"]')
       .waitFor({ state: "visible", timeout: 25000 });
 
     const saveButton = page.getByRole("button", { name: /Simpan dan buat QR/i });
@@ -168,7 +169,14 @@ async function main() {
       x.drawImage(img, 0, 0);
 
       const slotMeans = [];
+      const slotPrints = [];
       const third = img.naturalHeight / 3;
+      // The test captures Strip 3 (PAD 48, GAP 24), so crop the actual photo
+      // rect for each slot. Comparing whole slots catches a reused frame; two
+      // similar moments can still share a scanline average.
+      const pad = 48;
+      const gap = 24;
+      const slotH = (img.naturalHeight - pad * 2 - gap * 2) / 3;
       for (let i = 0; i < 3; i += 1) {
         const y = Math.floor(i * third + third / 2);
         const d = x.getImageData(0, y, img.naturalWidth, 1).data;
@@ -176,6 +184,23 @@ async function main() {
         for (let p = 0; p < d.length; p += 4) { r += d[p]; g += d[p + 1]; b += d[p + 2]; }
         const n = d.length / 4;
         slotMeans.push([r / n, g / n, b / n]);
+
+        const slot = document.createElement("canvas");
+        slot.width = 32;
+        slot.height = 32;
+        const sx = slot.getContext("2d");
+        sx.drawImage(
+          img,
+          pad,
+          pad + i * (slotH + gap),
+          img.naturalWidth - pad * 2,
+          slotH,
+          0,
+          0,
+          32,
+          32,
+        );
+        slotPrints.push([...sx.getImageData(0, 0, 32, 32).data].join(","));
       }
 
       let min = 255; let max = 0; let sum = 0;
@@ -188,6 +213,7 @@ async function main() {
         w: img.naturalWidth,
         h: img.naturalHeight,
         slotMeans,
+        slotPrints,
         range: max - min,
         mean: sum / (all.length / 4),
       };
@@ -204,10 +230,10 @@ async function main() {
     for (let i = 0; i < 3; i += 1) {
       for (let j = i + 1; j < 3; j += 1) {
         const d = distance(saved.slotMeans[i], saved.slotMeans[j]);
-        log(`  slot ${i + 1} vs ${j + 1}`, `distance=${d.toFixed(1)}`);
-        if (d < 3) {
+        log(`  slot ${i + 1} vs ${j + 1}`, `mean distance=${d.toFixed(1)}`);
+        if (saved.slotPrints[i] === saved.slotPrints[j]) {
           throw new Error(
-            `stored slots ${i + 1} and ${j + 1} are the same frame (distance ${d.toFixed(1)})`,
+            `stored slots ${i + 1} and ${j + 1} are the same frame`,
           );
         }
       }

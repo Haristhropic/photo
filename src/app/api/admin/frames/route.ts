@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto";
 
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
 import { events, frames } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
+import { isFrameCategory } from "@/lib/frames";
+import { analyzeFramePng } from "@/lib/frame-image";
+import { storeFramePng } from "@/lib/frame-assets";
 import { isLayoutType } from "@/lib/layouts";
-import { savePng } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -15,9 +17,10 @@ const MAX_FRAME_BYTES = 8 * 1024 * 1024;
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 const fields = z.object({
-  name: z.string().min(1).max(120),
+  name: z.string().trim().min(1).max(120),
   layoutType: z.string(),
   eventId: z.string().uuid().nullish(),
+  category: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -50,6 +53,7 @@ export async function POST(request: Request) {
     name: form.get("name"),
     layoutType: form.get("layoutType"),
     eventId: form.get("eventId") || null,
+    category: form.get("category") || undefined,
   });
   if (!parsed.success) {
     return Response.json({ error: "Data frame tidak valid" }, { status: 400 });
@@ -57,19 +61,73 @@ export async function POST(request: Request) {
   if (!isLayoutType(parsed.data.layoutType)) {
     return Response.json({ error: "Layout tidak dikenal" }, { status: 400 });
   }
+  const category = parsed.data.category ?? "cool";
+  if (!isFrameCategory(category)) {
+    return Response.json({ error: "Kategori frame tidak dikenal" }, { status: 400 });
+  }
+
+  const eventId = parsed.data.eventId ?? null;
+  if (eventId) {
+    const [target] = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(and(eq(events.id, eventId), eq(events.creatorId, admin.id)))
+      .limit(1);
+    if (!target) {
+      return Response.json({ error: "Event tidak ditemukan" }, { status: 404 });
+    }
+  }
+
+  let analysis;
+  try {
+    analysis = await analyzeFramePng(bytes);
+  } catch {
+    return Response.json(
+      { error: "PNG tidak bisa dibaca atau terlalu besar" },
+      { status: 400 },
+    );
+  }
+  if (analysis.width < 120 || analysis.height < 120) {
+    return Response.json({ error: "Ukuran frame terlalu kecil" }, { status: 400 });
+  }
 
   const id = randomUUID();
-  const imageUrl = await savePng(bytes, `frame-${id}.png`);
+  let stored;
+  try {
+    stored = await storeFramePng(bytes, `frame-${id}`);
+  } catch (error) {
+    console.error("frame upload failed:", error);
+    return Response.json(
+      { error: "Gagal mengunggah frame ke Cloudinary" },
+      { status: 502 },
+    );
+  }
 
   await db.insert(frames).values({
     id,
-    name: parsed.data.name,
-    imageUrl,
+    name: parsed.data.name.trim(),
+    imageUrl: stored.imageUrl,
+    imagePublicId: stored.imagePublicId,
+    imageWidth: analysis.width,
+    imageHeight: analysis.height,
+    windows: analysis.windows,
+    category,
     layoutType: parsed.data.layoutType,
-    eventId: parsed.data.eventId ?? null,
+    eventId,
   });
 
-  return Response.json({ id, imageUrl, name: parsed.data.name }, { status: 201 });
+  return Response.json(
+    {
+      id,
+      imageUrl: stored.imageUrl,
+      name: parsed.data.name.trim(),
+      storage: stored.storage,
+      width: analysis.width,
+      height: analysis.height,
+      windowCount: analysis.windows.length,
+    },
+    { status: 201 },
+  );
 }
 
 export async function GET() {
@@ -91,6 +149,11 @@ export async function GET() {
       id: frames.id,
       name: frames.name,
       imageUrl: frames.imageUrl,
+      imagePublicId: frames.imagePublicId,
+      imageWidth: frames.imageWidth,
+      imageHeight: frames.imageHeight,
+      windows: frames.windows,
+      category: frames.category,
       layoutType: frames.layoutType,
       eventId: frames.eventId,
       eventTitle: events.title,
@@ -105,5 +168,11 @@ export async function GET() {
       ? rows.filter((row) => row.eventId === null)
       : rows.filter((row) => row.eventId === null || ownedIds.includes(row.eventId));
 
-  return Response.json({ frames: visible });
+  return Response.json({
+    frames: visible.map((row) => ({
+      ...row,
+      storage: row.imagePublicId ? "cloudinary" : "local",
+      windowCount: row.windows.length,
+    })),
+  });
 }
