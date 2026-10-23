@@ -111,6 +111,7 @@ sudah ikut di-commit.
 | `STORAGE_DIR` | Folder penyimpanan file foto, default `./storage` |
 | `NEXT_PUBLIC_BASE_URL` | URL dasar untuk QR dan tautan berbagi |
 | `SESSION_SECRET` | Kunci HMAC untuk cookie sesi admin |
+| `CRON_SECRET` | Bearer token untuk `/api/cron/cleanup`; wajib di produksi |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Kredensial admin untuk `db:seed` |
 | `CLOUDINARY_URL` | Kredensial Cloudinary, mis. `cloudinary://KEY:SECRET@CLOUD_NAME`. Tanpa kurung sudut di sekitar key atau secret, kalau tidak `src/lib/cloudinary.ts` menolaknya |
 | `CLOUDINARY_FOLDER` | Folder tujuan aset di dalam cloud, default `photo` |
@@ -118,6 +119,28 @@ sudah ikut di-commit.
 `CLOUDINARY_URL` hanya dibaca di server. Secret-nya ada di dalam URL, jadi
 jangan pernah memberi awalan `NEXT_PUBLIC_` dan jangan commit `.env` yang sudah
 terisi.
+
+## Deploy
+
+Checklist minimum sebelum produksi:
+
+1. Isi `DATABASE_URL`, `SESSION_SECRET`, `CRON_SECRET`, `NEXT_PUBLIC_BASE_URL`
+   (origin HTTPS publik), dan kredensial Cloudinary.
+2. Di database baru, jalankan `npm run db:migrate`, lalu `npm run db:seed`
+   sekali. Ganti `ADMIN_EMAIL`/`ADMIN_PASSWORD` sebelum seed; kredensial contoh
+   hanya untuk lokal.
+3. `npm run build`, lalu `npm start`.
+4. Jadwalkan `POST /api/cron/cleanup` dengan header
+   `Authorization: Bearer $CRON_SECRET` (misalnya Vercel Cron tiap jam).
+5. Pastikan `STORAGE_DIR` berada di volume persisten. Filesystem serverless
+   (Vercel/Lambda) bersifat sementara dan tidak dibagi antar instance, jadi
+   foto akan hilang. Untuk host seperti itu, ganti `src/lib/storage.ts` dengan
+   object storage (S3/R2/Neon Object Storage) sebelum go-live.
+6. Kamera hanya aktif di HTTPS atau `localhost`.
+
+Verifikasi rilis: `npm run typecheck`, `npm run lint`, `npm run build`,
+`npm run e2e`, lalu `node scripts/responsive-check.mjs` saat server produksi
+berjalan.
 
 ## Galeri publik
 
@@ -258,7 +281,12 @@ Tanpa cookie selalu dibalas `401`.
 | `PATCH` | `/api/admin/photos/[id]` | Sembunyikan foto publik dan hapus salinan Cloudinary |
 | `DELETE` | `/api/admin/photos/[id]` | Hapus permanen aset Cloudinary, file lokal, dan sesi |
 | `GET` | `/api/frames?eventId=...` | Katalog publik untuk studio |
-| `POST` | `/api/cron/cleanup` | Jalankan retensi kedaluwarsa |
+| `POST` | `/api/cron/cleanup` | Jalankan retensi kedaluwarsa (butuh `Authorization: Bearer <CRON_SECRET>`) |
+
+Semua endpoint admin dan cron di atas butuh kredensial. Endpoint admin memakai
+cookie sesi dari `POST /api/admin/login`; cron memakai header
+`Authorization: Bearer <CRON_SECRET>`. Di produksi, cron membalas `503` kalau
+`CRON_SECRET` belum diset, jadi job retensi tidak pernah terbuka tanpa sengaja.
 
 Mengubah judul event juga memperbarui slug-nya dan tetap unik. Menghapus event
 atau frame ikut menghapus aset Cloudinary (atau file lokal fallback), bukan hanya

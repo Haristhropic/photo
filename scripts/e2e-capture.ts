@@ -17,7 +17,7 @@ async function clickWhenSettled(page: Page, selector: string) {
       previous &&
       current &&
       Math.abs(previous.y - current.y) < 0.5 &&
-      Math.abs(previous.x - previous.x) < 0.5
+      Math.abs(previous.x - current.x) < 0.5
     ) {
       await locator.click({ timeout: 10000 });
       return;
@@ -49,6 +49,9 @@ async function main() {
   const context = await browser.newContext({
     permissions: ["camera"],
     viewport: { width: 1440, height: 900 },
+    // This suite uses string-eval helpers; production CSP forbids eval, so let
+    // the harness bypass it without changing the shipped policy.
+    bypassCSP: true,
   });
   const page = await context.newPage();
 

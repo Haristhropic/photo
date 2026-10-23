@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { unlink } from "node:fs/promises";
 
 import { and, count, inArray, isNotNull, isNull, sql } from "drizzle-orm";
@@ -21,7 +22,40 @@ const expiredCutoff = and(
   isNull(photoSessions.publishedAt),
 );
 
-export async function POST() {
+// Vercel Cron (and most schedulers) send `Authorization: Bearer <secret>`.
+// Production fails closed when CRON_SECRET is missing so an unconfigured
+// deployment never exposes an unauthenticated delete endpoint; local dev stays
+// convenient. The comparison is length-checked and timing-safe.
+function denyUnauthorized(request: Request): Response | null {
+  const secret = process.env.CRON_SECRET?.trim();
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      return Response.json(
+        { error: "CRON_SECRET belum diset di environment" },
+        { status: 503 },
+      );
+    }
+    return null;
+  }
+
+  const header = request.headers.get("authorization") ?? "";
+  const provided = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  const expectedBytes = Buffer.from(secret, "utf8");
+  const providedBytes = Buffer.from(provided, "utf8");
+
+  const matches =
+    expectedBytes.length === providedBytes.length &&
+    timingSafeEqual(expectedBytes, providedBytes);
+
+  return matches
+    ? null
+    : Response.json({ error: "Unauthorized" }, { status: 401 });
+}
+
+export async function POST(request: Request) {
+  const denied = denyUnauthorized(request);
+  if (denied) return denied;
+
   const expired = await db
     .select({
       id: photoSessions.id,

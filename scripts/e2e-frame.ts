@@ -127,6 +127,10 @@ async function main() {
   const browser = await chromium.launch();
   const context = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
+    // The suite drives the page with string-eval helpers. Production ships a
+    // CSP without 'unsafe-eval'; bypassing it here keeps the harness working
+    // without weakening the deployed policy.
+    bypassCSP: true,
   });
   const page = await context.newPage();
   await page.addInitScript({

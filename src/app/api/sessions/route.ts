@@ -17,7 +17,14 @@ import { savePng } from "@/lib/storage";
 export const runtime = "nodejs";
 
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+// Base64 inflates by ~4/3, so cap the JSON envelope a little above the decoded
+// image limit. Chunked requests can omit Content-Length, but this still rejects
+// the common oversized-body case before it is buffered into memory.
+const MAX_BODY_BYTES = 16 * 1024 * 1024;
 const DEFAULT_RETENTION_HOURS = 24;
+const PNG_SIGNATURE = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
 
 const bodySchema = z.object({
   image: z.string().min(1),
@@ -32,10 +39,23 @@ function decodePng(dataUrl: string): Buffer | null {
   if (!match) return null;
   const bytes = Buffer.from(match[1], "base64");
   if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return null;
+  // The data-URL prefix is client-supplied. Only store real PNGs so a crafted
+  // request cannot park arbitrary bytes in storage under an image/png name.
+  if (
+    bytes.byteLength < PNG_SIGNATURE.length ||
+    !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
+  ) {
+    return null;
+  }
   return bytes;
 }
 
 export async function POST(request: Request) {
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+    return Response.json({ error: "Body terlalu besar" }, { status: 413 });
+  }
+
   let payload: unknown;
   try {
     payload = await request.json();
