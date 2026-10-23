@@ -1,12 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
-import { unlink } from "node:fs/promises";
 
 import { and, count, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { photoSessions } from "@/db/schema";
 import { destroyAsset, isCloudinaryConfigured } from "@/lib/cloudinary";
-import { resolveStoredPath } from "@/lib/storage";
+import { deleteStoredFile } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -100,14 +99,9 @@ export async function POST(request: Request) {
     if (!removableIds.includes(row.id)) continue;
 
     const filename = row.finalPhotoUrl.split("/").pop() ?? "";
-    const target = resolveStoredPath(filename);
-    if (target) {
-      try {
-        await unlink(target);
-        filesRemoved += 1;
-      } catch {
-        // Row deletion must still proceed when the file is already gone.
-      }
+    // Row deletion must still proceed when the file is already gone.
+    if (await deleteStoredFile(filename)) {
+      filesRemoved += 1;
     }
   }
 

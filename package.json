@@ -27,6 +27,7 @@
     "@neon/config": "^1.8.2",
     "@neon/env": "^1.4.7",
     "@tabler/icons-react": "^3.48.0",
+    "@vercel/blob": "^2.8.2",
     "dotenv": "^17.2.4",
     "drizzle-orm": "^0.45.3",
     "lenis": "^1.3.26",

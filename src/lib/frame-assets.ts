@@ -1,11 +1,9 @@
-import { unlink } from "node:fs/promises";
-
 import {
   destroyAsset,
   isCloudinaryConfigured,
   uploadFramePng,
 } from "./cloudinary";
-import { resolveStoredPath, savePng } from "./storage";
+import { deleteStoredFile, savePng } from "./storage";
 
 export type StoredFrame = {
   imageUrl: string;
@@ -53,13 +51,5 @@ export async function removeFrameAsset(
   }
 
   const filename = imageUrl.split("/").pop() ?? "";
-  const target = resolveStoredPath(filename);
-  if (!target) return false;
-
-  try {
-    await unlink(target);
-    return true;
-  } catch {
-    return false;
-  }
+  return deleteStoredFile(filename);
 }

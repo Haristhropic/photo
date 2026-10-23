@@ -50,6 +50,21 @@ import { StickerSwatch } from "@/components/sticker-swatch";
 import { Logo } from "@/components/logo";
 import { SiteFooter } from "@/components/site-footer";
 
+// Send the rendered PNG as raw bytes instead of a base64 JSON string. Vercel
+// caps a serverless request body at 4.5 MB, and base64 adds ~33% overhead.
+function dataUrlToBlob(dataUrl: string): Blob {
+  const comma = dataUrl.indexOf(",");
+  const metadata = dataUrl.slice(0, comma);
+  const base64 = dataUrl.slice(comma + 1);
+  const mime = /^data:([^;]+)/.exec(metadata)?.[1] ?? "image/png";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
+}
+
 function StickerOption({
   stickerKey,
   selected,
@@ -329,19 +344,25 @@ export function StudioClient() {
     setError(null);
 
     try {
+      const imageBlob = dataUrlToBlob(preview);
       const response = await fetch("/api/sessions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          image: preview,
-          layoutType: draft.layoutType,
-          filterKey,
-          eventId: draft.eventId,
-          publish,
-        }),
+        headers: {
+          "Content-Type": imageBlob.type || "image/png",
+          "X-Layout-Type": draft.layoutType,
+          "X-Filter-Key": filterKey,
+          "X-Publish": publish ? "true" : "false",
+          ...(draft.eventId ? { "X-Event-Id": draft.eventId } : {}),
+        },
+        body: imageBlob,
       });
 
       if (!response.ok) {
+        if (response.status === 413) {
+          throw new Error(
+            "Fotonya terlalu besar untuk diunggah. Coba layout atau frame yang lebih ringan.",
+          );
+        }
         const detail = await response.json().catch(() => null);
         throw new Error(detail?.error ?? "Foto gagal disimpan");
       }

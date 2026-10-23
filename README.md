@@ -108,7 +108,8 @@ sudah ikut di-commit.
 | Nama | Keterangan |
 | --- | --- |
 | `DATABASE_URL` | Connection string Neon, mis. `postgresql://USER:PASS@ep-x-pooler.region.aws.neon.tech/neondb?sslmode=require` |
-| `STORAGE_DIR` | Folder penyimpanan file foto, default `./storage` |
+| `STORAGE_DIR` | Folder penyimpanan lokal untuk pengembangan, default `./storage`. Di Vercel folder ini sementara |
+| `BLOB_READ_WRITE_TOKEN` | Token Vercel Blob untuk penyimpanan foto yang persisten. Wajib di Vercel, opsional di lokal. Vercel mengisinya otomatis saat Blob store dihubungkan |
 | `NEXT_PUBLIC_BASE_URL` | URL dasar untuk QR dan tautan berbagi |
 | `SESSION_SECRET` | Kunci HMAC untuk cookie sesi admin |
 | `CRON_SECRET` | Bearer token untuk `/api/cron/cleanup`; wajib di produksi |
@@ -131,12 +132,17 @@ Checklist minimum sebelum produksi:
    hanya untuk lokal.
 3. `npm run build`, lalu `npm start`.
 4. Jadwalkan `POST /api/cron/cleanup` dengan header
-   `Authorization: Bearer $CRON_SECRET` (misalnya Vercel Cron tiap jam).
-5. Pastikan `STORAGE_DIR` berada di volume persisten. Filesystem serverless
-   (Vercel/Lambda) bersifat sementara dan tidak dibagi antar instance, jadi
-   foto akan hilang. Untuk host seperti itu, ganti `src/lib/storage.ts` dengan
-   object storage (S3/R2/Neon Object Storage) sebelum go-live.
+   `Authorization: Bearer $CRON_SECRET`. Di Vercel, `vercel.json` sudah memakai
+   cron harian (batas Hobby) dan Vercel mengirim header tersebut otomatis.
+5. Hubungkan Vercel Blob store (akses private) ke project. Filesystem Vercel
+   bersifat sementara, jadi tanpa `BLOB_READ_WRITE_TOKEN` penyimpanan foto akan
+   gagal dengan pesan konfigurasi yang jelas. Di lokal, tanpa token, aplikasi
+   memakai `STORAGE_DIR` seperti biasa.
 6. Kamera hanya aktif di HTTPS atau `localhost`.
+
+Untuk Vercel: import repo GitHub, set environment variables di atas, hubungkan
+Blob store, lalu deploy branch `main`. `NEXT_PUBLIC_BASE_URL` harus diisi domain
+produksi (mis. `https://photo.vercel.app`) agar QR dan tautan berbagi stabil.
 
 Verifikasi rilis: `npm run typecheck`, `npm run lint`, `npm run build`,
 `npm run e2e`, lalu `node scripts/responsive-check.mjs` saat server produksi
@@ -389,9 +395,12 @@ memastikan kedua gejala lama — foto run sebelumnya dan "belum ada foto" — ti
 kembali. `npm run e2e:retake` memutar ulang Strip 3, Strip 4, Grid 2x2, dan
 Single untuk memastikan draft terbaru menang di setiap layout.
 
-**Penyimpanan file.** Foto ditulis ke `STORAGE_DIR` dan disajikan lewat
-`/api/files/[...path]`, yang menolak path di luar root. Untuk produksi,
-ganti dengan object storage (S3 atau sejenis) dan ganti `src/lib/storage.ts`.
+**Penyimpanan file.** Foto ditulis ke Vercel Blob privat saat
+`BLOB_READ_WRITE_TOKEN` tersedia, atau ke `STORAGE_DIR` sebagai fallback lokal.
+Keduanya disajikan lewat `/api/files/[...path]`, yang hanya menerima basename PNG
+yang aman. Jalur Blob memakai `put`/`get`/`del` dari `@vercel/blob`; tidak ada
+URL Blob publik yang bocor ke halaman hasil. Di Vercel, simpan foto tanpa Blob
+akan gagal, bukan menulis ke `/tmp` yang hilang saat instance berikutnya.
 
 **Sistem visual.** Arah desainnya playful/cute bergaya `cetak layar`
 (screenprint Indonesia): permukaan kertas krem, tinta candy bermSATA tinggi

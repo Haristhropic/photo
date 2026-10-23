@@ -16,11 +16,13 @@ import { savePng } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
-const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+const MAX_IMAGE_BYTES = (process.env.VERCEL ? 4 : 12) * 1024 * 1024;
 // Base64 inflates by ~4/3, so cap the JSON envelope a little above the decoded
-// image limit. Chunked requests can omit Content-Length, but this still rejects
-// the common oversized-body case before it is buffered into memory.
-const MAX_BODY_BYTES = 16 * 1024 * 1024;
+// image limit. Vercel also caps a serverless request body at 4.5 MB, so the
+// browser sends raw PNG bytes and keeps the JSON path for local scripts.
+const MAX_BODY_BYTES = process.env.VERCEL
+  ? Math.floor(4.5 * 1024 * 1024)
+  : 16 * 1024 * 1024;
 const DEFAULT_RETENTION_HOURS = 24;
 const PNG_SIGNATURE = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
@@ -34,6 +36,35 @@ const bodySchema = z.object({
   publish: z.boolean().optional().default(false),
 });
 
+const uploadHeaderSchema = z.object({
+  layoutType: z.string(),
+  filterKey: z.string(),
+  eventId: z.string().uuid().nullish(),
+  publish: z.boolean(),
+});
+
+type SessionInput = {
+  bytes: Buffer;
+  layoutType: string;
+  filterKey: string;
+  eventId: string | null;
+  publish: boolean;
+};
+
+function tooLarge(): Response {
+  return Response.json(
+    { error: "Gambar terlalu besar untuk diunggah. Coba layout yang lebih kecil." },
+    { status: 413 },
+  );
+}
+
+function isPng(bytes: Buffer): boolean {
+  return (
+    bytes.byteLength >= PNG_SIGNATURE.length &&
+    bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
+  );
+}
+
 function decodePng(dataUrl: string): Buffer | null {
   const match = /^data:image\/png;base64,([\s\S]+)$/.exec(dataUrl);
   if (!match) return null;
@@ -41,21 +72,55 @@ function decodePng(dataUrl: string): Buffer | null {
   if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return null;
   // The data-URL prefix is client-supplied. Only store real PNGs so a crafted
   // request cannot park arbitrary bytes in storage under an image/png name.
-  if (
-    bytes.byteLength < PNG_SIGNATURE.length ||
-    !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
-  ) {
+  if (!isPng(bytes)) {
     return null;
   }
   return bytes;
 }
 
-export async function POST(request: Request) {
+async function parseSessionInput(
+  request: Request,
+): Promise<SessionInput | Response> {
   const contentLength = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
-    return Response.json({ error: "Body terlalu besar" }, { status: 413 });
+    return tooLarge();
   }
 
+  const contentType = (request.headers.get("content-type") ?? "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+
+  if (contentType === "image/png") {
+    const bytes = Buffer.from(await request.arrayBuffer());
+    if (bytes.byteLength === 0 || !isPng(bytes)) {
+      return Response.json({ error: "Gambar PNG tidak valid" }, { status: 400 });
+    }
+    if (bytes.byteLength > MAX_IMAGE_BYTES) {
+      return tooLarge();
+    }
+
+    const eventId = request.headers.get("x-event-id")?.trim() || null;
+    const headers = uploadHeaderSchema.safeParse({
+      layoutType: request.headers.get("x-layout-type") ?? "",
+      filterKey: request.headers.get("x-filter-key") ?? "",
+      eventId,
+      publish: request.headers.get("x-publish") === "true",
+    });
+    if (!headers.success) {
+      return Response.json({ error: "Data tidak valid" }, { status: 400 });
+    }
+
+    return {
+      bytes,
+      layoutType: headers.data.layoutType,
+      filterKey: headers.data.filterKey,
+      eventId: headers.data.eventId ?? null,
+      publish: headers.data.publish,
+    };
+  }
+
+  // JSON remains supported for local scripts, e2e suites, and older clients.
   let payload: unknown;
   try {
     payload = await request.json();
@@ -68,14 +133,27 @@ export async function POST(request: Request) {
     return Response.json({ error: "Data tidak valid" }, { status: 400 });
   }
 
-  const { image, layoutType, filterKey, eventId, publish } = parsed.data;
-  if (!isLayoutType(layoutType) || !isFilterKey(filterKey)) {
-    return Response.json({ error: "Layout atau filter tidak dikenal" }, { status: 400 });
-  }
-
-  const bytes = decodePng(image);
+  const bytes = decodePng(parsed.data.image);
   if (!bytes) {
     return Response.json({ error: "Gambar PNG tidak valid" }, { status: 400 });
+  }
+
+  return {
+    bytes,
+    layoutType: parsed.data.layoutType,
+    filterKey: parsed.data.filterKey,
+    eventId: parsed.data.eventId ?? null,
+    publish: parsed.data.publish,
+  };
+}
+
+export async function POST(request: Request) {
+  const input = await parseSessionInput(request);
+  if (input instanceof Response) return input;
+
+  const { bytes, layoutType, filterKey, eventId, publish } = input;
+  if (!isLayoutType(layoutType) || !isFilterKey(filterKey)) {
+    return Response.json({ error: "Layout atau filter tidak dikenal" }, { status: 400 });
   }
 
   let retentionHours = DEFAULT_RETENTION_HOURS;

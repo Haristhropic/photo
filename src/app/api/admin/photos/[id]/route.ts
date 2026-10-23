@@ -1,5 +1,3 @@
-import { unlink } from "node:fs/promises";
-
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -7,7 +5,7 @@ import { db } from "@/db";
 import { photoSessions } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { destroyAsset, isCloudinaryConfigured } from "@/lib/cloudinary";
-import { resolveStoredPath } from "@/lib/storage";
+import { deleteStoredFile } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -149,14 +147,8 @@ export async function DELETE(
   }
 
   const filename = existing.finalPhotoUrl.split("/").pop() ?? "";
-  const localPath = resolveStoredPath(filename);
-  if (localPath) {
-    try {
-      await unlink(localPath);
-    } catch {
-      // The row still has to go when the private copy was already removed.
-    }
-  }
+  // The row still has to go when the private copy was already removed.
+  await deleteStoredFile(filename);
 
   await db.delete(photoSessions).where(eq(photoSessions.id, existing.id));
 

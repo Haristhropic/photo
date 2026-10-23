@@ -16,7 +16,9 @@ export async function GET(
     headers: {
       "Content-Type": contentTypeFor(relative ?? ""),
       "Content-Length": String(bytes.byteLength),
-      "Cache-Control": "public, max-age=31536000, immutable",
+      // The access key is the capability, but a guest photo should still not be
+      // stored by an intermediary cache.
+      "Cache-Control": "private, max-age=31536000, immutable",
     },
   });
 }
