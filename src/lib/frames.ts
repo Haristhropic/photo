@@ -48,8 +48,9 @@ export type BuiltInFrameKey =
   | "neon"
   | "balap";
 
-/** Built-in keys and admin-managed database frames (`db:<uuid>`). */
-export type FrameKey = BuiltInFrameKey | `db:${string}`;
+/** Built-in keys, admin-managed database frames (`db:<uuid>`), and the
+ *  guest-built frame in the studio (`custom`). */
+export type FrameKey = BuiltInFrameKey | "custom" | `db:${string}`;
 
 /**
  * A bitmap frame overlay. `design` and `windows` are in the source PNG's
@@ -71,6 +72,8 @@ export type FramePreset = {
   layouts?: readonly LayoutType[];
   /** Set for supplied bitmap frames; see FrameBitmap. */
   bitmap?: FrameBitmap;
+  /** Paper colour painted behind the photos. Omitted means white. */
+  paperColor?: string;
   draw: (ctx: CanvasRenderingContext2D, layout: LayoutPreset) => void;
 };
 
@@ -1082,7 +1085,7 @@ export function drawFrameSwatch(
   ctx.save();
   ctx.scale(scale, scale);
 
-  ctx.fillStyle = PAPER;
+  ctx.fillStyle = frame?.paperColor ?? PAPER;
   ctx.fillRect(0, 0, 900, 900);
 
   const slot = SWATCH_LAYOUT.slots[0];

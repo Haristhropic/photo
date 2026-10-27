@@ -57,7 +57,8 @@ what makes the zero-setup privacy stance honest rather than decorative.
 
 Confirmed and working:
 
-- Four photo layouts, each with its own per-shot capture count.
+- Five photo layouts (two, three, and four-shot strips, a 2x2 grid, and a
+  single), each with its own per-shot capture count.
 - Per-shot 3-second countdown with visible progress, cancellation, and shutter
   feedback. Cancelling mid-countdown must never capture.
 - Live camera capture composited to canvas with filter and sticker overlays.

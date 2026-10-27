@@ -13,6 +13,14 @@ export default async function BoothPage(props: PageProps<"/booth">) {
     typeof searchParams.event === "string" ? searchParams.event : undefined;
   const from =
     typeof searchParams.from === "string" ? searchParams.from : undefined;
+  const initialMode =
+    searchParams.mode === "upload" ? "upload" : "camera";
 
-  return <BoothClient eventId={eventId} from={from} />;
+  return (
+    <BoothClient
+      eventId={eventId}
+      from={from}
+      initialMode={initialMode}
+    />
+  );
 }

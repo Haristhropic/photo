@@ -13,6 +13,7 @@ import {
 
 export const roleEnum = pgEnum("role", ["USER", "ADMIN"]);
 export const layoutEnum = pgEnum("layout_type", [
+  "STRIP_2",
   "STRIP_3",
   "STRIP_4",
   "GRID_4",

@@ -3,7 +3,17 @@
 import {
   IconArrowBackUp,
   IconArrowLeft,
+  IconCamera,
   IconCheck,
+  IconDeviceFloppy,
+  IconFrame,
+  IconLayoutGrid,
+  IconPalette,
+  IconPhoto,
+  IconSticker,
+  IconTrash,
+  IconWand,
+  IconX,
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -16,10 +26,22 @@ import {
 } from "react";
 
 import {
+  clearBoothRun,
   clearDraft,
   getDraftSnapshot,
+  restoreDraftToBooth,
   subscribeDraft,
 } from "@/lib/draft-store";
+import {
+  CUSTOM_ACCENT_COLORS,
+  CUSTOM_FRAME_DEFAULTS,
+  CUSTOM_FRAME_STYLE_LABEL,
+  CUSTOM_FRAME_STYLES,
+  CUSTOM_PAPER_COLORS,
+  MAX_CUSTOM_CAPTION,
+  customFramePreset,
+  type CustomFrameOptions,
+} from "@/lib/custom-frame";
 import {
   FILTERS,
   FILTER_ORDER,
@@ -44,7 +66,8 @@ import {
   type FrameKey,
   type FramePreset,
 } from "@/lib/frames";
-import { BackLink } from "@/components/back-link";
+import { BackLink, backIconFor } from "@/components/back-link";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FrameSwatch } from "@/components/frame-swatch";
 import { StickerSwatch } from "@/components/sticker-swatch";
 import { Logo } from "@/components/logo";
@@ -151,9 +174,11 @@ function decodePreview(dataUrl: string): Promise<void> {
 function StudioHeader({
   layoutLabel,
   back = { href: "/booth?from=studio", label: "Booth" },
+  onBackClick,
 }: {
   layoutLabel?: string;
   back?: { href: string; label: string };
+  onBackClick?: (e: React.MouseEvent) => void;
 }) {
   return (
     <header className="border-b-2 border-ink">
@@ -166,13 +191,31 @@ function StudioHeader({
           <Logo className="h-12 w-auto" />
         </Link>
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-          <BackLink href={back.href} label={back.label} />
-          <span className="hidden rounded-[var(--radius-pill)] border-2 border-ink bg-butter px-4 py-1.5 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase sm:inline-flex">
+          {onBackClick ? (
+            <button
+              type="button"
+              onClick={onBackClick}
+              className="pressable inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1 hover:bg-butter"
+            >
+              {backIconFor(back.label)}
+              <span className="sr-only sm:not-sr-only">{back.label}</span>
+            </button>
+          ) : (
+            <BackLink href={back.href} label={back.label} />
+          )}
+          <span className="hidden items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-butter px-4 py-1.5 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase sm:inline-flex">
+            <IconPalette size={16} stroke={2.5} aria-hidden="true" />
             Studio
           </span>
           {layoutLabel && (
-            <span className="min-w-0 truncate rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
-              {layoutLabel}
+            <span className="inline-flex min-w-0 items-center gap-2 truncate rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
+              <IconLayoutGrid
+                size={16}
+                stroke={2.5}
+                aria-hidden="true"
+                className="shrink-0"
+              />
+              <span className="truncate">{layoutLabel}</span>
             </span>
           )}
         </div>
@@ -199,6 +242,9 @@ export function StudioClient() {
   const [frameCategory, setFrameCategory] = useState<FrameCategory | "all">(
     "all",
   );
+  const [customOptions, setCustomOptions] = useState<CustomFrameOptions>(
+    CUSTOM_FRAME_DEFAULTS,
+  );
   const [dynamicFrames, setDynamicFrames] = useState<FramePreset[]>([]);
   const [loadedEventId, setLoadedEventId] = useState<
     string | null | undefined
@@ -212,7 +258,7 @@ export function StudioClient() {
     draft: Draft;
     filterKey: FilterKey;
     sticker: StickerKey | null;
-    frameKey: FrameKey | null;
+    frame: FramePreset | null;
     frameName: string | null;
     dataUrl: string;
   } | null>(null);
@@ -220,6 +266,8 @@ export function StudioClient() {
   const [error, setError] = useState<string | null>(null);
   const [publish, setPublish] = useState(false);
   const [publishNotice, setPublishNotice] = useState<string | null>(null);
+  const [backDialogOpen, setBackDialogOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   const builtIn = useMemo(() => builtInFrames(), []);
   const eventId = draft?.eventId ?? null;
@@ -268,9 +316,16 @@ export function StudioClient() {
     () => [...builtIn, ...dynamicFrames],
     [builtIn, dynamicFrames],
   );
+  const customFrame = useMemo(
+    () => customFramePreset(customOptions),
+    [customOptions],
+  );
   const frameMap = useMemo(
-    () => new Map(allFrames.map((frame) => [frame.key, frame])),
-    [allFrames],
+    () =>
+      new Map(
+        [...allFrames, customFrame].map((frame) => [frame.key, frame]),
+      ),
+    [allFrames, customFrame],
   );
   const requestedFrame = frameKey ? frameMap.get(frameKey) ?? null : null;
 
@@ -293,7 +348,7 @@ export function StudioClient() {
     renderedForDraft &&
     renderedForDraft.filterKey === filterKey &&
     renderedForDraft.sticker === sticker &&
-    renderedForDraft.frameKey === (activeFrame?.key ?? null)
+    renderedForDraft.frame === activeFrame
       ? renderedForDraft.dataUrl
       : null;
   const shownPreview = preview ?? renderedForDraft?.dataUrl ?? null;
@@ -303,6 +358,10 @@ export function StudioClient() {
   const shownFrameName = preview
     ? (activeFrame?.name ?? null)
     : (renderedForDraft?.frameName ?? null);
+
+  function updateCustomOptions(patch: Partial<CustomFrameOptions>) {
+    setCustomOptions((current) => ({ ...current, ...patch }));
+  }
 
   useEffect(() => {
     if (!draft) return;
@@ -315,6 +374,7 @@ export function StudioClient() {
       sticker,
       frame: activeFrame,
       eventLabel: null,
+      transforms: draft.transforms,
     })
       .then(async (dataUrl) => {
         if (cancelled) return;
@@ -324,7 +384,7 @@ export function StudioClient() {
           draft,
           filterKey,
           sticker,
-          frameKey: activeFrame?.key ?? null,
+          frame: activeFrame,
           frameName: activeFrame?.name ?? null,
           dataUrl,
         });
@@ -402,6 +462,19 @@ export function StudioClient() {
   }
 
   if (!draft) {
+    if (leaving) {
+      return (
+        <div className="flex flex-1 flex-col">
+          <StudioHeader back={{ href: "/", label: "Beranda" }} />
+          <main className="shell flex flex-1 flex-col justify-center py-[var(--page)]">
+            <h1 className="sr-only">Studio foto</h1>
+            <p className="text-lead text-ink-body">Kembali ke booth...</p>
+          </main>
+          <SiteFooter />
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-1 flex-col">
         <StudioHeader back={{ href: "/", label: "Beranda" }} />
@@ -411,11 +484,12 @@ export function StudioClient() {
               Belum ada foto
             </h1>
             <p className="mt-3 text-lead text-ink-body">
-              Studio hanya bisa dibuka setelah kamu mengambil foto di booth.
+              Studio hanya bisa dibuka setelah kamu mengambil atau mengunggah
+              foto di booth.
             </p>
             <button
               type="button"
-              onClick={() => router.push("/booth?from=studio")}
+              onClick={() => router.push("/booth")}
               className="pressable mt-8 inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-mint px-7 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-sky"
             >
               <IconArrowLeft size={22} stroke={2.5} aria-hidden="true" />
@@ -429,6 +503,56 @@ export function StudioClient() {
   }
 
   const layout = LAYOUTS[draft.layoutType];
+  const boothHref = `/booth?from=studio${
+    draft.eventId ? `&event=${encodeURIComponent(draft.eventId)}` : ""
+  }${draft.source === "upload" ? "&mode=upload" : ""}`;
+
+  function requestBack() {
+    if (draft && draft.shots.length > 0) {
+      setBackDialogOpen(true);
+    } else {
+      router.push(boothHref);
+    }
+  }
+
+  function confirmBackToBooth(keep: boolean) {
+    setBackDialogOpen(false);
+    if (keep) {
+      // Rebuild the booth's own run snapshot so the layout and photos are
+      // waiting there, not just in the studio's draft key.
+      if (draft) restoreDraftToBooth(draft);
+      router.push(boothHref);
+      return;
+    }
+    // The discarded draft breaks the studio leg of the journey, so the booth
+    // must drop the "from=studio" trail and aim its back pill at Beranda.
+    // Event context still matters; upload guests keep their upload editor.
+    const discardParams: string[] = [];
+    if (draft?.eventId) {
+      discardParams.push(`event=${encodeURIComponent(draft.eventId)}`);
+    }
+    if (draft?.source === "upload") {
+      discardParams.push("mode=upload");
+    }
+    // Show a neutral state while the draft clears, so the empty-studio
+    // "Belum ada foto" card does not flash before the booth takes over.
+    setLeaving(true);
+    clearDraft();
+    router.push(
+      discardParams.length > 0
+        ? `/booth?${discardParams.join("&")}`
+        : "/booth",
+    );
+  }
+
+  // "Ambil ulang" / "Ganti foto" is an explicit retake, not a back action:
+  // start the booth empty so the guest can shoot or upload again. The studio
+  // draft stays behind as a safety net until the new run replaces it.
+  function retake() {
+    clearBoothRun();
+    router.push(boothHref);
+  }
+
   const visibleFrames = filterFrames(
     allFrames,
     frameCategory,
@@ -438,13 +562,20 @@ export function StudioClient() {
     (frame) => !frameSupportsLayout(frame, draft.layoutType),
   );
   const frameGridClass =
-    (1 + visibleFrames.length) % 3 === 1
+    (2 + visibleFrames.length) % 3 === 1
       ? "max-sm:[&>button:last-child]:col-start-2"
       : "";
 
   return (
     <div className="flex flex-1 flex-col">
-      <StudioHeader layoutLabel={layout.label} />
+      <StudioHeader
+        layoutLabel={layout.label}
+        back={{
+          href: boothHref,
+          label: draft.source === "upload" ? "Foto" : "Booth",
+        }}
+        onBackClick={requestBack}
+      />
 
       <main className="flex-1">
         <h1 className="sr-only">Studio foto</h1>
@@ -489,7 +620,8 @@ export function StudioClient() {
 
           <div className="flex flex-col gap-8">
             <fieldset>
-              <legend className="font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase">
+              <legend className="flex items-center gap-2 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase">
+                <IconWand size={16} stroke={2.5} aria-hidden="true" />
                 Filter
               </legend>
               <div className="mt-3 grid grid-cols-2 gap-3 min-[380px]:grid-cols-3">
@@ -512,9 +644,10 @@ export function StudioClient() {
             </fieldset>
 
             <fieldset>
-              <legend className="font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase">
+              <legend className="flex flex-wrap items-center gap-2 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase">
+                <IconSticker size={16} stroke={2.5} aria-hidden="true" />
                 Stiker
-                <span className="ml-2 font-bold tracking-[0.1em] text-ink-meta">
+                <span className="font-bold tracking-[0.1em] text-ink-meta">
                   · {sticker ? STICKERS[sticker].name : "Tanpa"}
                 </span>
               </legend>
@@ -539,9 +672,10 @@ export function StudioClient() {
             </fieldset>
 
             <fieldset>
-              <legend className="font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase">
+              <legend className="flex flex-wrap items-center gap-2 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase">
+                <IconFrame size={16} stroke={2.5} aria-hidden="true" />
                 Frame
-                <span className="ml-2 font-bold tracking-[0.1em] text-ink-meta">
+                <span className="font-bold tracking-[0.1em] text-ink-meta">
                   · {activeFrame ? activeFrame.name : "Tanpa"}
                 </span>
               </legend>
@@ -579,6 +713,11 @@ export function StudioClient() {
                   selected={activeFrame === null}
                   onSelect={() => setFrameKey(null)}
                 />
+                <FrameOption
+                  frame={customFrame}
+                  selected={activeFrame?.key === "custom"}
+                  onSelect={() => setFrameKey("custom")}
+                />
                 {visibleFrames.map((frame) => (
                   <FrameOption
                     key={frame.key}
@@ -588,6 +727,164 @@ export function StudioClient() {
                   />
                 ))}
               </div>
+              {activeFrame?.key === "custom" && (
+                <div
+                  data-testid="custom-frame-controls"
+                  className="mt-4 rounded-[var(--radius-lg)] border-2 border-ink bg-sunken p-4 shadow-lift-1"
+                >
+                  <div>
+                    <p className="font-display text-label font-extrabold tracking-[0.1em] text-ink uppercase">
+                      Gaya
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {CUSTOM_FRAME_STYLES.map((style) => {
+                        const active = customOptions.style === style;
+                        return (
+                          <button
+                            key={style}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() => updateCustomOptions({ style })}
+                            className={`pressable rounded-[var(--radius-pill)] border-2 border-ink px-3 py-1.5 font-display text-label font-bold tracking-[0.08em] uppercase shadow-lift-1 ${
+                              active
+                                ? "bg-butter text-ink"
+                                : "bg-elev text-ink-body hover:bg-butter hover:text-ink"
+                            }`}
+                          >
+                            {CUSTOM_FRAME_STYLE_LABEL[style]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <p className="font-display text-label font-extrabold tracking-[0.1em] text-ink uppercase">
+                        Warna kertas
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {CUSTOM_PAPER_COLORS.map((color) => {
+                          const active = customOptions.paper === color.value;
+                          return (
+                            <button
+                              key={color.value}
+                              type="button"
+                              aria-label={`Warna kertas ${color.label}`}
+                              aria-pressed={active}
+                              title={color.label}
+                              onClick={() =>
+                                updateCustomOptions({ paper: color.value })
+                              }
+                              className={`grid size-9 place-items-center rounded-full border-2 border-ink shadow-lift-1 ${
+                                active
+                                  ? "ring-2 ring-ink ring-offset-2 ring-offset-sunken"
+                                  : ""
+                              }`}
+                              style={{ background: color.value }}
+                            >
+                              {active && (
+                                <IconCheck
+                                  size={16}
+                                  stroke={3}
+                                  aria-hidden="true"
+                                  className="text-ink"
+                                />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="font-display text-label font-extrabold tracking-[0.1em] text-ink uppercase">
+                        Warna aksen
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {CUSTOM_ACCENT_COLORS.map((color) => {
+                          const active = customOptions.accent === color.value;
+                          return (
+                            <button
+                              key={color.value}
+                              type="button"
+                              aria-label={`Warna aksen ${color.label}`}
+                              aria-pressed={active}
+                              title={color.label}
+                              onClick={() =>
+                                updateCustomOptions({ accent: color.value })
+                              }
+                              className={`grid size-9 place-items-center rounded-full border-2 border-ink shadow-lift-1 ${
+                                active
+                                  ? "ring-2 ring-ink ring-offset-2 ring-offset-sunken"
+                                  : ""
+                              }`}
+                              style={{ background: color.value }}
+                            >
+                              {active && (
+                                <IconCheck
+                                  size={16}
+                                  stroke={3}
+                                  aria-hidden="true"
+                                  className="text-ink"
+                                />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <label
+                      htmlFor="custom-caption"
+                      className="flex flex-wrap items-baseline justify-between gap-2 font-display text-label font-extrabold tracking-[0.1em] text-ink uppercase"
+                    >
+                      Tulisan
+                      <span className="font-bold tracking-[0.04em] text-ink-meta normal-case">
+                        maks {MAX_CUSTOM_CAPTION} karakter
+                      </span>
+                    </label>
+                    <input
+                      id="custom-caption"
+                      type="text"
+                      maxLength={MAX_CUSTOM_CAPTION}
+                      value={customOptions.caption}
+                      onChange={(event) =>
+                        updateCustomOptions({
+                          caption: Array.from(event.target.value)
+                            .slice(0, MAX_CUSTOM_CAPTION)
+                            .join(""),
+                        })
+                      }
+                      placeholder="Nama, tanggal, atau kata-kata"
+                      className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 font-semibold text-ink shadow-lift-1 placeholder:text-ink-meta focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky"
+                    />
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <label className="flex cursor-pointer items-center gap-2 text-small font-semibold text-ink">
+                      <input
+                        type="checkbox"
+                        checked={customOptions.showDate}
+                        onChange={(event) =>
+                          updateCustomOptions({ showDate: event.target.checked })
+                        }
+                        className="size-5 accent-[var(--pink)]"
+                      />
+                      Tanggal hari ini
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setCustomOptions(CUSTOM_FRAME_DEFAULTS)}
+                      className="pressable inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3 py-1.5 font-display text-label font-bold tracking-[0.08em] text-ink uppercase shadow-lift-1 hover:bg-butter"
+                    >
+                      Reset custom
+                    </button>
+                  </div>
+                </div>
+              )}
               {framesLoading && (
                 <p role="status" className="mt-2.5 text-small font-semibold text-ink-meta">
                   Memuat frame event...
@@ -631,11 +928,11 @@ export function StudioClient() {
               </button>
               <button
                 type="button"
-                onClick={() => router.push("/booth?from=studio")}
+                onClick={retake}
                 className="pressable inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-7 py-4 font-display text-lead font-bold text-ink shadow-lift-2 hover:bg-butter sm:w-auto"
               >
                 <IconArrowBackUp size={22} stroke={2.5} aria-hidden="true" />
-                Ambil ulang
+                {draft.source === "upload" ? "Ganti foto" : "Ambil ulang"}
               </button>
             </div>
 
@@ -673,13 +970,56 @@ export function StudioClient() {
               </span>
             </label>
 
-            <p className="font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
-              {draft.shots.length} bidikan / {layout.canvas.w} x {layout.canvas.h}
+            <p className="flex items-center gap-2 font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
+              {draft.source === "upload" ? (
+                <IconPhoto size={15} stroke={2.5} aria-hidden="true" />
+              ) : (
+                <IconCamera size={15} stroke={2.5} aria-hidden="true" />
+              )}
+              {draft.shots.length} {draft.source === "upload" ? "foto" : "bidikan"} /{" "}
+              {layout.canvas.w} x {layout.canvas.h}
             </p>
           </div>
         </div>
       </main>
       <SiteFooter />
+
+      {backDialogOpen && (
+        <ConfirmDialog
+          open={backDialogOpen}
+          title={`Mau kembali ke ${draft.source === "upload" ? "foto" : "booth"}?`}
+          description={`Kamu punya ${draft.shots.length} ${
+            draft.source === "upload" ? "foto" : "bidikan"
+          } yang belum disimpan ke galeri. Mau diapakan?`}
+          icon={<IconArrowLeft size={22} stroke={2.5} aria-hidden="true" />}
+          onClose={() => setBackDialogOpen(false)}
+          actions={[
+            {
+              label: "Simpan ke draft & kembali",
+              description:
+                "Foto dan layout tetap tersimpan, siap dilanjutkan di booth.",
+              icon: (
+                <IconDeviceFloppy size={20} stroke={2.5} aria-hidden="true" />
+              ),
+              tone: "primary",
+              onClick: () => confirmBackToBooth(true),
+            },
+            {
+              label: "Buang foto & kembali",
+              description: "Foto dihapus, booth mulai lagi dengan sesi kosong.",
+              icon: <IconTrash size={20} stroke={2.5} aria-hidden="true" />,
+              tone: "danger",
+              onClick: () => confirmBackToBooth(false),
+            },
+            {
+              label: "Batal, tetap di studio",
+              icon: <IconX size={20} stroke={2.5} aria-hidden="true" />,
+              tone: "neutral",
+              onClick: () => setBackDialogOpen(false),
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }

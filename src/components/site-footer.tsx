@@ -1,12 +1,17 @@
-import { IconTrash } from "@tabler/icons-react";
+import {
+  IconCamera,
+  IconPhoto,
+  IconShieldLock,
+  IconTrash,
+} from "@tabler/icons-react";
 import Link from "next/link";
 
 import { Logo } from "@/components/logo";
 
 const FOOTER_LINKS = [
-  { href: "/booth", label: "Booth" },
-  { href: "/gallery", label: "Galeri" },
-  { href: "/privacy", label: "Privasi" },
+  { href: "/booth", label: "Booth", icon: IconCamera },
+  { href: "/gallery", label: "Galeri", icon: IconPhoto },
+  { href: "/privacy", label: "Privasi", icon: IconShieldLock },
 ];
 
 /** One footer for every public screen, so app and marketing pages end alike. */
@@ -34,15 +39,19 @@ export function SiteFooter() {
         </div>
 
         <nav className="flex flex-wrap gap-2" aria-label="Footer">
-          {FOOTER_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-4 py-1.5 font-display text-small font-bold text-ink transition-colors hover:bg-mint"
-            >
-              {link.label}
-            </Link>
-          ))}
+          {FOOTER_LINKS.map((link) => {
+            const Icon = link.icon;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-4 py-1.5 font-display text-small font-bold text-ink transition-colors hover:bg-mint"
+              >
+                <Icon size={15} stroke={2.5} aria-hidden="true" />
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
       </div>
     </footer>

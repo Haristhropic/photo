@@ -16,10 +16,13 @@
     "e2e:timer": "tsx scripts/e2e-timer.ts",
     "capture": "tsx scripts/capture.mts",
     "e2e:retake": "tsx scripts/e2e-retake.ts",
+    "e2e:studio-back": "tsx scripts/e2e-studio-back.ts",
+    "e2e:booth-back": "tsx scripts/e2e-booth-back.ts",
     "e2e:download": "tsx scripts/e2e-download.ts",
     "e2e:capture": "tsx scripts/e2e-capture.ts",
     "e2e:draft": "tsx scripts/e2e-draft.ts",
     "e2e:frame": "tsx scripts/e2e-frame.ts",
+    "e2e:upload": "tsx scripts/e2e-upload.ts",
     "e2e:hero": "tsx scripts/e2e-hero.ts",
     "e2e:mirror": "tsx scripts/e2e-mirror.ts"
   },

@@ -61,6 +61,7 @@ async function main() {
     log("booth loaded", page.url());
 
     const expectedViewBoxes: Record<string, string> = {
+      STRIP_2: "0 0 900 1200",
       STRIP_3: "0 0 900 1800",
       STRIP_4: "0 0 900 2400",
       GRID_4: "0 0 1200 1200",
@@ -78,8 +79,8 @@ async function main() {
       "layout previews",
       layoutPreviews.map((item) => `${item.type}:${item.viewBox}`).join(", "),
     );
-    if (layoutPreviews.length !== 4) {
-      throw new Error(`expected 4 layout previews, found ${layoutPreviews.length}`);
+    if (layoutPreviews.length !== 5) {
+      throw new Error(`expected 5 layout previews, found ${layoutPreviews.length}`);
     }
     for (const preview of layoutPreviews) {
       if (expectedViewBoxes[preview.type] !== preview.viewBox) {
@@ -150,15 +151,20 @@ async function main() {
     await page.waitForURL("**/studio", { timeout: 15000 });
     log("studio entered", page.url());
 
-    const studioBack = page.locator('header a[aria-label="Kembali ke booth"]');
+    const studioBack = page
+      .locator("header")
+      .getByRole("button", { name: /^Booth$/ });
     await studioBack.waitFor({ state: "visible", timeout: 10000 });
-    const studioBackHref = await studioBack.getAttribute("href");
-    if (studioBackHref !== "/booth?from=studio") {
-      throw new Error(
-        `studio back control points at ${studioBackHref}, want /booth?from=studio`,
-      );
-    }
-    log("studio back control", studioBackHref);
+    await studioBack.click();
+    const backDialog = page.getByRole("dialog", {
+      name: /Mau kembali ke booth/i,
+    });
+    await backDialog.waitFor({ state: "visible", timeout: 10000 });
+    await backDialog
+      .getByRole("button", { name: /Batal, tetap di studio/i })
+      .click();
+    await backDialog.waitFor({ state: "hidden", timeout: 10000 });
+    log("studio back control", "dialog opened and cancelled");
 
     // The header must keep the brand and the control cluster as two siblings.
     // Extra direct children let `justify-between` space every pill across the

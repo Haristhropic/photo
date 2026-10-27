@@ -90,6 +90,19 @@ async function shootRun(page: Page, layoutLabel: string, expectedShots: number) 
   await page.waitForURL("**/studio", { timeout: 20000 });
 }
 
+/**
+ * "Ambil ulang" is an explicit retake: it goes straight back to the booth with
+ * a fresh run, while the confirmation dialog is reserved for the header's
+ * back-to-booth link.
+ */
+async function leaveStudio(page: Page) {
+  await clickWhenSettled(
+    page,
+    page.getByRole("button", { name: /Ambil ulang|Ganti foto/i }),
+  );
+  await page.waitForURL("**/booth**", { timeout: 20000 });
+}
+
 async function main() {
   const browser = await chromium.launch({
     args: [
@@ -128,8 +141,7 @@ async function main() {
 
     // Retake: back to the booth, pick a different layout, shoot again. The
     // second run must replace the first everywhere in the studio.
-    await clickWhenSettled(page, page.getByRole("button", { name: /Ambil ulang/i }));
-    await page.waitForURL("**/booth**", { timeout: 20000 });
+    await leaveStudio(page);
     log("returned to booth for a retake");
 
     await shootRun(page, "Grid 2x2", 4);
@@ -158,8 +170,7 @@ async function main() {
 
     // A third run proves the 4-shot vertical strip also replaces the previous
     // draft; then a fourth covers the single-shot layout.
-    await clickWhenSettled(page, page.getByRole("button", { name: /Ambil ulang/i }));
-    await page.waitForURL("**/booth**", { timeout: 20000 });
+    await leaveStudio(page);
     await shootRun(page, "Strip 4", 4);
     const thirdBadge = await readDraftBadge(page);
     const thirdPreview = await readPreviewSize(page);
@@ -171,8 +182,7 @@ async function main() {
       throw new Error(`expected 4 shots in the third badge, got "${thirdBadge}"`);
     }
 
-    await clickWhenSettled(page, page.getByRole("button", { name: /Ambil ulang/i }));
-    await page.waitForURL("**/booth**", { timeout: 20000 });
+    await leaveStudio(page);
     await shootRun(page, "Single", 1);
     const fourthBadge = await readDraftBadge(page);
     const fourthPreview = await readPreviewSize(page);

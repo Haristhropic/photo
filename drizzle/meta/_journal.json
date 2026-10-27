@@ -22,6 +22,13 @@
       "when": 1792658324561,
       "tag": "0002_dynamic_frames",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792926337114,
+      "tag": "0003_gigantic_forge",
+      "breakpoints": true
     }
   ]
 }

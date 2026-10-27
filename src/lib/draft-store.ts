@@ -17,9 +17,11 @@
 // the old entry so a reload can never resurrect a previous guest's strip.
 
 import { LAYOUTS, type LayoutType } from "./layouts";
+import { normalizeShotTransform, type ShotTransform } from "./photo-transform";
 import type { Draft } from "./render";
 
 const DRAFT_KEY = "snapvibe.draft";
+export const BOOTH_KEY = "snapvibe.boothrun";
 
 let cachedRaw: string | null | undefined;
 let cachedDraft: Draft | null = null;
@@ -42,13 +44,39 @@ function parse(raw: string | null): Draft | null {
     return null;
   }
 
-  if (!Array.isArray(parsed.shots) || parsed.shots.length === 0) return null;
+  if (
+    !Array.isArray(parsed.shots) ||
+    parsed.shots.length === 0 ||
+    !parsed.shots.every((shot) => typeof shot === "string")
+  ) {
+    return null;
+  }
 
   const preset = LAYOUTS[parsed.layoutType as LayoutType];
   if (!preset) return null;
   if (parsed.shots.length < preset.shotCount) return null;
 
-  return parsed;
+  const source = parsed.source === "upload" ? "upload" : "camera";
+  const rawTransforms = Array.isArray(parsed.transforms)
+    ? parsed.transforms
+    : null;
+  // Old drafts have no transforms and must keep their centre-cropped look.
+  // Uploaded drafts always get a sanitised entry for every slot so the renderer
+  // never has to guess whether a missing index means "centre" or "broken".
+  const transforms: ShotTransform[] | undefined =
+    rawTransforms || source === "upload"
+      ? parsed.shots.map((_, index) =>
+          normalizeShotTransform(rawTransforms?.[index]),
+        )
+      : undefined;
+
+  return {
+    shots: parsed.shots,
+    layoutType: preset.type,
+    eventId: typeof parsed.eventId === "string" ? parsed.eventId : null,
+    source,
+    ...(transforms ? { transforms } : {}),
+  };
 }
 
 export function getDraftSnapshot(): Draft | null {
@@ -129,9 +157,45 @@ function clearStoredDraft(): void {
   }
 }
 
+/**
+ * Hand the current draft back to the booth as its own run snapshot. The booth
+ * keeps its in-progress run in sessionStorage under a separate key; without
+ * this, leaving the studio drops the photos and the booth falls back to its
+ * default layout, even when the guest asked to keep the draft.
+ */
+export function restoreDraftToBooth(draft: Draft): boolean {
+  try {
+    sessionStorage.setItem(
+      BOOTH_KEY,
+      JSON.stringify({
+        layoutType: draft.layoutType,
+        shots: draft.shots,
+        source: draft.source,
+        ...(draft.transforms ? { transforms: draft.transforms } : {}),
+      }),
+    );
+    return true;
+  } catch {
+    // The studio still holds the draft in memory; the booth can be reopened
+    // from there in the same tab even if storage is full.
+    return false;
+  }
+}
+
+export function clearBoothRun(): void {
+  try {
+    sessionStorage.removeItem(BOOTH_KEY);
+  } catch {
+    // Nothing to clean up if storage is unavailable.
+  }
+}
+
 export function clearDraft(): void {
   memoryDraft = null;
   clearStoredDraft();
+  // Discarding the draft must also stop the booth from restoring the same
+  // photos through its own snapshot.
+  clearBoothRun();
   cachedRaw = undefined;
   cachedDraft = null;
   notify();

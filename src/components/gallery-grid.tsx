@@ -12,6 +12,7 @@ import { LAYOUTS, type LayoutType } from "@/lib/layouts";
 const PREVIEW_COUNT = 8;
 
 const LAYOUT_LABELS: Record<string, string> = {
+  STRIP_2: "Strip 2",
   STRIP_3: "Strip 3",
   STRIP_4: "Strip 4",
   GRID_4: "Grid 2x2",

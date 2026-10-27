@@ -1,5 +1,13 @@
 import { eq, sql } from "drizzle-orm";
-import { IconCamera, IconHome, IconQrcode } from "@tabler/icons-react";
+import {
+  IconCalendarEvent,
+  IconCamera,
+  IconClockHour4,
+  IconHome,
+  IconLayoutGrid,
+  IconQrcode,
+  IconShare,
+} from "@tabler/icons-react";
 import QRCode from "qrcode";
 import type { Metadata } from "next";
 import Image from "next/image";
@@ -113,7 +121,8 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
                 className="size-40 shrink-0 self-center rounded-[var(--radius)] border-2 border-ink bg-elev sm:self-start"
               />
               <div className="min-w-0">
-                <p className="font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase">
+                <p className="flex items-center gap-2 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase">
+                  <IconShare size={15} stroke={2.5} aria-hidden="true" />
                   Bagikan
                 </p>
                 <p className="mt-2 font-semibold text-ink">
@@ -150,21 +159,24 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
 
           <dl className="grid gap-3">
             <div className="rounded-[var(--radius)] border-2 border-ink bg-elev p-4 shadow-lift-1">
-              <dt className="font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
+              <dt className="flex items-center gap-2 font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
+                <IconLayoutGrid size={15} stroke={2.5} aria-hidden="true" />
                 Layout
               </dt>
               <dd className="mt-1 font-semibold text-ink">{layout.label}</dd>
             </div>
             {session.eventTitle && (
               <div className="rounded-[var(--radius)] border-2 border-ink bg-elev p-4 shadow-lift-1">
-                <dt className="font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
+                <dt className="flex items-center gap-2 font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
+                  <IconCalendarEvent size={15} stroke={2.5} aria-hidden="true" />
                   Event
                 </dt>
                 <dd className="mt-1 font-semibold text-ink">{session.eventTitle}</dd>
               </div>
             )}
             <div className="rounded-[var(--radius)] border-2 border-ink bg-elev p-4 shadow-lift-1">
-              <dt className="font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
+              <dt className="flex items-center gap-2 font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
+                <IconClockHour4 size={15} stroke={2.5} aria-hidden="true" />
                 Berlaku sampai
               </dt>
               <dd className="mt-1 font-semibold text-ink">

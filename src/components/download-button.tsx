@@ -89,8 +89,9 @@ export function DownloadButton({
       </a>
       <p
         role="status"
-        className="font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase"
+        className="flex items-center gap-2 font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase"
       >
+        <IconDownload size={15} stroke={2.5} aria-hidden="true" />
         {count} kali diunduh
       </p>
       {error && (

@@ -5,12 +5,20 @@ import {
   preloadFrameImage,
   type FramePreset,
 } from "./frames";
+import {
+  drawPhotoCover,
+  type ShotTransform,
+} from "./photo-transform";
 import { STICKERS, drawSticker, type StickerKey } from "./stickers";
 
 export type Draft = {
   shots: string[];
   layoutType: LayoutType;
   eventId: string | null;
+  /** Where the shots came from. Older drafts are treated as camera runs. */
+  source?: "camera" | "upload";
+  /** Optional per-shot focus/zoom; camera shots keep the centre cover crop. */
+  transforms?: ShotTransform[];
 };
 
 // The studio re-renders on every filter, sticker and frame change. Without a
@@ -59,38 +67,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return pending;
 }
 
-function drawCover(
-  ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-): void {
-  const sourceRatio = img.naturalWidth / img.naturalHeight;
-  const targetRatio = w / h;
-
-  let sx = 0;
-  let sy = 0;
-  let sw = img.naturalWidth;
-  let sh = img.naturalHeight;
-
-  if (sourceRatio > targetRatio) {
-    sw = img.naturalHeight * targetRatio;
-    sx = (img.naturalWidth - sw) / 2;
-  } else {
-    sh = img.naturalWidth / targetRatio;
-    sy = (img.naturalHeight - sh) / 2;
-  }
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(x, y, w, h);
-  ctx.clip();
-  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
-  ctx.restore();
-}
-
 export async function renderStrip(options: {
   shots: string[];
   layoutType: LayoutType;
@@ -98,8 +74,10 @@ export async function renderStrip(options: {
   sticker: StickerKey | null;
   frame: FramePreset | null;
   eventLabel: string | null;
+  transforms?: ShotTransform[];
 }): Promise<string> {
-  const { shots, layoutType, filterKey, sticker, eventLabel } = options;
+  const { shots, layoutType, filterKey, sticker, eventLabel, transforms } =
+    options;
   const layout = LAYOUTS[layoutType];
   const { w: width, h: height } = layout.canvas;
 
@@ -127,7 +105,7 @@ export async function renderStrip(options: {
     await document.fonts.ready;
   }
 
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = frame?.paperColor ?? "#ffffff";
   ctx.fillRect(0, 0, width, height);
 
   const imagesPromise = Promise.all(
@@ -144,7 +122,7 @@ export async function renderStrip(options: {
   ctx.filter = FILTERS[filterKey].css;
   photoSlots.forEach((slot, i) => {
     const img = images[i];
-    if (img) drawCover(ctx, img, slot.x, slot.y, slot.w, slot.h);
+    if (img) drawPhotoCover(ctx, img, slot, transforms?.[i]);
   });
   ctx.filter = "none";
 

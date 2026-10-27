@@ -81,7 +81,7 @@ function clipped(
   ctx.restore();
 }
 
-function displayFamily(): string {
+export function displayFamily(): string {
   if (typeof document === "undefined") {
     return "ui-sans-serif, system-ui, sans-serif";
   }

@@ -1,4 +1,9 @@
-export type LayoutType = "STRIP_3" | "STRIP_4" | "GRID_4" | "SINGLE";
+export type LayoutType =
+  | "STRIP_2"
+  | "STRIP_3"
+  | "STRIP_4"
+  | "GRID_4"
+  | "SINGLE";
 
 export type Rect = { x: number; y: number; w: number; h: number };
 
@@ -33,6 +38,10 @@ function verticalStrip(
 }
 
 export const LAYOUTS: Record<LayoutType, LayoutPreset> = {
+  STRIP_2: verticalStrip("STRIP_2", "Strip 2", "Dua bidikan vertikal", 2, {
+    w: 900,
+    h: 1200,
+  }),
   STRIP_3: verticalStrip("STRIP_3", "Strip 3", "Tiga bidikan vertikal", 3, {
     w: 900,
     h: 1800,
@@ -65,6 +74,7 @@ export const LAYOUTS: Record<LayoutType, LayoutPreset> = {
 };
 
 export const LAYOUT_ORDER: LayoutType[] = [
+  "STRIP_2",
   "STRIP_3",
   "STRIP_4",
   "GRID_4",

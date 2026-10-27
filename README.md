@@ -1,8 +1,8 @@
 # SnapVibe
 
 Web photobooth untuk event. Tamu buka link di browser HP, pilih layout, jepret
-bareng-bareng, lalu hias strip dengan filter, stiker, dan frame sebelum
-menyimpan. Data tersimpan di Neon Postgres, file foto di disk lokal.
+atau unggah foto dari galeri, lalu hias strip dengan filter, stiker, dan frame
+sebelum menyimpan. Data tersimpan di Neon Postgres, file foto di disk lokal.
 
 Stack: Next.js 16 (App Router) + React 19 + Tailwind v4 + Drizzle ORM + Neon Postgres.
 
@@ -65,11 +65,14 @@ Kalau auth atau object storage diaktifkan nanti, perintahnya lewat
 | `npm run e2e:retake` | Uji bahwa studio selalu memakai draft terakhir, bukan foto run sebelumnya |
 | `npm run e2e:draft` | Uji draft di penyimpanan penuh tetap memakai foto baru, bukan foto run lama atau "belum ada foto" |
 | `npm run e2e:frame` | Uji frame event Kultur/Fiksi mengisi ketiga jendela Strip 3 dan hanya muncul di layout itu |
+| `npm run e2e:upload` | Uji unggah 2/3/4 foto, layout otomatis, filter frame, crop/zoom, simpan, dan unduh |
 | `npm run e2e:download` | Uji tally "kali diunduh" bertambah sendiri tanpa reload |
 | `npm run e2e:capture` | Uji bidikan yang tersimpan benar-benar bingkai kamera, bukan frame kosong atau duplikat |
 | `npm run e2e:mirror` | Uji pratinjau dan foto tersimpan sama-sama bercermin |
 | `npm run e2e:timer` | Uji hitung mundur 3 detik per bidikan, pembatalan, dan(frame) gelap |
 | `npm run e2e:nav` | Uji semua rute, tautan, dan affordance navigasi |
+| `npm run e2e:studio-back` | Uji dialog kembali dari studio: simpan ke draft, buang, batal, dan Escape |
+| `npm run e2e:booth-back` | Uji dialog kembali dari booth ke foto/studio dan konfirmasi ganti layout |
 | `npm run capture` | Tangkapan layar desktop dan mobile untuk review desain |
 
 `npm run e2e` butuh dev server berjalan dan kamera Chromium palsu
@@ -195,16 +198,61 @@ dengan dashboard.
 
 ## Alur
 
-1. `/booth` pilih layout (Strip 3, Strip 4, Grid 2x2, Single), aktifkan kamera,
-   hitung mundur 3-2-1, lalu burst beberapa bidikan.
-2. Bidikan dikirim ke `/studio` lewat `sessionStorage`, dirender jadi satu PNG
-   di canvas dengan filter, stiker, frame, dan tata letak pilihan.
+1. `/booth` pilih layout (Strip 2, Strip 3, Strip 4, Grid 2x2, Single), lalu
+   aktifkan kamera dan burst beberapa bidikan, atau tekan **Unggah foto** untuk
+   memilih foto yang sudah ada di galeri HP. Satu foto mengisi satu slot; setiap
+   slot bisa diganti, dihapus, diurutkan ulang, digeser, dan di-zoom sebelum
+   lanjut.
+2. Foto kamera atau unggahan dikirim ke `/studio` lewat `sessionStorage`,
+   dirender jadi satu PNG di canvas dengan filter, stiker, frame, dan tata letak
+   pilihan.
 3. PNG dikirim ke `POST /api/sessions`, disimpan ke disk, dan baris Postgres dibuat
    dengan `accessKey` acak 20 karakter.
 4. `/p/[accessKey]` menampilkan strip, QR ke halaman yang sama, dan tombol unduh
    yang menambah `download_count`.
 5. `/api/cron/cleanup` menghapus sesi kedaluwarsa beserta filenya. Sesi yang
    sudah dipublikasikan ke galeri dilewati, jadi fotonya tetap tampil.
+
+**Unggah dari galeri.** Tombol **Unggah foto** di layar pilih layout dan layar
+error kamera membuka `/booth?mode=upload`; alamat itu juga bisa dibuka langsung.
+Entry langsung memakai **Strip 4** agar empat foto langsung muat, lalu layout
+menyesuaikan jumlah foto yang benar-benar dipilih: dua foto pindah ke **Strip 2**,
+tiga foto ke **Strip 3**, dan empat foto tetap di **Strip 4**. Kalau Grid 2x2
+dipilih secara eksplisit, empat foto tetap di Grid. Ini membuat frame yang khusus
+didesain untuk dua atau tiga foto langsung tersedia di studio. Kalau tamu
+menambah atau menghapus foto, layout ikut menyesuaikan (maksimal empat foto). Setiap slot bisa diganti, dihapus, diurutkan ulang, digeser, dan di-zoom
+sebelum lanjut. Kalau baru punya satu foto di layout berbilang slot, ada jalan
+pintas ke layout Single.
+
+Frame admin terikat ke layout yang dipilih saat unggah. Frame dua jendela harus
+dipasang ke **Strip 2**, frame tiga jendela ke **Strip 3**, dan seterusnya; studio
+hanya menampilkan frame yang cocok dengan layout draft.
+
+Semua pemrosesan foto asli terjadi di browser, di `src/lib/photo-import.ts`:
+
+- JPEG, PNG, WebP, AVIF, HEIC, dan HEIF diterima lewat `accept`; tipe lain
+  ditolak dengan pesan yang jelas.
+- Batas file 25 MB dan 60 megapiksel; foto diperkecil ke sisi terpanjang 1440px
+  lalu di-encode ulang sebagai JPEG kualitas 0,84. Langkah ini juga membuang
+  metadata seperti GPS dan nama kamera.
+- Orientasi EXIF dihormati lewat `createImageBitmap(..., { imageOrientation:
+  "from-image" })` bila browser mendukung, dengan fallback `<img>`.
+- HEIC/HEIF hanya didukung kalau browser bisa men-decode-nya sendiri (Safari
+  umumnya bisa, Chrome biasanya tidak). Kalau decode gagal, tamu melihat pesan
+  untuk mengekspor foto sebagai JPEG. Tidak ada library konversi HEIC yang
+  dikirim ke client pada v1.
+- Foto asli **tidak pernah** dikirim ke server. Yang diunggah ke
+  `POST /api/sessions` tetap hanya PNG strip akhir, lewat jalur yang sama dengan
+  hasil kamera. Karena itu tidak ada perubahan skema database atau API untuk
+  fitur ini.
+
+Posisi crop disimpan sebagai `ShotTransform` ternormalisasi
+(`focusX`, `focusY`, `zoom`) di draft, bukan koordinat piksel. `renderStrip` dan
+pratinjau memakai `drawPhotoCover` yang sama, jadi hasil di thumbnail, studio,
+dan PNG identik. Draft lama tanpa transform tetap memakai crop tengah seperti
+sebelumnya. `npm run e2e:upload` menguji unggah dua, tiga, dan empat foto,
+pergantian otomatis ke Strip 2/Strip 3/Strip 4, filter frame per layout, ganti,
+hapus, urutan ulang, crop/zoom, frame custom, simpan, unduh, dan lebar 320-1440px.
 
 Admin membuat event di `/admin`, opsional dengan kode akses, dan mengunggah
 frame PNG. Event terkunci hanya bisa dibuka lewat `/e/[slug]` dengan kode yang
@@ -216,7 +264,8 @@ swatch pemilih, pratinjau, dan PNG hasil simpan memakai kode yang sama persis.
 Dua frame event RTS, **Kultur** dan **Fiksi**, sekarang dikelola admin seperti
 frame lain: PNG diunggah ke Cloudinary, metadata dan jendela fotonya disimpan di
 Neon, lalu studio mengambil katalog dari `GET /api/frames`. Keduanya khusus
-**Strip 3** dan tidak ditampilkan di layout lain.
+**Strip 3** dan tidak ditampilkan di layout lain. Frame dua jendela bisa
+diunggah dengan layout **Strip 2** dan hanya muncul untuk draft dua foto.
 
 Saat admin mengunggah PNG, `src/lib/frame-image.ts` memindai alpha channel:
 margin transparan yang menyentuh tepi diabaikan, lalu komponen transparan
@@ -231,6 +280,17 @@ Frame dilukis setelah foto dan sebelum stiker; tepi bawah 70px dan tepi samping
 bitmap, stiker ditempel di foto terakhir agar footer bermerek pada frame tidak
 tertutup. Global frame (`event_id` null) muncul di semua sesi; frame yang
 dipasang ke event hanya muncul untuk draft dari event itu.
+
+**Frame custom** adalah frame buatan tamu yang hanya hidup di sesi studio.
+Kartunya selalu muncul di pemilih frame (tidak ikut filter kategori) dan
+menyediakan tiga gaya (`Bingkai`, `Bintik`, `Garis`), palet kertas dan aksen
+terkurasi, caption maksimal 20 karakter, serta opsi tanggal hari ini. Pilihan
+disimpan di state React, bukan di database, dan dirender lewat
+`customFramePreset` di `src/lib/custom-frame.ts` sebagai `FramePreset` biasa
+dengan `key: "custom"`. Warna kertas dibawa di `FramePreset.paperColor` supaya
+`renderStrip` dan swatch memakai latar yang sama. Caption sengaja diletakkan di
+margin atas, jauh dari stiker kiri-bawah dan label event kanan-bawah; garis
+bingkai custom dibuat cukup tipis agar tidak menabrak caption.
 
 **Stiker tempel** juga ada di studio: enam desain die-cut (Senyum, Cakep, Squad,
 Bestie, Party, Gemes) digambar di `src/lib/stickers.ts` dengan bentuk, rim kertas,
@@ -343,15 +403,14 @@ multi-megabyte, sementara slot strip tidak lebih dari ~900px. Tanpa ini,
 Pratinjau `<video>` di-flip dengan `scaleX(-1)`, dan `grabFrame` membalik piksel
 dengan cara yang sama, jadi foto yang tersimpan persis seperti yang tamu lihat di
 pratinjau. Label teks di strip digambar setelah pembalikan, jadi tulisan tetap
-terbaca normal. `drawCover` di `src/lib/render.ts` menggambar langsung di
-`(x, y)` slotnya; kalau suatu saat perlu mengubah pembalikan, ingat bahwa
-`translate` di sana juga yang memposisikan gambar ke slot, bukan hanya bagian
-dari pembalikan. `npm run e2e:mirror` memasang stream uji separuh merah separuh
-biru dan memastikan merah pindah ke kanan, baik di transform pratinjau, thumbnail
-review, maupun file yang tersimpan.
+terbaca normal. Pembalikan terjadi di `grabFrame` sebelum gambar masuk ke canvas
+strip; `drawPhotoCover` di `src/lib/photo-transform.ts` lalu menggambar ke rect
+slot `(x, y, w, h)` dan menerapkan crop/zoom unggahan. `npm run e2e:mirror`
+memasang stream uji separuh merah separuh biru dan memastikan merah pindah ke
+kanan, baik di transform pratinjau, thumbnail review, maupun file yang tersimpan.
 
 **Strip halaman depan.** Hero di `/` menampilkan `HeroStrip`, proof statis
-layout pertama (`Strip 3`) dengan tiga slot bernomor dan ilustrasi placeholder.
+layout **Strip 3** dengan tiga slot bernomor dan ilustrasi placeholder.
 Tidak ada hitung mundur, animasi bidikan, atau umpan kamera; halaman marketing
 tidak meminta kamera sebelum tamu memilih masuk booth, dan loop kamera
 sungguhan hanya ada di `/booth`. `npm run e2e:hero` memastikan hero tetap
@@ -378,10 +437,11 @@ buat `useSyncExternalStore`; karena itu hasil `JSON.parse` di-memoisikan **terha
 string mentahnya**, bukan disimpan sekali lalu dibekukan. Cache yang hanya di-reset
 setelah simpan akan terus mengembalikan foto run pertama, atau `null` yang membuat
 studio menampilkan "belum ada foto" padahal tamu baru saja jepret.
-Draft juga dianggap tidak sah kalau jumlah bidikan kurang dari `shotCount` layout-nya,
+Draft juga dianggap tidak sah kalau jumlah foto kurang dari `shotCount` layout-nya,
 supaya strip tidak pernah dirender dengan slot kosong. Pratinjau disimpan bersama
-asal render-nya (draft, filter, stiker) dan validity-nya diturunkan saat dibaca,
-jadi pratinjau milik run lama tidak bisa diunggah ke database. `npm run e2e:retake`
+asal render-nya (draft, filter, stiker, dan identitas frame termasuk opsi custom)
+dan validity-nya diturunkan saat dibaca, jadi pratinjau milik run lama atau opsi
+frame yang sudah diubah tidak bisa diunggah ke database. `npm run e2e:retake`
 menjaga semua itu.
 
 Penyimpanan hanyalah lapisan ketahanan, bukan sumber kebenaran untuk layar

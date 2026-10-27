@@ -1,9 +1,18 @@
 "use client";
 
 import {
+  IconAdjustmentsHorizontal,
   IconArrowBackUp,
+  IconArrowLeft,
+  IconArrowRight,
   IconCamera,
+  IconCheck,
+  IconLayoutGrid,
+  IconPalette,
+  IconPhoto,
   IconRefresh,
+  IconReplace,
+  IconTrash,
   IconX,
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
@@ -23,20 +32,72 @@ import {
   stopStream,
   waitForVideoLive,
 } from "@/lib/capture";
-import { writeDraft } from "@/lib/draft-store";
+import { BOOTH_KEY, clearBoothRun, writeDraft } from "@/lib/draft-store";
 import { LAYOUTS, LAYOUT_ORDER, type LayoutType } from "@/lib/layouts";
+import {
+  IMPORT_ACCEPT,
+  importPhoto,
+  photoImportMessage,
+} from "@/lib/photo-import";
+import {
+  DEFAULT_SHOT_TRANSFORM,
+  normalizeShotTransform,
+  type ShotTransform,
+} from "@/lib/photo-transform";
 import { BackLink } from "@/components/back-link";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { LayoutPreview } from "@/components/layout-preview";
 import { Logo } from "@/components/logo";
+import { PhotoCropper } from "@/components/photo-cropper";
+import { PhotoThumb } from "@/components/photo-thumb";
 import { SiteFooter } from "@/components/site-footer";
 
-const BOOTH_KEY = "snapvibe.boothrun";
+type BoothSource = "camera" | "upload";
 
-type BoothRun = { layoutType: LayoutType; shots: string[] };
+type BoothRun = {
+  layoutType: LayoutType;
+  shots: string[];
+  source?: BoothSource;
+  transforms?: ShotTransform[];
+};
 
 /** Event slugs and access keys are `[a-z0-9-]`; anything else cannot be a real
  *  segment, so a crafted `from` cannot smuggle `//host` or `..` into the href. */
 const SAFE_SEGMENT = /^[a-z0-9][a-z0-9-]*$/;
+
+const MAX_SHOT_COUNT = Math.max(
+  ...LAYOUT_ORDER.map((type) => LAYOUTS[type].shotCount),
+);
+
+/** Layouts ordered by photo capacity, so uploads can pick the tightest fit
+ *  without depending on the public picker's display order. */
+const LAYOUTS_BY_CAPACITY = [...LAYOUT_ORDER].sort(
+  (a, b) => LAYOUTS[a].shotCount - LAYOUTS[b].shotCount,
+);
+
+/** Pick the smallest layout that can hold `count` photos. Uploads use this so a
+ *  two- or three-photo selection gets the matching frame set instead of being
+ *  left in the four-slot default, while four files still grow to Strip 4. */
+function layoutForShotCount(count: number): LayoutType {
+  const fit = Math.min(Math.max(count, 1), MAX_SHOT_COUNT);
+  return (
+    LAYOUTS_BY_CAPACITY.find((type) => LAYOUTS[type].shotCount >= fit) ??
+    "STRIP_4"
+  );
+}
+
+/** Pick the upload layout without overriding an explicit four-photo choice.
+ *  Two and three photos always use their exact strip so the matching admin
+ *  frames are available, while four photos keep a chosen Strip 4 or Grid 2x2. */
+function layoutForUploadCount(
+  current: LayoutType,
+  count: number,
+): LayoutType {
+  const fit = Math.min(Math.max(count, 1), MAX_SHOT_COUNT);
+  if (fit <= 1) return current;
+  if (fit <= 3) return layoutForShotCount(fit);
+  return LAYOUTS[current].shotCount === 4 ? current : layoutForShotCount(4);
+}
 
 function resolveBackTarget(from: string | undefined): { href: string; label: string } {
   if (from) {
@@ -54,20 +115,34 @@ function resolveBackTarget(from: string | undefined): { href: string; label: str
   return { href: "/", label: "Beranda" };
 }
 
-type Status = "intro" | "requesting" | "ready" | "countdown" | "burst" | "review" | "error";
+type Status =
+  | "intro"
+  | "requesting"
+  | "ready"
+  | "countdown"
+  | "burst"
+  | "review"
+  | "upload"
+  | "error";
+
+type BoothDialog = "foto" | "studio" | "layout" | null;
 
 export function BoothClient({
   eventId,
   from,
+  initialMode = "camera",
 }: {
   eventId?: string;
   from?: string;
+  initialMode?: BoothSource;
 }) {
   const router = useRouter();
   const back = resolveBackTarget(from);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const runRef = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const importRunRef = useRef(0);
   // Which run currently owns the live stream. A cancelled run must not stop a
   // stream that a newer run has taken over.
   const streamOwnerRef = useRef(0);
@@ -77,15 +152,27 @@ export function BoothClient({
   // kamera". Track real unmounts separately so only navigation cancels work.
   const mountedRef = useRef(true);
 
-  const [status, setStatus] = useState<Status>("intro");
-  const [layoutType, setLayoutType] = useState<LayoutType>("STRIP_3");
+  const [status, setStatus] = useState<Status>(
+    initialMode === "upload" ? "upload" : "intro",
+  );
+  const [source, setSource] = useState<BoothSource>(initialMode);
+  const [layoutType, setLayoutType] = useState<LayoutType>(
+    initialMode === "upload" ? "STRIP_4" : "STRIP_3",
+  );
   const [countdown, setCountdown] = useState<number | null>(null);
   const [shotIndex, setShotIndex] = useState<number | null>(null);
   const [shots, setShots] = useState<string[]>([]);
+  const [transforms, setTransforms] = useState<ShotTransform[]>([]);
+  const replaceIndexRef = useRef<number | null>(null);
+  const [cropIndex, setCropIndex] = useState<number | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importNotice, setImportNotice] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<"camera" | "capture" | null>(null);
   const [aspect, setAspect] = useState(4 / 3);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [dialog, setDialog] = useState<BoothDialog>(null);
 
   // The booth keeps its run in memory only, so a back/forward (an accidental
   // tap, a browser swipe) silently discarded the layout choice and every photo
@@ -104,8 +191,18 @@ export function BoothClient({
           const parsed = JSON.parse(raw) as BoothRun;
           if (Array.isArray(parsed?.shots) && parsed.shots.length > 0) {
             if (parsed.layoutType) setLayoutType(parsed.layoutType);
+            const restoredSource: BoothSource =
+              parsed.source === "upload" ? "upload" : "camera";
+            setSource(restoredSource);
             setShots(parsed.shots);
-            setStatus("review");
+            setTransforms(
+              restoredSource === "upload"
+                ? parsed.shots.map((_, index) =>
+                    normalizeShotTransform(parsed.transforms?.[index]),
+                  )
+                : [],
+            );
+            setStatus(restoredSource === "upload" ? "upload" : "review");
           } else {
             sessionStorage.removeItem(BOOTH_KEY);
           }
@@ -121,11 +218,14 @@ export function BoothClient({
         sessionStorage.removeItem(BOOTH_KEY);
         return;
       }
-      sessionStorage.setItem(BOOTH_KEY, JSON.stringify({ layoutType, shots }));
+      sessionStorage.setItem(
+        BOOTH_KEY,
+        JSON.stringify({ layoutType, shots, source, transforms }),
+      );
     } catch {
       // Storage can be full or blocked; the run still works in memory.
     }
-  }, [layoutType, shots]);
+  }, [layoutType, shots, source, transforms]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const preset = LAYOUTS[layoutType];
@@ -163,7 +263,16 @@ export function BoothClient({
 
   const startCamera = useCallback(async () => {
     const run = ++runRef.current;
+    importRunRef.current += 1;
+    setSource("camera");
     setStatus("requesting");
+    setShots([]);
+    setTransforms([]);
+    setImporting(false);
+    setImportError(null);
+    setImportNotice(null);
+    replaceIndexRef.current = null;
+    setCropIndex(null);
     setErrorText(null);
     setErrorKind(null);
     setCountdown(null);
@@ -305,13 +414,22 @@ export function BoothClient({
   function retake() {
     cancelRun();
     setShots([]);
+    setTransforms([]);
     startCamera();
   }
 
   function backToLayout() {
     cancelRun();
+    importRunRef.current += 1;
     setShots([]);
+    setTransforms([]);
+    setSource("camera");
     setStatus("intro");
+    setImporting(false);
+    setImportError(null);
+    setImportNotice(null);
+    replaceIndexRef.current = null;
+    setCropIndex(null);
     setErrorText(null);
     setErrorKind(null);
     try {
@@ -321,8 +439,163 @@ export function BoothClient({
     }
   }
 
+  function openPicker(index: number | null = null) {
+    replaceIndexRef.current = index;
+    setImportError(null);
+    setImportNotice(null);
+    const input = fileInputRef.current;
+    if (!input) return;
+    input.value = "";
+    input.click();
+  }
+
+  async function handleFiles(files: File[] | null) {
+    if (!files || files.length === 0) return;
+
+    const list = files;
+    const replaceAt = replaceIndexRef.current;
+    replaceIndexRef.current = null;
+
+    // Match the layout to the number of photos selected, not just grow when the
+    // current one is full. A two-photo upload therefore opens Strip 2 and sees
+    // its two-photo frames, and three photos move to Strip 3. Four photos keep
+    // an explicitly chosen Strip 4 or Grid 2x2. Single-photo uploads keep the
+    // existing Single shortcut.
+    const nextCount = shots.length + list.length;
+    const targetType =
+      replaceAt === null
+        ? layoutForUploadCount(layoutType, nextCount)
+        : layoutType;
+    const targetPreset = LAYOUTS[targetType];
+    const room =
+      replaceAt !== null
+        ? 1
+        : Math.max(0, targetPreset.shotCount - shots.length);
+    if (replaceAt === null && room === 0) {
+      setImportNotice("Semua slot sudah terisi. Hapus atau ganti salah satu foto dulu.");
+      return;
+    }
+
+    const accepted =
+      replaceAt !== null ? list.slice(0, 1) : list.slice(0, room);
+
+    setImportNotice(null);
+    setImportError(null);
+    setImporting(true);
+    setSource("upload");
+    setStatus("upload");
+    const run = ++importRunRef.current;
+    const nextShots = [...shots];
+    const nextTransforms = [...transforms];
+    const failures: string[] = [];
+
+    try {
+      for (const file of accepted) {
+        if (!mountedRef.current || importRunRef.current !== run) return;
+        try {
+          const imported = await importPhoto(file);
+          if (!mountedRef.current || importRunRef.current !== run) return;
+          if (replaceAt !== null && replaceAt < nextShots.length) {
+            nextShots[replaceAt] = imported.dataUrl;
+            nextTransforms[replaceAt] = { ...DEFAULT_SHOT_TRANSFORM };
+          } else {
+            nextShots.push(imported.dataUrl);
+            nextTransforms.push({ ...DEFAULT_SHOT_TRANSFORM });
+          }
+        } catch (error) {
+          failures.push(`${file.name}: ${photoImportMessage(error)}`);
+        }
+      }
+
+      if (!mountedRef.current || importRunRef.current !== run) return;
+      // Import failures can leave fewer photos than selected, so fit the layout
+      // to what was actually imported.
+      const finalLayoutType =
+        replaceAt === null
+          ? layoutForUploadCount(layoutType, nextShots.length)
+          : layoutType;
+      setShots(nextShots);
+      setLayoutType(finalLayoutType);
+      setTransforms(
+        nextShots.map((_, index) =>
+          normalizeShotTransform(nextTransforms[index]),
+        ),
+      );
+      if (failures.length > 0) setImportError(failures.join(" "));
+      if (replaceAt === null && list.length > accepted.length) {
+        setImportNotice(`Cuma ${accepted.length} foto pertama yang dipakai.`);
+      } else if (replaceAt === null && finalLayoutType !== layoutType) {
+        setImportNotice(
+          `Layout diganti ke ${LAYOUTS[finalLayoutType].label} supaya semua foto muat.`,
+        );
+      }
+    } finally {
+      if (mountedRef.current && importRunRef.current === run) {
+        setImporting(false);
+      }
+    }
+  }
+
+  function removeShot(index: number) {
+    if (importing) return;
+    const nextShots = shots.filter((_, i) => i !== index);
+    setShots(nextShots);
+    setTransforms((current) => current.filter((_, i) => i !== index));
+    // Removing a photo should hand back the matching frame set too. Leave a
+    // lone photo in place so the existing Single shortcut can offer its layout.
+    if (nextShots.length >= 2) {
+      setLayoutType(layoutForShotCount(nextShots.length));
+    }
+    setCropIndex(null);
+  }
+
+  function moveShot(index: number, delta: -1 | 1) {
+    const target = index + delta;
+    if (target < 0 || target >= shots.length) return;
+    setShots((current) => {
+      if (target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+    setTransforms((current) => {
+      if (target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  function updateTransform(index: number, value: ShotTransform) {
+    setTransforms((current) =>
+      current.map((transform, i) => (i === index ? value : transform)),
+    );
+    setCropIndex(null);
+  }
+
+  function useSingleLayout() {
+    importRunRef.current += 1;
+    setImporting(false);
+    setLayoutType("SINGLE");
+    setShots((current) => current.slice(0, 1));
+    setTransforms((current) => current.slice(0, 1));
+    setSource("upload");
+    setStatus("upload");
+    setImportError(null);
+    setImportNotice(null);
+  }
+
   function proceed() {
-    if (shots.length === 0) return;
+    const required = preset.shotCount;
+    if (shots.length < required) return;
+    const finalShots = shots.slice(0, required);
+    const finalTransforms =
+      source === "upload"
+        ? finalShots.map((_, index) =>
+            normalizeShotTransform(transforms[index]),
+          )
+        : undefined;
+
     // Free the booth snapshot before writing the draft. Both hold the same
     // photo data, and on a nearly-full sessionStorage the draft write could
     // otherwise fail with the previous run still in place.
@@ -331,9 +604,92 @@ export function BoothClient({
     } catch {
       // A blocked storage does not affect the in-memory draft handoff.
     }
-    writeDraft({ shots, layoutType, eventId: eventId ?? null });
+    writeDraft({
+      shots: finalShots,
+      layoutType,
+      eventId: eventId ?? null,
+      source,
+      ...(finalTransforms ? { transforms: finalTransforms } : {}),
+    });
     router.push("/studio");
   }
+
+  const possibleSingleShortcut =
+    source === "upload" &&
+    preset.shotCount > 1 &&
+    shots.length === 1 &&
+    !importing;
+  const canContinue = shots.length >= preset.shotCount;
+  const canAddMore =
+    source === "upload" &&
+    shots.length < MAX_SHOT_COUNT &&
+    (shots.length < preset.shotCount ||
+      layoutForShotCount(shots.length + 1) !== layoutType);
+
+  /** The header back link only needs a gate when it leaves the booth for the
+   *  result or the studio; Beranda and Event stay one-tap. */
+  function requestLeave(event: React.MouseEvent<HTMLAnchorElement>) {
+    if (back.label !== "Foto" && back.label !== "Studio") return;
+    // Keep modifier/middle clicks as ordinary "open elsewhere" actions; only a
+    // plain click is about to drop this booth run in this tab.
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    event.preventDefault();
+    setDialog(back.label === "Foto" ? "foto" : "studio");
+  }
+
+  function requestLayoutChange() {
+    if (shots.length === 0) {
+      backToLayout();
+      return;
+    }
+    setDialog("layout");
+  }
+
+  function confirmLeaveToPhoto() {
+    setDialog(null);
+    clearBoothRun();
+    router.push(back.href);
+  }
+
+  function confirmGoToStudio() {
+    setDialog(null);
+    if (canContinue) {
+      proceed();
+      return;
+    }
+    clearBoothRun();
+    router.push("/studio");
+  }
+
+  const studioDialogDescription = canContinue
+    ? "Foto di booth ini siap dibawa ke studio. Kamu bisa atur filter, stiker, dan frame di sana."
+    : shots.length > 0
+      ? "Sesi ini belum lengkap. Membuka studio akan menutup sesi booth dan menampilkan draft terakhir."
+      : "Belum ada foto baru di booth ini. Studio akan menampilkan draft terakhir kalau ada.";
+
+  const fotoDialogDescription =
+    shots.length === 0
+      ? "Sesi booth ini akan ditutup. Foto yang sudah tersimpan di halaman hasil tetap aman."
+      : source === "upload"
+        ? "Foto baru di sesi ini akan ditutup. Foto yang sudah tersimpan di halaman hasil tetap aman."
+        : "Bidikan baru di sesi ini akan ditutup. Foto yang sudah tersimpan di halaman hasil tetap aman.";
+  const uploadGridClass =
+    preset.shotCount === 1
+      ? "mx-auto w-full max-w-md grid-cols-1"
+      : preset.shotCount === 2
+        ? "mx-auto w-full max-w-3xl grid-cols-1 sm:grid-cols-2"
+        : preset.shotCount === 3
+          ? "grid-cols-1 sm:grid-cols-3"
+          : "grid-cols-2 sm:grid-cols-4";
+  const cropShot = cropIndex !== null ? shots[cropIndex] : undefined;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -348,11 +704,19 @@ export function BoothClient({
           </Link>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <BackLink href={back.href} label={back.label} />
+            <BackLink
+              href={back.href}
+              label={back.label}
+              onClick={
+                back.label === "Foto" || back.label === "Studio"
+                  ? requestLeave
+                  : undefined
+              }
+            />
             {status !== "intro" && (
               <button
                 type="button"
-                onClick={backToLayout}
+                onClick={requestLayoutChange}
                 aria-label="Ganti layout"
                 className="pressable inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3.5 py-1.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1"
               >
@@ -360,11 +724,17 @@ export function BoothClient({
                 <span className="sr-only sm:not-sr-only">Layout</span>
               </button>
             )}
-            <span className="hidden rounded-[var(--radius-pill)] border-2 border-ink bg-butter px-4 py-1.5 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase sm:inline-flex">
+            <span className="hidden items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-butter px-4 py-1.5 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase sm:inline-flex">
+              <IconCamera size={16} stroke={2.5} aria-hidden="true" />
               Booth
             </span>
-            <span className="hidden shrink-0 rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase sm:inline-flex">
-              {preset.shotCount} bidikan
+            <span className="hidden shrink-0 items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase sm:inline-flex">
+              {source === "upload" ? (
+                <IconPhoto size={16} stroke={2.5} aria-hidden="true" />
+              ) : (
+                <IconCamera size={16} stroke={2.5} aria-hidden="true" />
+              )}
+              {preset.shotCount} {source === "upload" ? "foto" : "bidikan"}
             </span>
           </div>
         </div>
@@ -426,11 +796,11 @@ export function BoothClient({
           <div className="shell flex flex-1 flex-col justify-center py-[var(--page)]">
             <h1 className="text-display font-extrabold">Pilih layout</h1>
             <p className="mt-4 max-w-[var(--measure)] text-lead text-ink-body">
-              Ganti layout dan mengambil ulang foto sebanyak yang kamu mau sebelum
-              menyimpan.
+              Pilih layout, lalu jepret atau unggah foto dari galeri. Kamu bisa
+              ganti foto sebanyak yang kamu mau sebelum menyimpan.
             </p>
 
-            <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {LAYOUT_ORDER.map((key, index) => {
                 const layout = LAYOUTS[key];
                 const active = key === layoutType;
@@ -470,14 +840,14 @@ export function BoothClient({
                       {layout.label}
                     </p>
                     <p className="mt-1 font-display text-label font-bold tracking-[0.1em] text-ink-meta uppercase">
-                      {layout.shotCount} bidikan
+                      {layout.shotCount} slot
                     </p>
                   </button>
                 );
               })}
             </div>
 
-            <div className="mt-10">
+            <div className="mt-10 flex flex-wrap gap-3">
               <button
                 type="button"
                 onClick={startCamera}
@@ -486,7 +856,220 @@ export function BoothClient({
                 <IconCamera size={24} stroke={2.5} aria-hidden="true" />
                 Aktifkan kamera
               </button>
+              <button
+                type="button"
+                onClick={() => openPicker(null)}
+                className="pressable inline-flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-butter px-8 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-[var(--mix-coral)]"
+              >
+                <IconPhoto size={24} stroke={2.5} aria-hidden="true" />
+                Unggah foto
+              </button>
             </div>
+          </div>
+        )}
+
+        {status === "upload" && (
+          <div
+            data-testid="upload-editor"
+            className="shell flex flex-1 flex-col justify-center py-[var(--page)]"
+          >
+            <div className="max-w-[var(--measure)]">
+              <h1 className="font-display text-h2 font-extrabold">Susun fotomu</h1>
+              <p className="mt-3 text-lead text-ink-body">
+                Pilih {preset.shotCount} foto dari galeri, bisa sampai empat.
+                Kalau foto yang kamu pilih lebih banyak, layout otomatis
+                menyesuaikan. Foto asli tetap di HP; hanya strip akhir yang
+                diunggah nanti. Geser dan zoom tiap foto lewat tombol Atur.
+              </p>
+            </div>
+
+            {importing && (
+              <p
+                role="status"
+                className="mt-5 max-w-[var(--measure)] rounded-[var(--radius)] border-2 border-ink bg-butter px-4 py-3 text-small font-bold text-ink"
+              >
+                Memproses foto...
+              </p>
+            )}
+            {importError && (
+              <p
+                role="alert"
+                className="mt-5 max-w-[var(--measure)] rounded-[var(--radius)] border-2 border-ink bg-pink px-4 py-3 text-small font-semibold text-ink"
+              >
+                {importError}
+              </p>
+            )}
+            {importNotice && (
+              <p
+                role="status"
+                className="mt-5 max-w-[var(--measure)] rounded-[var(--radius)] border-2 border-ink bg-sky px-4 py-3 text-small font-semibold text-ink"
+              >
+                {importNotice}
+              </p>
+            )}
+
+            <div className={`mt-8 grid gap-4 ${uploadGridClass}`}>
+              {Array.from({ length: preset.shotCount }, (_, index) => {
+                const shot = shots[index];
+                const slot = preset.slots[index];
+                const slotAspect = slot.w / slot.h;
+                const transform = normalizeShotTransform(transforms[index]);
+                return (
+                  <div
+                    key={index}
+                    data-testid={`upload-slot-${index}`}
+                    className="flex flex-col rounded-[var(--radius)] border-2 border-ink bg-elev p-2 shadow-lift-1"
+                  >
+                    <div className="overflow-hidden rounded-[6px] border-2 border-ink bg-sunken">
+                      {shot ? (
+                        <PhotoThumb
+                          src={shot}
+                          aspect={slotAspect}
+                          transform={transform}
+                          className="block h-auto w-full"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openPicker(index)}
+                          disabled={importing}
+                          className="grid w-full place-items-center bg-sunken p-3 text-center disabled:cursor-not-allowed disabled:opacity-45"
+                          style={{ aspectRatio: `${slotAspect}` }}
+                        >
+                          <span className="inline-flex flex-col items-center gap-1.5 font-display text-label font-bold tracking-[0.1em] text-ink-meta uppercase">
+                            <IconPhoto size={26} stroke={2} aria-hidden="true" />
+                            Pilih foto
+                          </span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                      <span className="px-1 font-display text-label font-extrabold tracking-[0.1em] text-ink uppercase">
+                        Foto {index + 1}
+                      </span>
+                      {shot && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCropIndex(index)}
+                            disabled={importing}
+                            className="pressable inline-flex min-h-10 items-center gap-1.5 rounded-[var(--radius-sm)] border-2 border-ink bg-butter px-3 font-display text-label font-bold tracking-[0.06em] text-ink uppercase shadow-lift-1 disabled:opacity-45"
+                          >
+                            <IconAdjustmentsHorizontal
+                              size={18}
+                              stroke={2.5}
+                              aria-hidden="true"
+                            />
+                            Atur
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openPicker(index)}
+                            disabled={importing}
+                            className="pressable inline-flex min-h-10 items-center gap-1.5 rounded-[var(--radius-sm)] border-2 border-ink bg-elev px-3 font-display text-label font-bold tracking-[0.06em] text-ink uppercase shadow-lift-1 hover:bg-butter disabled:opacity-45"
+                          >
+                            <IconReplace size={18} stroke={2.5} aria-hidden="true" />
+                            Ganti
+                          </button>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => moveShot(index, -1)}
+                              disabled={importing || index === 0}
+                              aria-label={`Geser foto ${index + 1} ke kiri`}
+                              title="Geser ke kiri"
+                              className="pressable grid size-10 place-items-center rounded-[var(--radius-sm)] border-2 border-ink bg-elev text-ink shadow-lift-1 hover:bg-butter disabled:opacity-35"
+                            >
+                              <IconArrowLeft size={18} stroke={2.5} aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveShot(index, 1)}
+                              disabled={importing || index >= shots.length - 1}
+                              aria-label={`Geser foto ${index + 1} ke kanan`}
+                              title="Geser ke kanan"
+                              className="pressable grid size-10 place-items-center rounded-[var(--radius-sm)] border-2 border-ink bg-elev text-ink shadow-lift-1 hover:bg-butter disabled:opacity-35"
+                            >
+                              <IconArrowRight size={18} stroke={2.5} aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeShot(index)}
+                              disabled={importing}
+                              aria-label={`Hapus foto ${index + 1}`}
+                              title="Hapus foto"
+                              className="pressable grid size-10 place-items-center rounded-[var(--radius-sm)] border-2 border-ink bg-pink text-ink shadow-lift-1 hover:bg-[var(--mix-coral)] disabled:opacity-45"
+                            >
+                              <IconTrash size={18} stroke={2.5} aria-hidden="true" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {possibleSingleShortcut && (
+              <div className="mt-6 max-w-[var(--measure)] rounded-[var(--radius)] border-2 border-ink bg-sky p-4 shadow-lift-1">
+                <p className="text-small font-semibold text-ink">
+                  Cuma punya satu foto? Layout Single lebih pas untuk satu
+                  bidikan besar.
+                </p>
+                <button
+                  type="button"
+                  onClick={useSingleLayout}
+                  className="pressable mt-3 inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-4 py-2 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-butter"
+                >
+                  <IconPhoto size={18} stroke={2.5} aria-hidden="true" />
+                  Pakai layout Single
+                </button>
+              </div>
+            )}
+
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={proceed}
+                disabled={!canContinue || importing}
+                className="pressable inline-flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-pink px-7 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-[var(--mix-coral)] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <IconCheck size={22} stroke={2.5} aria-hidden="true" />
+                Lanjut ke studio
+              </button>
+              {(!canContinue || canAddMore) && (
+                <button
+                  type="button"
+                  onClick={() => openPicker(null)}
+                  disabled={importing}
+                  className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-butter px-6 py-4 font-display text-body font-bold text-ink shadow-lift-1 hover:bg-[var(--mix-coral)] disabled:opacity-45"
+                >
+                  <IconPhoto size={20} stroke={2.5} aria-hidden="true" />
+                  Tambah foto
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setShots([]);
+                  setTransforms([]);
+                  setImportError(null);
+                  setImportNotice(null);
+                }}
+                disabled={importing || shots.length === 0}
+                className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-6 py-4 font-display text-body font-bold text-ink shadow-lift-1 hover:bg-butter disabled:opacity-45"
+              >
+                <IconTrash size={20} stroke={2.5} aria-hidden="true" />
+                Kosongkan
+              </button>
+            </div>
+
+            <p className="mt-5 flex items-center gap-2 font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
+              <IconPhoto size={15} stroke={2.5} aria-hidden="true" />
+              {shots.length} / {preset.shotCount} foto · {preset.label}
+            </p>
           </div>
         )}
 
@@ -516,10 +1099,19 @@ export function BoothClient({
                 </button>
                 <button
                   type="button"
-                  onClick={backToLayout}
-                  className="pressable inline-flex items-center rounded-[var(--radius)] border-2 border-ink bg-elev px-6 py-3 font-display text-body font-bold text-ink shadow-lift-1 hover:bg-butter"
+                  onClick={requestLayoutChange}
+                  className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-6 py-3 font-display text-body font-bold text-ink shadow-lift-1 hover:bg-butter"
                 >
+                  <IconLayoutGrid size={20} stroke={2.5} aria-hidden="true" />
                   Ganti layout
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openPicker(null)}
+                  className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-butter px-6 py-3 font-display text-body font-bold text-ink shadow-lift-1 hover:bg-[var(--mix-coral)]"
+                >
+                  <IconPhoto size={20} stroke={2.5} aria-hidden="true" />
+                  Unggah foto saja
                 </button>
               </div>
             </div>
@@ -530,7 +1122,8 @@ export function BoothClient({
           <div className="shell flex flex-1 flex-col justify-center pb-[var(--page)]">
             <div className="mx-auto w-full max-w-3xl">
               <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
-                <p className="font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
+                <p className="flex items-center gap-2 font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
+                  <IconCamera size={15} stroke={2.5} aria-hidden="true" />
                   {preset.label} / {preset.shotCount} bidikan
                 </p>
                 <button
@@ -583,9 +1176,10 @@ export function BoothClient({
               <button
                 type="button"
                 onClick={proceed}
-                disabled={shots.length === 0}
+                disabled={!canContinue}
                 className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-pink px-7 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-[var(--mix-coral)] disabled:opacity-45"
               >
+                <IconCheck size={22} stroke={2.5} aria-hidden="true" />
                 Lanjut ke studio
               </button>
               <button
@@ -610,7 +1204,124 @@ export function BoothClient({
         )}
       </main>
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={IMPORT_ACCEPT}
+        multiple
+        tabIndex={-1}
+        aria-hidden="true"
+        data-testid="photo-input"
+        className="sr-only"
+        onChange={(event) => {
+          const files = event.currentTarget.files
+            ? Array.from(event.currentTarget.files)
+            : null;
+          event.currentTarget.value = "";
+          void handleFiles(files);
+        }}
+      />
+
+      {cropShot && cropIndex !== null && (
+        <PhotoCropper
+          src={cropShot}
+          aspect={
+            preset.slots[cropIndex]
+              ? preset.slots[cropIndex].w / preset.slots[cropIndex].h
+              : 1
+          }
+          title={`Atur foto ${cropIndex + 1}`}
+          value={normalizeShotTransform(transforms[cropIndex])}
+          onCancel={() => setCropIndex(null)}
+          onSave={(value) => {
+            if (cropIndex !== null) updateTransform(cropIndex, value);
+          }}
+        />
+      )}
+
       <SiteFooter />
+
+      {dialog === "foto" && (
+        <ConfirmDialog
+          open
+          title="Kembali ke foto?"
+          description={fotoDialogDescription}
+          icon={<IconPhoto size={22} stroke={2.5} aria-hidden="true" />}
+          onClose={() => setDialog(null)}
+          actions={[
+            {
+              label: "Lihat foto",
+              description: "Buka halaman hasil dan QR untuk membagikannya.",
+              icon: <IconPhoto size={20} stroke={2.5} aria-hidden="true" />,
+              tone: "primary",
+              onClick: confirmLeaveToPhoto,
+            },
+            {
+              label: "Batal, tetap di booth",
+              icon: <IconX size={20} stroke={2.5} aria-hidden="true" />,
+              tone: "neutral",
+              onClick: () => setDialog(null),
+            },
+          ]}
+        />
+      )}
+
+      {dialog === "studio" && (
+        <ConfirmDialog
+          open
+          title="Buka studio?"
+          description={studioDialogDescription}
+          icon={<IconPalette size={22} stroke={2.5} aria-hidden="true" />}
+          onClose={() => setDialog(null)}
+          actions={[
+            {
+              label: canContinue ? "Bawa foto ke studio" : "Ke studio",
+              description: canContinue
+                ? "Filter, stiker, dan frame bisa diatur di sana."
+                : undefined,
+              icon: <IconPalette size={20} stroke={2.5} aria-hidden="true" />,
+              tone: "primary",
+              onClick: confirmGoToStudio,
+            },
+            {
+              label: "Batal, tetap di booth",
+              icon: <IconX size={20} stroke={2.5} aria-hidden="true" />,
+              tone: "neutral",
+              onClick: () => setDialog(null),
+            },
+          ]}
+        />
+      )}
+
+      {dialog === "layout" && (
+        <ConfirmDialog
+          open
+          title="Ganti layout?"
+          description="Foto yang sudah diambil atau diunggah di sesi ini akan dihapus. Kamu mulai lagi dari pilihan layout."
+          icon={<IconLayoutGrid size={22} stroke={2.5} aria-hidden="true" />}
+          onClose={() => setDialog(null)}
+          actions={[
+            {
+              label: "Ganti layout",
+              description: "Kosongkan sesi ini dan pilih layout lain.",
+              icon: (
+                <IconLayoutGrid size={20} stroke={2.5} aria-hidden="true" />
+              ),
+              tone: "danger",
+              onClick: () => {
+                setDialog(null);
+                backToLayout();
+              },
+            },
+            {
+              label: "Batal, tetap di sini",
+              icon: <IconX size={20} stroke={2.5} aria-hidden="true" />,
+              tone: "neutral",
+              onClick: () => setDialog(null),
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }

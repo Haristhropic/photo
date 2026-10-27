@@ -129,6 +129,10 @@ const FAQ = [
     a: "Bisa. Buat event dengan kode akses, unggah frame sendiri, lalu bagikan linknya ke tamu.",
   },
   {
+    q: "Bisa unggah foto dari galeri?",
+    a: "Bisa. Pilih layout, tekan Unggah foto, lalu susun foto dari galeri HP. Foto asli tetap di HP; hanya strip akhir yang diunggah saat kamu menyimpan.",
+  },
+  {
     q: "Kalau kamera tidak bisa dibuka?",
     a: "Berikan izin kamera di pengaturan browser. Booth juga menampilkan pesan error yang jelas kalau izin ditolak.",
   },
@@ -237,10 +241,10 @@ export default function Home() {
           <div className="shell py-[var(--section)]">
             <h2 className="text-h2 font-extrabold">Pilih layout</h2>
             <p className="mt-4 max-w-[var(--measure)] text-lead text-ink-body">
-              Empat susun siap pakai. Ganti layout kapan saja sebelum menekan
-              tombol jepret.
+              Lima susun siap pakai, dari satu sampai empat bidikan. Ganti
+              layout kapan saja sebelum menekan tombol jepret.
             </p>
-            <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {LAYOUT_ORDER.map((key, index) => {
                 const layout = LAYOUTS[key];
                 const ink = LAYOUT_INKS[index % LAYOUT_INKS.length];

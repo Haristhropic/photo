@@ -63,7 +63,7 @@ type SeedFrame = {
   name: string;
   file: string;
   category: "cute" | "funny" | "horror" | "cool" | "race";
-  layoutType: "STRIP_3" | "STRIP_4" | "GRID_4" | "SINGLE";
+  layoutType: "STRIP_2" | "STRIP_3" | "STRIP_4" | "GRID_4" | "SINGLE";
 };
 
 const SEED_FRAMES: SeedFrame[] = [
