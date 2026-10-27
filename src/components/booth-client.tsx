@@ -1174,28 +1174,34 @@ export function BoothClient({
                     {preset.label} / {preset.shotCount} bidikan
                   </p>
                   {liveSupported && (
-                    <button
-                      type="button"
-                      onClick={toggleLive}
-                      aria-pressed={liveEnabled}
-                      aria-label="Live Photo"
-                      className="pressable group inline-flex items-center gap-2"
-                    >
-                      <span className="font-display text-label font-bold tracking-[0.1em] text-ink-meta uppercase">
-                        Live
-                      </span>
-                      <span
-                        className={`relative inline-flex h-7 w-12 items-center rounded-full border-2 border-ink shadow-lift-1 transition-colors ${
-                          liveEnabled ? "bg-coral" : "bg-elev"
-                        }`}
+                    <div className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={toggleLive}
+                        aria-pressed={liveEnabled}
+                        aria-label="Live Photo"
+                        className="pressable group inline-flex items-center gap-2"
                       >
+                        <span className="font-display text-label font-bold tracking-[0.1em] text-ink-meta uppercase">
+                          Live
+                        </span>
                         <span
-                          className={`inline-block size-5 rounded-full border-2 border-ink bg-board shadow-sm transition-transform ${
-                            liveEnabled ? "translate-x-6" : "translate-x-0.5"
+                          className={`relative inline-flex h-7 w-12 items-center rounded-full border-2 border-ink shadow-lift-1 transition-colors ${
+                            liveEnabled ? "bg-coral" : "bg-elev"
                           }`}
-                        />
-                      </span>
-                    </button>
+                        >
+                          <span
+                            className={`inline-block size-5 rounded-full border-2 border-ink bg-board shadow-sm transition-transform ${
+                              liveEnabled ? "translate-x-6" : "translate-x-0.5"
+                            }`}
+                          />
+                        </span>
+                      </button>
+                      <p className="flex items-center gap-1 text-[10px] font-semibold text-ink-meta">
+                        <IconVideo size={11} stroke={2.5} aria-hidden="true" />
+                        Rekam video per foto
+                      </p>
+                    </div>
                   )}
                 </div>
                 <button
