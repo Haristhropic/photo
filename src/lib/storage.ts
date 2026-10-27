@@ -16,6 +16,7 @@ const STORAGE_ROOT = path.resolve(
 // Restricting Blob operations to the same shape means a crafted /api/files path
 // can never read or delete an unrelated object from the store.
 const SAFE_PNG_FILENAME = /^[a-zA-Z0-9_-]+\.png$/;
+const SAFE_MEDIA_FILENAME = /^[a-zA-Z0-9_-]+\.(png|webm|mp4)$/;
 
 export function storageRoot(): string {
   return STORAGE_ROOT;
@@ -27,6 +28,8 @@ const MIME_BY_EXT: Record<string, string> = {
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
   ".svg": "image/svg+xml",
+  ".webm": "video/webm",
+  ".mp4": "video/mp4",
 };
 
 export function contentTypeFor(filePath: string): string {
@@ -48,7 +51,7 @@ function blobToken(): string | undefined {
 function safeBlobFilename(relative: string): string | null {
   try {
     const decoded = decodeURIComponent(relative);
-    return SAFE_PNG_FILENAME.test(decoded) ? decoded : null;
+    return SAFE_MEDIA_FILENAME.test(decoded) ? decoded : null;
   } catch {
     return null;
   }
@@ -63,8 +66,6 @@ export async function savePng(bytes: Buffer, filename: string): Promise<string> 
     await put(filename, bytes, {
       access: "private",
       token: blobToken(),
-      // Access keys are random, but the local frame fallback deliberately
-      // overwrites its own asset when an admin replaces a frame.
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: "image/png",
@@ -72,8 +73,6 @@ export async function savePng(bytes: Buffer, filename: string): Promise<string> 
     return `/api/files/${filename}`;
   }
 
-  // Fail instead of silently writing to /tmp: a photo that vanishes after the
-  // next deployment is worse than a clear configuration error.
   if (process.env.VERCEL) {
     throw new Error(
       "BLOB_READ_WRITE_TOKEN belum diset. Hubungkan Vercel Blob ke project ini sebelum menyimpan foto.",
@@ -84,6 +83,32 @@ export async function savePng(bytes: Buffer, filename: string): Promise<string> 
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, bytes);
   return `/api/files/${filename}`;
+}
+
+export async function saveMedia(bytes: Uint8Array, filename: string, contentType: string): Promise<{ url: string }> {
+  if (!SAFE_MEDIA_FILENAME.test(filename)) {
+    throw new Error(`Unsafe filename rejected: ${filename}`);
+  }
+
+  if (isBlobConfigured()) {
+    await put(filename, Buffer.from(bytes), {
+      access: "private",
+      token: blobToken(),
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType,
+    });
+    return { url: `/api/files/${filename}` };
+  }
+
+  if (process.env.VERCEL) {
+    throw new Error("BLOB_READ_WRITE_TOKEN belum diset.");
+  }
+
+  const target = path.join(/*turbopackIgnore: true*/ STORAGE_ROOT, filename);
+  await mkdir(path.dirname(target), { recursive: true });
+  await writeFile(target, bytes);
+  return { url: `/api/files/${filename}` };
 }
 
 /**

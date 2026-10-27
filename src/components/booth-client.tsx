@@ -13,6 +13,7 @@ import {
   IconRefresh,
   IconReplace,
   IconTrash,
+  IconVideo,
   IconX,
 } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
@@ -34,6 +35,13 @@ import {
 } from "@/lib/capture";
 import { BOOTH_KEY, clearBoothRun, writeDraft } from "@/lib/draft-store";
 import { LAYOUTS, LAYOUT_ORDER, type LayoutType } from "@/lib/layouts";
+import {
+  deleteRunClips,
+  isLivePhotoSupported,
+  startForShot,
+  storeClip,
+  type LiveClip,
+} from "@/lib/live-photo";
 import {
   IMPORT_ACCEPT,
   importPhoto,
@@ -173,6 +181,26 @@ export function BoothClient({
   const [aspect, setAspect] = useState(4 / 3);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [dialog, setDialog] = useState<BoothDialog>(null);
+
+  const [liveEnabled, setLiveEnabled] = useState(false);
+  const liveSupported = isLivePhotoSupported();
+  const liveRunIdRef = useRef<string | null>(null);
+  const liveMetaRef = useRef<{ slot: number; mime: string; durationMs: number }[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("snapvibe.live");
+      if (stored === "1") setLiveEnabled(true);
+    } catch {}
+  }, []);
+
+  function toggleLive() {
+    setLiveEnabled((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("snapvibe.live", next ? "1" : "0"); } catch {}
+      return next;
+    });
+  }
 
   // The booth keeps its run in memory only, so a back/forward (an accidental
   // tap, a browser swipe) silently discarded the layout choice and every photo
@@ -341,12 +369,13 @@ export function BoothClient({
     setErrorKind(null);
     setStatus("countdown");
 
+    const runId = liveEnabled && liveSupported ? crypto.randomUUID() : null;
+    liveRunIdRef.current = runId;
+    liveMetaRef.current = [];
+    const recorderHandles: { stop(): Promise<LiveClip | null>; cancel(): void }[] = [];
+
     const taken: string[] = [];
     try {
-      // Wait for the current stream to present a decoded, non-blank frame
-      // before the first countdown. Without this, a slow camera (or a retake)
-      // can expose the previous stream's frozen frame, which was then saved as
-      // the "new" photo.
       const live = await waitForVideoLive(video);
       if (!isCurrent()) return;
       if (!live) {
@@ -364,14 +393,15 @@ export function BoothClient({
         const endAt = performance.now() + COUNTDOWN_FROM * COUNTDOWN_STEP_MS;
         for (let n = COUNTDOWN_FROM; n >= 1; n -= 1) {
           setCountdown(n);
+          if (n === 2 && runId) {
+            recorderHandles.push(startForShot(stream));
+          }
           await sleepUntil(endAt - (n - 1) * COUNTDOWN_STEP_MS);
           if (!isCurrent()) return;
         }
 
         setCountdown(null);
         setStatus("burst");
-        // grabFrame is synchronous, so without yielding React coalesces the
-        // burst status away and the shutter feedback never paints.
         await nextPaint();
         const frame = await grabFrameWhenReady(video);
         if (!frame) {
@@ -383,16 +413,25 @@ export function BoothClient({
         }
         taken.push(frame);
       }
+
+      if (runId) {
+        const clips = await Promise.all(recorderHandles.map((h) => h.stop()));
+        for (let i = 0; i < clips.length; i++) {
+          const clip = clips[i];
+          if (clip) {
+            await storeClip(runId, i, clip);
+            liveMetaRef.current.push({ slot: i, mime: clip.mime, durationMs: clip.durationMs });
+          }
+        }
+      }
     } catch {
       setShots([]);
       setErrorText(captureFailedMessage(shotCount));
       setErrorKind("capture");
       setStatus("error");
+      if (runId) recorderHandles.forEach((h) => h.cancel());
       return;
     } finally {
-      // The stream must stay live for every grabFrame call, so it is released
-      // here instead. Only the run that still owns the stream may stop it, so
-      // a cancelled run cannot kill a newer run's camera.
       if (streamOwnerRef.current === run) {
         stopStream(stream);
         if (streamRef.current === stream) streamRef.current = null;
@@ -403,12 +442,17 @@ export function BoothClient({
     setShotIndex(null);
     setShots(taken);
     setStatus("review");
-  }, [preset.shotCount]);
+  }, [preset.shotCount, liveEnabled, liveSupported]);
 
   function cancelRun() {
     runRef.current += 1;
     setCountdown(null);
     setShotIndex(null);
+    if (liveRunIdRef.current) {
+      void deleteRunClips(liveRunIdRef.current);
+      liveRunIdRef.current = null;
+      liveMetaRef.current = [];
+    }
   }
 
   function retake() {
@@ -596,9 +640,10 @@ export function BoothClient({
           )
         : undefined;
 
-    // Free the booth snapshot before writing the draft. Both hold the same
-    // photo data, and on a nearly-full sessionStorage the draft write could
-    // otherwise fail with the previous run still in place.
+    const liveMeta = liveRunIdRef.current && liveMetaRef.current.length > 0
+      ? { runId: liveRunIdRef.current, slots: liveMetaRef.current }
+      : undefined;
+
     try {
       sessionStorage.removeItem(BOOTH_KEY);
     } catch {
@@ -610,6 +655,7 @@ export function BoothClient({
       eventId: eventId ?? null,
       source,
       ...(finalTransforms ? { transforms: finalTransforms } : {}),
+      ...(liveMeta ? { live: liveMeta } : {}),
     });
     router.push("/studio");
   }
@@ -1122,10 +1168,25 @@ export function BoothClient({
           <div className="shell flex flex-1 flex-col justify-center pb-[var(--page)]">
             <div className="mx-auto w-full max-w-3xl">
               <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
-                <p className="flex items-center gap-2 font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
-                  <IconCamera size={15} stroke={2.5} aria-hidden="true" />
-                  {preset.label} / {preset.shotCount} bidikan
-                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="flex items-center gap-2 font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
+                    <IconCamera size={15} stroke={2.5} aria-hidden="true" />
+                    {preset.label} / {preset.shotCount} bidikan
+                  </p>
+                  {liveSupported && (
+                    <button
+                      type="button"
+                      onClick={toggleLive}
+                      aria-pressed={liveEnabled}
+                      className={`pressable inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border-2 border-ink px-3 py-1 font-display text-label font-bold tracking-[0.1em] uppercase shadow-lift-1 ${
+                        liveEnabled ? "bg-coral text-ink" : "bg-elev text-ink-meta"
+                      }`}
+                    >
+                      <IconVideo size={14} stroke={2.5} aria-hidden="true" />
+                      Live
+                    </button>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={runSession}

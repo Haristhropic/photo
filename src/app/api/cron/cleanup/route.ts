@@ -60,6 +60,7 @@ export async function POST(request: Request) {
       id: photoSessions.id,
       finalPhotoUrl: photoSessions.finalPhotoUrl,
       cloudinaryPublicId: photoSessions.cloudinaryPublicId,
+      liveClips: photoSessions.liveClips,
     })
     .from(photoSessions)
     .where(expiredCutoff);
@@ -99,9 +100,17 @@ export async function POST(request: Request) {
     if (!removableIds.includes(row.id)) continue;
 
     const filename = row.finalPhotoUrl.split("/").pop() ?? "";
-    // Row deletion must still proceed when the file is already gone.
     if (await deleteStoredFile(filename)) {
       filesRemoved += 1;
+    }
+
+    if (row.liveClips && Array.isArray(row.liveClips)) {
+      for (const clip of row.liveClips) {
+        if (clip?.url) {
+          const clipFilename = clip.url.split("/").pop() ?? "";
+          void deleteStoredFile(clipFilename);
+        }
+      }
     }
   }
 

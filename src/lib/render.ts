@@ -19,6 +19,8 @@ export type Draft = {
   source?: "camera" | "upload";
   /** Optional per-shot focus/zoom; camera shots keep the centre cover crop. */
   transforms?: ShotTransform[];
+  /** Live Photo metadata. Clip blobs stay in IndexedDB until save. */
+  live?: { runId: string; slots: { slot: number; mime: string; durationMs: number }[] };
 };
 
 // The studio re-renders on every filter, sticker and frame change. Without a

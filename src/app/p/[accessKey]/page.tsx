@@ -15,6 +15,7 @@ import Link from "next/link";
 
 import { BackLink } from "@/components/back-link";
 import { DownloadButton } from "@/components/download-button";
+import { LivePhotoOverlay } from "@/components/live-photo-player";
 import { SiteFooter } from "@/components/site-footer";
 import { db } from "@/db";
 import { events, photoSessions } from "@/db/schema";
@@ -37,6 +38,7 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
       downloadCount: photoSessions.downloadCount,
       expiresAt: photoSessions.expiresAt,
       layoutType: photoSessions.layoutType,
+      liveClips: photoSessions.liveClips,
       eventTitle: events.title,
       isExpired: sql<number>`${photoSessions.expiresAt} < (now() at time zone 'utc')`,
     })
@@ -90,7 +92,7 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
     >
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start">
         <div
-          className="w-full min-w-0 justify-self-center rounded-[var(--radius-xl)] border-2 border-ink bg-ink p-3 shadow-lift-3 lg:justify-self-end"
+          className="relative w-full min-w-0 justify-self-center rounded-[var(--radius-xl)] border-2 border-ink bg-ink p-3 shadow-lift-3 lg:justify-self-end"
           style={{
             transform: "rotate(-0.8deg)",
             maxWidth: `calc(${(70 * layout.canvas.w) / layout.canvas.h}vh + 1.5rem)`,
@@ -105,6 +107,9 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
             priority
             className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-[6px]"
           />
+          {session.liveClips && session.liveClips.length > 0 && (
+            <LivePhotoOverlay canvas={layout.canvas} slots={layout.slots} clips={session.liveClips} />
+          )}
         </div>
 
         <div className="flex min-w-0 flex-col gap-6">

@@ -32,6 +32,7 @@ import {
   restoreDraftToBooth,
   subscribeDraft,
 } from "@/lib/draft-store";
+import { deleteRunClips, takeClip } from "@/lib/live-photo";
 import {
   CUSTOM_ACCENT_COLORS,
   CUSTOM_FRAME_DEFAULTS,
@@ -86,6 +87,33 @@ function dataUrlToBlob(dataUrl: string): Blob {
     bytes[i] = binary.charCodeAt(i);
   }
   return new Blob([bytes], { type: mime });
+}
+
+async function uploadLiveClips(
+  accessKey: string,
+  runId: string,
+  slots: { slot: number; mime: string; durationMs: number }[],
+): Promise<void> {
+  try {
+    const form = new FormData();
+    for (const meta of slots) {
+      const clip = await takeClip(runId, meta.slot);
+      if (clip) {
+        form.append(`slot-${meta.slot}`, clip.blob, `clip-${meta.slot}.${clip.mime.includes("mp4") ? "mp4" : "webm"}`);
+      }
+    }
+    if (form.has(`slot-0`) || form.has(`slot-1`) || form.has(`slot-2`) || form.has(`slot-3`)) {
+      await fetch(`/api/sessions/${accessKey}/live`, {
+        method: "POST",
+        body: form,
+        signal: AbortSignal.timeout(10000),
+      });
+    }
+  } catch {
+    // Best effort; photo already saved.
+  } finally {
+    void deleteRunClips(runId);
+  }
 }
 
 function StickerOption({
@@ -431,16 +459,17 @@ export function StudioClient() {
         accessKey: string;
         published: boolean;
       };
-      // The guest asked for the gallery, so say so plainly when Cloudinary
-      // rejected the upload. The photo itself is saved either way.
+
+      if (draft.live?.runId && draft.live.slots.length > 0) {
+        void uploadLiveClips(data.accessKey, draft.live.runId, draft.live.slots);
+      }
+
       if (publish && !data.published) {
         setPublishNotice(
           "Fotomu tersimpan, tapi gagal masuk galeri publik. Coba lagi nanti.",
         );
       }
       clearDraft();
-      // The draft is already cleared, so /studio must not stay in history or
-      // Back lands on an empty studio. replace keeps Back pointing at /booth.
       router.replace(`/p/${data.accessKey}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Foto gagal disimpan");

@@ -1,0 +1,1 @@
+ALTER TABLE "photo_sessions" ADD COLUMN "live_clips" jsonb DEFAULT '[]'::jsonb NOT NULL;

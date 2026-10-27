@@ -103,6 +103,8 @@ export const photoSessions = pgTable(
     publishedAt: timestamp("published_at", { withTimezone: false }),
     cloudinaryPublicId: varchar("cloudinary_public_id", { length: 191 }),
     cloudinaryUrl: text("cloudinary_url"),
+    // Per-shot live clips: [{ slot, url, mime, durationMs }]. Private Blob storage.
+    liveClips: jsonb("live_clips").$type<{ slot: number; url: string; mime: string; durationMs: number }[]>().notNull().default([]),
     createdAt: createdAt(),
   },
   (table) => [

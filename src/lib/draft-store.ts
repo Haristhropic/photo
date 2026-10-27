@@ -70,12 +70,23 @@ function parse(raw: string | null): Draft | null {
         )
       : undefined;
 
+  const live =
+    parsed.live &&
+    typeof parsed.live === "object" &&
+    typeof parsed.live.runId === "string" &&
+    Array.isArray(parsed.live.slots)
+      ? { runId: parsed.live.runId, slots: parsed.live.slots.filter((s: any) =>
+          typeof s?.slot === "number" && typeof s?.mime === "string" && typeof s?.durationMs === "number"
+        ) }
+      : undefined;
+
   return {
     shots: parsed.shots,
     layoutType: preset.type,
     eventId: typeof parsed.eventId === "string" ? parsed.eventId : null,
     source,
     ...(transforms ? { transforms } : {}),
+    ...(live && live.slots.length > 0 ? { live } : {}),
   };
 }
 

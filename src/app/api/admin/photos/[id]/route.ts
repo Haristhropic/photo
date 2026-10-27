@@ -19,6 +19,7 @@ async function loadPhoto(id: string) {
       finalPhotoUrl: photoSessions.finalPhotoUrl,
       cloudinaryPublicId: photoSessions.cloudinaryPublicId,
       publishedAt: photoSessions.publishedAt,
+      liveClips: photoSessions.liveClips,
     })
     .from(photoSessions)
     .where(eq(photoSessions.id, id))
@@ -147,8 +148,16 @@ export async function DELETE(
   }
 
   const filename = existing.finalPhotoUrl.split("/").pop() ?? "";
-  // The row still has to go when the private copy was already removed.
   await deleteStoredFile(filename);
+
+  if (existing.liveClips && Array.isArray(existing.liveClips)) {
+    for (const clip of existing.liveClips) {
+      if (clip?.url) {
+        const clipFilename = clip.url.split("/").pop() ?? "";
+        void deleteStoredFile(clipFilename);
+      }
+    }
+  }
 
   await db.delete(photoSessions).where(eq(photoSessions.id, existing.id));
 
