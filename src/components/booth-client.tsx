@@ -1178,12 +1178,23 @@ export function BoothClient({
                       type="button"
                       onClick={toggleLive}
                       aria-pressed={liveEnabled}
-                      className={`pressable inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border-2 border-ink px-3 py-1 font-display text-label font-bold tracking-[0.1em] uppercase shadow-lift-1 ${
-                        liveEnabled ? "bg-coral text-ink" : "bg-elev text-ink-meta"
-                      }`}
+                      aria-label="Live Photo"
+                      className="pressable group inline-flex items-center gap-2"
                     >
-                      <IconVideo size={14} stroke={2.5} aria-hidden="true" />
-                      Live
+                      <span className="font-display text-label font-bold tracking-[0.1em] text-ink-meta uppercase">
+                        Live
+                      </span>
+                      <span
+                        className={`relative inline-flex h-7 w-12 items-center rounded-full border-2 border-ink shadow-lift-1 transition-colors ${
+                          liveEnabled ? "bg-coral" : "bg-elev"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block size-5 rounded-full border-2 border-ink bg-board shadow-sm transition-transform ${
+                            liveEnabled ? "translate-x-6" : "translate-x-0.5"
+                          }`}
+                        />
+                      </span>
                     </button>
                   )}
                 </div>
