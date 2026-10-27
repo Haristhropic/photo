@@ -86,7 +86,7 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
     <Shell
       title="Fotomu sudah jadi"
       back={{
-        href: `/booth?from=p/${encodeURIComponent(accessKey)}`,
+        href: `/booth`,
         label: "Booth",
       }}
     >
@@ -153,7 +153,7 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
               initialCount={session.downloadCount}
             />
             <Link
-              href={`/booth?from=p/${encodeURIComponent(accessKey)}`}
+              href={`/booth`}
               className="pressable inline-flex items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-6 py-4 font-display text-lead font-bold text-ink shadow-lift-2 hover:bg-mint"
             >
               <IconCamera size={22} stroke={2.5} aria-hidden="true" />
