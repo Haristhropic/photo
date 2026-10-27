@@ -391,10 +391,11 @@ export function BoothClient({
 
         setStatus("countdown");
         const endAt = performance.now() + COUNTDOWN_FROM * COUNTDOWN_STEP_MS;
+        let recorderHandle: { stop(): Promise<LiveClip | null>; cancel(): void } | null = null;
         for (let n = COUNTDOWN_FROM; n >= 1; n -= 1) {
           setCountdown(n);
           if (n === 2 && runId) {
-            recorderHandles.push(startForShot(stream));
+            recorderHandle = startForShot(stream);
           }
           await sleepUntil(endAt - (n - 1) * COUNTDOWN_STEP_MS);
           if (!isCurrent()) return;
@@ -405,6 +406,7 @@ export function BoothClient({
         await nextPaint();
         const frame = await grabFrameWhenReady(video);
         if (!frame) {
+          if (runId && recorderHandle) recorderHandle.cancel();
           setShots([]);
           setErrorText(captureFailedMessage(shotCount));
           setErrorKind("capture");
@@ -412,24 +414,27 @@ export function BoothClient({
           return;
         }
         taken.push(frame);
+
+        if (runId && recorderHandle) {
+          const handle = recorderHandle;
+          await sleepUntil(performance.now() + 1200);
+          if (!isCurrent()) { handle.cancel(); return; }
+          const clip = await handle.stop();
+          if (clip) {
+            await storeClip(runId, shot, clip);
+            liveMetaRef.current.push({ slot: shot, mime: clip.mime, durationMs: clip.durationMs });
+          }
+        }
       }
 
       if (runId) {
-        const clips = await Promise.all(recorderHandles.map((h) => h.stop()));
-        for (let i = 0; i < clips.length; i++) {
-          const clip = clips[i];
-          if (clip) {
-            await storeClip(runId, i, clip);
-            liveMetaRef.current.push({ slot: i, mime: clip.mime, durationMs: clip.durationMs });
-          }
-        }
+        // clips already stored per-shot
       }
     } catch {
       setShots([]);
       setErrorText(captureFailedMessage(shotCount));
       setErrorKind("capture");
       setStatus("error");
-      if (runId) recorderHandles.forEach((h) => h.cancel());
       return;
     } finally {
       if (streamOwnerRef.current === run) {

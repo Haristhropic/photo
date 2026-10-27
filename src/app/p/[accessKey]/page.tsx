@@ -92,24 +92,30 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
     >
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start">
         <div
-          className="relative w-full min-w-0 justify-self-center rounded-[var(--radius-xl)] border-2 border-ink bg-ink p-3 shadow-lift-3 lg:justify-self-end"
+          className="relative w-full min-w-0 justify-self-center rounded-[var(--radius-xl)] border-2 border-ink bg-ink shadow-lift-3 lg:justify-self-end"
           style={{
             transform: "rotate(-0.8deg)",
             maxWidth: `calc(${(70 * layout.canvas.w) / layout.canvas.h}vh + 1.5rem)`,
           }}
         >
-          <Image
-            src={session.finalPhotoUrl}
-            alt="Strip foto hasil"
-            width={layout.canvas.w}
-            height={layout.canvas.h}
-            sizes="(min-width: 1024px) 45vw, 90vw"
-            priority
-            className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-[6px]"
-          />
-          {session.liveClips && session.liveClips.length > 0 && (
-            <LivePhotoOverlay canvas={layout.canvas} slots={layout.slots} clips={session.liveClips} />
-          )}
+          <div className="p-3">
+            <div
+              className="relative w-full max-h-[70vh] overflow-hidden rounded-[6px]"
+              style={{ aspectRatio: `${layout.canvas.w}/${layout.canvas.h}` }}
+            >
+              <Image
+                src={session.finalPhotoUrl}
+                alt="Strip foto hasil"
+                fill
+                sizes="(min-width: 1024px) 45vw, 90vw"
+                priority
+                className="object-cover"
+              />
+              {session.liveClips && session.liveClips.length > 0 && (
+                <LivePhotoOverlay canvas={layout.canvas} slots={layout.slots} clips={session.liveClips} />
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="flex min-w-0 flex-col gap-6">

@@ -461,7 +461,7 @@ export function StudioClient() {
       };
 
       if (draft.live?.runId && draft.live.slots.length > 0) {
-        void uploadLiveClips(data.accessKey, draft.live.runId, draft.live.slots);
+        try { await uploadLiveClips(data.accessKey, draft.live.runId, draft.live.slots); } catch {}
       }
 
       if (publish && !data.published) {

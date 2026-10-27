@@ -16,7 +16,9 @@ export function LivePhotoOverlay({ canvas, slots, clips }: LivePhotoOverlayProps
     const video = videoRefs.current[slot];
     if (!video) return;
     video.currentTime = 0;
-    void video.play();
+    video.load();
+    const p = video.play();
+    if (p) p.catch(() => {});
     setPlaying(slot);
   }
 
@@ -54,6 +56,7 @@ export function LivePhotoOverlay({ canvas, slots, clips }: LivePhotoOverlayProps
             <button
               type="button"
               onPointerDown={() => handlePlay(clip.slot)}
+              onClick={() => handlePlay(clip.slot)}
               onPointerUp={() => handleStop(clip.slot)}
               onPointerLeave={() => handleStop(clip.slot)}
               aria-label={`Putar live photo slot ${clip.slot + 1}`}
@@ -66,7 +69,7 @@ export function LivePhotoOverlay({ canvas, slots, clips }: LivePhotoOverlayProps
               src={clip.url}
               muted
               playsInline
-              preload="none"
+              preload="metadata"
               className={`absolute inset-0 size-full rounded-[6px] object-cover ${isPlaying ? "block" : "hidden"}`}
               style={{ transform: "scaleX(-1)" }}
             />
