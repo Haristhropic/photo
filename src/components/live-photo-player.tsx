@@ -71,7 +71,6 @@ export function LivePhotoOverlay({ canvas, slots, clips }: LivePhotoOverlayProps
               playsInline
               preload="metadata"
               className={`absolute inset-0 size-full rounded-[6px] object-cover ${isPlaying ? "block" : "hidden"}`}
-              style={{ transform: "scaleX(-1)" }}
             />
           </div>
         );
