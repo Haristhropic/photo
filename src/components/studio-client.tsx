@@ -625,7 +625,7 @@ export function StudioClient() {
                   shownSticker ? ` dengan stiker ${STICKERS[shownSticker].name}` : ""
                 }${shownFrameName ? ` dan frame ${shownFrameName}` : ""}`}
                 aria-busy={!preview}
-                className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-[6px]"
+                className="ml-0 h-auto max-h-[70vh] w-auto max-w-full rounded-[6px]"
               />
             ) : (
               <div
