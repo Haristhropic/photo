@@ -39,7 +39,7 @@ export function AdminHeader({ active }: { active: AdminSection }) {
           aria-label="StripSnap, kembali ke beranda"
           className="shrink-0 font-display text-h3 font-extrabold"
         >
-          <Logo className="h-11 w-auto" />
+          <Logo className="h-12 w-auto" />
         </Link>
 
         <div className="flex items-center gap-1.5 sm:gap-2">

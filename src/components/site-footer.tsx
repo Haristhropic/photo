@@ -25,7 +25,7 @@ export function SiteFooter() {
             aria-label="StripSnap, kembali ke beranda"
             className="w-fit"
           >
-            <Logo className="h-10 w-auto" />
+            <Logo className="h-12 w-auto" />
           </Link>
           <p className="flex items-start gap-2 font-display text-label leading-[1.55] font-bold tracking-[0.12em] text-ink uppercase sm:items-center">
             <IconTrash
