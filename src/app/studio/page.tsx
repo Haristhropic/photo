@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { StudioClient } from "@/components/studio-client";
 
 export const metadata: Metadata = {
-  title: "Studio: SnapVibe",
+  title: "Studio: StripSnap",
   description: "Ganti filter, tambah stiker, lalu simpan strip fotomu.",
 };
 

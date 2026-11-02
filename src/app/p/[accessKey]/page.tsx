@@ -24,7 +24,7 @@ import { absoluteUrl } from "@/lib/site";
 import { Logo } from "@/components/logo";
 
 export const metadata: Metadata = {
-  title: "Hasil fotomu: SnapVibe",
+  title: "Hasil fotomu: StripSnap",
   description: "Unduh strip fotomu atau bagikan tautannya.",
 };
 
@@ -219,7 +219,7 @@ function Shell({
         <div className="shell flex h-18 items-center justify-between gap-3 py-2">
           <Link
             href="/"
-            aria-label="SnapVibe, kembali ke beranda"
+            aria-label="StripSnap, kembali ke beranda"
             className="font-display text-h3 font-extrabold"
           >
             <Logo className="h-12 w-auto" />

@@ -43,7 +43,7 @@ async function main() {
 
   try {
     // Replace the camera with a stream whose left half is red and right half is
-    // blue. SnapVibe mirrors by design, so the preview and the saved file must
+    // blue. StripSnap mirrors by design, so the preview and the saved file must
     // both swap them: red lands on the right. A regression to the old
     // unmirrored behaviour puts red back on the left.
     await page.addInitScript(() => {

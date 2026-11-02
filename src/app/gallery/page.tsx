@@ -9,8 +9,8 @@ import { getPublicGallery, type GalleryPhoto } from "@/lib/gallery";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Galeri: SnapVibe",
-    description: "Foto-foto yang diunggah sendiri oleh para tamu SnapVibe.",
+  title: "Galeri: StripSnap",
+    description: "Foto-foto yang diunggah sendiri oleh para tamu StripSnap.",
 };
 
 export default async function GalleryPage() {
@@ -29,7 +29,7 @@ export default async function GalleryPage() {
         <div className="shell flex h-18 items-center justify-between gap-3 py-2">
           <Link
             href="/"
-            aria-label="SnapVibe, kembali ke beranda"
+            aria-label="StripSnap, kembali ke beranda"
             className="font-display text-h3 font-extrabold"
           >
             <Logo className="h-12 w-auto" />

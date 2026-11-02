@@ -22,7 +22,7 @@ export function SiteFooter() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
           <Link
             href="/"
-            aria-label="SnapVibe, kembali ke beranda"
+            aria-label="StripSnap, kembali ke beranda"
             className="w-fit"
           >
             <Logo className="h-10 w-auto" />

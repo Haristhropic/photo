@@ -16,7 +16,7 @@ export function HeroStrip() {
     >
       <div className="relative -rotate-[1.2deg] rounded-[var(--radius-xl)] border-2 border-ink bg-plum p-2 shadow-lift-3 sm:p-4">
         <div className="flex items-center justify-between gap-3 px-1 pt-1 pb-2.5 font-display text-label font-bold tracking-[0.14em] text-bg/80 uppercase sm:px-0 sm:pt-0 sm:pb-3">
-          <span>SnapVibe</span>
+          <span>StripSnap</span>
           <span>Strip 3</span>
         </div>
 

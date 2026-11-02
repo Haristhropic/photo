@@ -1,4 +1,4 @@
-# SnapVibe
+# StripSnap
 
 Web photobooth untuk event. Tamu buka link di browser HP, pilih layout, jepret
 atau unggah foto dari galeri, lalu hias strip dengan filter, stiker, dan frame

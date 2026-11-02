@@ -4,7 +4,7 @@ export function Logo({ className = "h-10 w-auto" }: { className?: string }) {
   return (
     <Image
       src="/logo-lumibooth.jpg"
-      alt="LumiBooth"
+      alt="StripSnap"
       width={2400}
       height={1792}
       sizes="120px"

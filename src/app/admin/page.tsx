@@ -8,7 +8,7 @@ import { events, frames, photoSessions } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 
 export const metadata: Metadata = {
-  title: "Admin: SnapVibe",
+  title: "Admin: StripSnap",
   description: "Kelola event, frame, dan retensi foto.",
   robots: { index: false, follow: false },
 };

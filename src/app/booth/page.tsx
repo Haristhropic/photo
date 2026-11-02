@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { BoothClient } from "@/components/booth-client";
 
 export const metadata: Metadata = {
-  title: "Booth: SnapVibe",
+  title: "Booth: StripSnap",
   description: "Pilih layout, jepret bareng-bareng, lalu simpan strip fotomu.",
 };
 

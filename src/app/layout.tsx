@@ -18,12 +18,12 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
-  title: "SnapVibe: Web Photobooth untuk Event Kamu",
+  title: "StripSnap: Web Photobooth untuk Event Kamu",
   description:
     "Bikin strip foto event langsung di browser. Pilih layout, jepret bareng-bareng, filter, frame, dan stiker. QR untuk download.",
-  applicationName: "SnapVibe",
+  applicationName: "StripSnap",
   openGraph: {
-    title: "SnapVibe: Web Photobooth untuk Event Kamu",
+    title: "StripSnap: Web Photobooth untuk Event Kamu",
     description:
       "Bikin strip foto event langsung di browser. Pilih layout, jepret, filter, frame, stiker, lalu QR untuk download.",
     type: "website",

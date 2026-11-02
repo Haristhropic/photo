@@ -59,7 +59,7 @@ const STEPS: { icon: TablerIcon; title: string; body: string }[] = [
   {
     icon: IconCamera,
     title: "Buka linknya",
-    body: "Buka SnapVibe di browser HP, lalu pilih layout. Cukup izinkan kamera sekali.",
+    body: "Buka StripSnap di browser HP, lalu pilih layout. Cukup izinkan kamera sekali.",
   },
   {
     icon: IconBolt,
@@ -377,7 +377,7 @@ export default function Home() {
                   ))}
                 </ul>
                 <p className="mt-2.5 px-1 font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
-                  SnapVibe
+                  StripSnap
                 </p>
               </div>
 

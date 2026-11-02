@@ -213,7 +213,7 @@ function StudioHeader({
       <div className="shell flex h-18 items-center justify-between gap-3 py-2">
         <Link
           href="/"
-          aria-label="SnapVibe, kembali ke beranda"
+          aria-label="StripSnap, kembali ke beranda"
           className="font-display text-h3 font-extrabold"
         >
           <Logo className="h-12 w-auto" />
@@ -993,7 +993,7 @@ export function StudioClient() {
                 </span>
                 <span className="text-small opacity-80">
                   Centang untuk mengunggah foto ini ke Cloudinary supaya
-                  bisa dilihat semua orang di galeri SnapVibe. Biarkan
+                  bisa dilihat semua orang di galeri StripSnap. Biarkan
                   kosong kalau fotomu hanya untukmu.
                 </span>
               </span>

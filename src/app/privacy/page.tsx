@@ -5,8 +5,8 @@ import { Logo } from "@/components/logo";
 import { SiteFooter } from "@/components/site-footer";
 
 export const metadata: Metadata = {
-  title: "Privasi: SnapVibe",
-  description: "Cara SnapVibe menyimpan, menampilkan, dan menghapus fotomu.",
+  title: "Privasi: StripSnap",
+  description: "Cara StripSnap menyimpan, menampilkan, dan menghapus fotomu.",
 };
 
 export default function PrivacyPage() {
@@ -16,7 +16,7 @@ export default function PrivacyPage() {
         <div className="shell flex h-18 items-center justify-between gap-3 py-2">
           <Link
             href="/"
-            aria-label="SnapVibe, kembali ke beranda"
+            aria-label="StripSnap, kembali ke beranda"
             className="font-display text-h3 font-extrabold"
           >
             <Logo className="h-12 w-auto" />
@@ -40,7 +40,7 @@ export default function PrivacyPage() {
                 Yang kami simpan
               </h2>
               <p className="mt-3">
-                SnapVibe menyimpan strip foto hasil jepretanmu beserta tautan
+                StripSnap menyimpan strip foto hasil jepretanmu beserta tautan
                 unduhnya. Foto tidak&rsquo;mengenai nama, email, atau nomor
                 telepon, dan tidak disimpan di perangkat kamu.
               </p>

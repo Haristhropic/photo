@@ -12,7 +12,7 @@ import { Logo } from "@/components/logo";
 import { SiteFooter } from "@/components/site-footer";
 
 export const metadata: Metadata = {
-  title: "Event: SnapVibe",
+  title: "Event: StripSnap",
   description: "Masuk booth event dan ambil strip fotomu.",
 };
 
@@ -92,7 +92,7 @@ export default async function EventPage(props: PageProps<"/e/[slug]">) {
             <dd className="mt-1 font-semibold text-ink">
               {eventFrames.length > 0
                 ? eventFrames.map((frame) => frame.name).join(", ")
-                : "Default SnapVibe"}
+                : "Default StripSnap"}
             </dd>
           </div>
           <div className="rounded-[var(--radius-lg)] border-2 border-ink bg-sky p-5 shadow-lift-2">
@@ -127,7 +127,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         <div className="shell flex h-18 items-center justify-between gap-3 py-2">
           <Link
             href="/"
-            aria-label="SnapVibe, kembali ke beranda"
+            aria-label="StripSnap, kembali ke beranda"
             className="font-display text-h3 font-extrabold"
           >
             <Logo className="h-12 w-auto" />

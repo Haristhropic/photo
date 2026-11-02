@@ -32,7 +32,7 @@ attendant, no waiting line.
 
 **The guest's phone is the booth.** A conventional web photobooth assumes a
 laptop or tablet is available at the venue, so the room, the queue, and often an
-attendant are part of the product. SnapVibe inverts that: the organizer ships a
+attendant are part of the product. StripSnap inverts that: the organizer ships a
 link, and every guest's own device becomes the camera. Nothing to install, no
 hardware to buy, no line to wait in, and the organizer's only artifact is a URL.
 
@@ -91,7 +91,7 @@ Constraints and confirmed gaps:
 
 ## Brand Commitments
 
-- **Name:** SnapVibe.
+- **Name:** StripSnap.
 - **Languages:** Indonesian and English as peers from the start, not one with the
   other as a fallback. Indonesian is the language currently shipped and should
   remain complete.

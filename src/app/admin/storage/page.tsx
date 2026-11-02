@@ -9,8 +9,8 @@ import { events, photoSessions } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 
 export const metadata: Metadata = {
-  title: "Storage: SnapVibe Admin",
-  description: "Kontrol foto yang tampil di galeri publik SnapVibe.",
+  title: "Storage: StripSnap Admin",
+  description: "Kontrol foto yang tampil di galeri publik StripSnap.",
   robots: { index: false, follow: false },
 };
 

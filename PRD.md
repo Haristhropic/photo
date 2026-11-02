@@ -2,7 +2,7 @@
 
 | Metadata | Detail |
 | :--- | :--- |
-| **Product Name** | SnapVibe / Web Photobooth |
+| **Product Name** | StripSnap / Web Photobooth |
 | **Document Version** | 1.0.0 |
 | **Status** | Draft / Planning |
 | **Target Audience** | Event Attendees, Gen Z/Millennials, Party Guests, General Users |

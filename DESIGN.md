@@ -1,4 +1,4 @@
-# SnapVibe — Design System
+# StripSnap — Design System
 
 A playful, cute web photobooth. The visual world is Indonesian **`cetak layar`**
 (screenprint): a cream paper sheet, a handful of saturated spot inks, hand-placed
