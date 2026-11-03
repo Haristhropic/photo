@@ -75,9 +75,15 @@ function parse(raw: string | null): Draft | null {
     typeof parsed.live === "object" &&
     typeof parsed.live.runId === "string" &&
     Array.isArray(parsed.live.slots)
-      ? { runId: parsed.live.runId, slots: parsed.live.slots.filter((s: any) =>
-          typeof s?.slot === "number" && typeof s?.mime === "string" && typeof s?.durationMs === "number"
-        ) }
+      ? {
+          runId: parsed.live.runId,
+          slots: parsed.live.slots.filter(
+            (s): s is { slot: number; mime: string; durationMs: number } =>
+              typeof s?.slot === "number" &&
+              typeof s?.mime === "string" &&
+              typeof s?.durationMs === "number",
+          ),
+        }
       : undefined;
 
   return {

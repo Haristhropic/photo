@@ -182,25 +182,27 @@ export function BoothClient({
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [dialog, setDialog] = useState<BoothDialog>(null);
 
-  const [liveEnabled, setLiveEnabled] = useState(false);
+  const [liveEnabled, setLiveEnabled] = useState(() => {
+    try {
+      return localStorage.getItem("snapvibe.live") === "1";
+    } catch {
+      return false;
+    }
+  });
   const liveSupported = isLivePhotoSupported();
   const liveRunIdRef = useRef<string | null>(null);
   const liveMetaRef = useRef<{ slot: number; mime: string; durationMs: number }[]>([]);
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("snapvibe.live");
-      if (stored === "1") setLiveEnabled(true);
-    } catch {}
-  }, []);
-
   function toggleLive() {
     setLiveEnabled((prev) => {
       const next = !prev;
-      try { localStorage.setItem("snapvibe.live", next ? "1" : "0"); } catch {}
+      try {
+        localStorage.setItem("snapvibe.live", next ? "1" : "0");
+      } catch {}
       return next;
     });
   }
+
 
   // The booth keeps its run in memory only, so a back/forward (an accidental
   // tap, a browser swipe) silently discarded the layout choice and every photo

@@ -43,8 +43,6 @@ const CANVAS_LONG_EDGE = 480;
 const FPS = 24;
 const BIT_RATE = 800_000;
 
-let warned = false;
-
 export function isLivePhotoSupported(): boolean {
   return pickMime() !== null;
 }
