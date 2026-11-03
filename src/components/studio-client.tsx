@@ -725,6 +725,7 @@ export function StudioClient() {
   }
 
   function startStickerDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0) return;
     const startSpot = currentStickerSpot();
     if (!startSpot) return;
     event.preventDefault();
