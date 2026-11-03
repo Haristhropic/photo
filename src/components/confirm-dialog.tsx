@@ -17,7 +17,7 @@ type ConfirmDialogProps = {
   open: boolean;
   title: string;
   description: ReactNode;
-  icon: ReactNode;
+  icon?: ReactNode;
   actions: ConfirmAction[];
   onClose: () => void;
 };
@@ -123,12 +123,14 @@ export function ConfirmDialog({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
-            <span
-              className="grid size-11 shrink-0 place-items-center rounded-[14px] border-2 border-ink bg-butter text-ink"
-              aria-hidden="true"
-            >
-              {icon}
-            </span>
+            {icon && (
+              <span
+                className="grid size-11 shrink-0 place-items-center rounded-[14px] border-2 border-ink bg-butter text-ink"
+                aria-hidden="true"
+              >
+                {icon}
+              </span>
+            )}
             <div className="min-w-0">
               <h2
                 id={titleId}

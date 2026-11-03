@@ -1,4 +1,12 @@
-import { FILTERS, LAYOUTS, type FilterKey, type LayoutType } from "./layouts";
+import {
+  FILTERS,
+  LAYOUTS,
+  PAPER_MARGIN,
+  type FilterKey,
+  type LayoutPreset,
+  type LayoutType,
+  type Rect,
+} from "./layouts";
 import {
   framePhotoSlots,
   frameSupportsLayout,
@@ -7,9 +15,15 @@ import {
 } from "./frames";
 import {
   drawPhotoCover,
+  drawPhotoFit,
   type ShotTransform,
 } from "./photo-transform";
-import { STICKERS, drawSticker, type StickerKey } from "./stickers";
+import {
+  STICKERS,
+  drawSticker,
+  type StickerKey,
+  type StickerSpot,
+} from "./stickers";
 
 export type Draft = {
   shots: string[];
@@ -69,14 +83,91 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return pending;
 }
 
+/* -------------------------------------------------------------------------- */
+/* photo slot geometry                                                         */
+/* -------------------------------------------------------------------------- */
+
+/** How close a slot edge must sit to the paper margin to count as "outer". */
+const PAPER_EDGE_TOLERANCE = 1.5;
+
+type CornerRadii = { tl: number; tr: number; br: number; bl: number };
+
+/**
+ * Photos that sit against the paper margin take the margin's curve at their
+ * outer corners. The strip is clipped with a radius of twice the margin, so a
+ * square photo corner leaves a thinner band of paper at the corner than along
+ * the edges. Rounding the corner by the margin keeps that band an even width,
+ * which is what makes the photo and the frame read as one shape.
+ *
+ * Slots that are flush with the canvas edge, or inset well past the margin,
+ * keep square corners: they belong to a frame artwork, not to the paper.
+ */
+function photoSlotRadii(slot: Rect, canvas: { w: number; h: number }): CornerRadii {
+  const onEdge = (inset: number) =>
+    Math.abs(inset - PAPER_MARGIN) <= PAPER_EDGE_TOLERANCE;
+  const radius = Math.min(PAPER_MARGIN, slot.w / 2, slot.h / 2);
+
+  const left = onEdge(slot.x);
+  const right = onEdge(canvas.w - (slot.x + slot.w));
+  const top = onEdge(slot.y);
+  const bottom = onEdge(canvas.h - (slot.y + slot.h));
+
+  return {
+    tl: left && top ? radius : 0,
+    tr: right && top ? radius : 0,
+    br: right && bottom ? radius : 0,
+    bl: left && bottom ? radius : 0,
+  };
+}
+
+function photoSlotPath(
+  ctx: CanvasRenderingContext2D,
+  slot: Rect,
+  { tl, tr, br, bl }: CornerRadii,
+): void {
+  const { x, y, w, h } = slot;
+  ctx.beginPath();
+  ctx.moveTo(x + tl, y);
+  ctx.lineTo(x + w - tr, y);
+  ctx.arcTo(x + w, y, x + w, y + tr, tr);
+  ctx.lineTo(x + w, y + h - br);
+  ctx.arcTo(x + w, y + h, x + w - br, y + h, br);
+  ctx.lineTo(x + bl, y + h);
+  ctx.arcTo(x, y + h, x, y + h - bl, bl);
+  ctx.lineTo(x, y + tl);
+  ctx.arcTo(x, y, x + tl, y, tl);
+  ctx.closePath();
+}
+
+/**
+ * How a sticker is sized and how low it may hang for a given frame. Bitmap
+ * event frames have a large branded footer, so the default spot sits on the
+ * last photo instead of covering the event art.
+ */
+export function stickerAnchors(
+  frame: FramePreset | null,
+  layout: LayoutPreset,
+): { photoWidth?: number; bottom?: number } {
+  const slots = frame ? framePhotoSlots(frame, layout) : layout.slots;
+  const last = slots[slots.length - 1];
+  return {
+    photoWidth: slots[0]?.w,
+    bottom: frame?.bitmap && last ? last.y + last.h + 40 : undefined,
+  };
+}
+
 export async function renderStrip(options: {
   shots: string[];
   layoutType: LayoutType;
   filterKey: FilterKey;
   sticker: StickerKey | null;
+  /** Guest-dragged sticker position; null keeps the default corner spot. */
+  stickerSpot?: StickerSpot | null;
   frame: FramePreset | null;
   eventLabel: string | null;
   transforms?: ShotTransform[];
+  /** Which flow produced the shots. Camera shots get the safe fit crop. */
+  source?: "camera" | "upload";
 }): Promise<string> {
   const { shots, layoutType, filterKey, sticker, eventLabel, transforms } =
     options;
@@ -121,10 +212,27 @@ export async function renderStrip(options: {
   const images = await imagesPromise;
   await framePromise;
 
-  ctx.filter = FILTERS[filterKey].css;
+  const filterCss = FILTERS[filterKey].css;
+  const isCameraRun = options.source !== "upload";
+
+  ctx.filter = filterCss;
   photoSlots.forEach((slot, i) => {
     const img = images[i];
-    if (img) drawPhotoCover(ctx, img, slot, transforms?.[i]);
+    if (!img) return;
+    // The rounded outer corners are part of the print, not just the preview:
+    // the PNG, the QR page and the gallery all share this canvas.
+    ctx.save();
+    photoSlotPath(ctx, slot, photoSlotRadii(slot, layout.canvas));
+    ctx.clip();
+    // Uploads carry an explicit focus/zoom, so honour their cover crop. Camera
+    // shots were framed inside the 4:3 preview and have no crop control, so
+    // fit the whole frame instead of guessing which edge to cut off.
+    if (isCameraRun) {
+      drawPhotoFit(ctx, img, slot, filterCss, transforms?.[i]);
+    } else {
+      drawPhotoCover(ctx, img, slot, transforms?.[i]);
+    }
+    ctx.restore();
   });
   ctx.filter = "none";
 
@@ -135,15 +243,9 @@ export async function renderStrip(options: {
   }
 
   if (sticker) {
-    const lastSlot = photoSlots[photoSlots.length - 1];
     drawSticker(ctx, STICKERS[sticker], layout, {
-      photoWidth: photoSlots[0]?.w,
-      // Bitmap event frames have a large branded footer; keep the sticker on
-      // the photo instead of covering the event art.
-      bottom:
-        frame?.bitmap && lastSlot
-          ? lastSlot.y + lastSlot.h + 40
-          : undefined,
+      ...stickerAnchors(frame, layout),
+      spot: options.stickerSpot,
     });
   }
 
@@ -163,6 +265,54 @@ export async function renderStrip(options: {
     ctx.fillStyle = "#241428";
     ctx.fillText(eventLabel, x, baseline);
   }
+
+  return canvas.toDataURL("image/png");
+}
+
+/**
+ * Stamp a guest-dragged sticker onto an already rendered strip.
+ *
+ * The studio keeps the preview free of the sticker so the DOM layer can move
+ * without re-rendering four photos on every pointer move. At save time the
+ * same geometry is painted onto the cached PNG, which means the overlay the
+ * guest positioned is exactly what gets uploaded.
+ */
+export async function addStickerToStrip(options: {
+  base: string;
+  sticker: StickerKey;
+  layoutType: LayoutType;
+  frame: FramePreset | null;
+  spot?: StickerSpot | null;
+}): Promise<string> {
+  const layout = LAYOUTS[options.layoutType];
+  const image = await loadImage(options.base);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = layout.canvas.w;
+  canvas.height = layout.canvas.h;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas 2D tidak tersedia");
+
+  // The base already carries the paper, photos, frame and any filter, so the
+  // sticker is the only new ink. Draw at natural size to avoid a resample.
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  if (typeof document !== "undefined" && document.fonts) {
+    await document.fonts.ready;
+  }
+
+  const requestedFrame = options.frame;
+  const frame =
+    requestedFrame &&
+    frameSupportsLayout(requestedFrame, options.layoutType)
+      ? requestedFrame
+      : null;
+
+  drawSticker(ctx, STICKERS[options.sticker], layout, {
+    ...stickerAnchors(frame, layout),
+    spot: options.spot,
+  });
 
   return canvas.toDataURL("image/png");
 }

@@ -1,4 +1,4 @@
-import { LAYOUTS, type LayoutType } from "@/lib/layouts";
+import { LAYOUTS, PAPER_MARGIN, type LayoutType } from "@/lib/layouts";
 
 type LayoutPreviewProps = {
   type: LayoutType;
@@ -55,7 +55,7 @@ export function LayoutPreview({
               y={slot.y}
               width={slot.w}
               height={slot.h}
-              rx={layout.canvas.w * 0.012}
+              rx={Math.min(PAPER_MARGIN, slot.w / 2, slot.h / 2)}
               fill={slotFill}
               stroke="var(--ink)"
               strokeWidth="1.5"

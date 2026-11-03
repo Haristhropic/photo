@@ -211,7 +211,7 @@
 
   button,
   a,
-  input,
+  input:not([type="checkbox"]):not([type="radio"]),
   select,
   textarea,
   summary {
@@ -240,6 +240,26 @@
   max-width: var(--shell);
   margin-inline: auto;
   padding-inline: var(--gutter);
+}
+
+/*
+ * Studio preview sits left of the centered shell so the strip reads as
+ * anchored to the left, without hugging the page edge: it cancels half of
+ * the shell's centering offset, landing in the left-center of the page.
+ * The controls keep their own grid column.
+ */
+.studio-preview-bleed {
+  margin-inline-start: min(0px, calc((var(--shell) - 100vw) / 4));
+}
+
+/*
+ * The photo sits inside the strip's ink frame, so its corners must follow the
+ * card's radius minus the frame thickness (2px border + 6px padding). That
+ * keeps the black edge an even width around every corner instead of pooling
+ * into wedges.
+ */
+@utility frame-inner {
+  border-radius: calc(var(--radius-xl) - 0.5rem);
 }
 
 /* Sticker press: the sheet lifts and settles. One authored moment, reused. */

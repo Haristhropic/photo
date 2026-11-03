@@ -8,8 +8,12 @@ import {
   IconDeviceFloppy,
   IconFrame,
   IconLayoutGrid,
+  IconMinus,
   IconPalette,
   IconPhoto,
+  IconPlus,
+  IconRotate,
+  IconRotateClockwise,
   IconSticker,
   IconTrash,
   IconWand,
@@ -21,6 +25,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -49,11 +54,22 @@ import {
   LAYOUTS,
   type FilterKey,
 } from "@/lib/layouts";
-import { renderStrip, type Draft } from "@/lib/render";
+import {
+  addStickerToStrip,
+  renderStrip,
+  stickerAnchors,
+  type Draft,
+} from "@/lib/render";
 import {
   STICKERS,
+  STICKER_ART,
   STICKER_KEYS,
+  STICKER_SCALE_MAX,
+  STICKER_SCALE_MIN,
+  paintSticker,
+  stickerGeometry,
   type StickerKey,
+  type StickerSpot,
 } from "@/lib/stickers";
 import {
   builtInFrames,
@@ -144,6 +160,37 @@ function StickerOption({
       <span className="block truncate px-0.5 font-display text-label font-extrabold tracking-[0.04em] text-ink uppercase">
         {preset ? preset.name : "Tanpa"}
       </span>
+    </button>
+  );
+}
+
+function StickerToolButton({
+  label,
+  icon,
+  onClick,
+  danger = false,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={`grid size-8 shrink-0 place-items-center rounded-full border-2 border-ink shadow-lift-1 ${
+        danger
+          ? "bg-pink text-ink hover:bg-[var(--mix-coral)]"
+          : "bg-elev text-ink hover:bg-butter"
+      }`}
+      // The global button rule sets a 44px tap target, which would break a
+      // floating bar this small; the bar itself provides the spacing.
+      style={{ minHeight: 0, minWidth: 0 }}
+    >
+      {icon}
     </button>
   );
 }
@@ -252,6 +299,17 @@ function StudioHeader({
   );
 }
 
+/**
+ * The preview card is printed slightly off-register. The same angle is used by
+ * the drag math: a pointer move on a tilted card is not a move on the print.
+ */
+const PREVIEW_TILT = -0.7;
+const TILT_RADIANS = (PREVIEW_TILT * Math.PI) / 180;
+
+function clampScale(scale: number): number {
+  return Math.min(STICKER_SCALE_MAX, Math.max(STICKER_SCALE_MIN, scale));
+}
+
 export function StudioClient() {
   const router = useRouter();
   const hydrated = useSyncExternalStore(
@@ -266,6 +324,22 @@ export function StudioClient() {
   );
   const [filterKey, setFilterKey] = useState<FilterKey>("original");
   const [sticker, setSticker] = useState<StickerKey | null>("senyum");
+  // The guest's sticker placement. Null means the default corner spot, so the
+  // first drag has to seed the spot from the geometry that is already on screen.
+  const [stickerSpot, setStickerSpot] = useState<StickerSpot | null>(null);
+  const [stickerSelected, setStickerSelected] = useState(false);
+  const [draggingSticker, setDraggingSticker] = useState(false);
+  const [previewSize, setPreviewSize] = useState({ w: 0, h: 0 });
+  const [toolbarSize, setToolbarSize] = useState({ w: 190, h: 44 });
+  const stickerCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const stickerToolbarRef = useRef<HTMLDivElement | null>(null);
+  const previewBoxRef = useRef<HTMLDivElement | null>(null);
+  const stickerDragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startSpot: StickerSpot;
+  } | null>(null);
   const [frameKey, setFrameKey] = useState<FrameKey | null>(null);
   const [frameCategory, setFrameCategory] = useState<FrameCategory | "all">(
     "all",
@@ -280,12 +354,13 @@ export function StudioClient() {
   const [framesError, setFramesError] = useState<string | null>(null);
   // The rendered strip is stored together with the exact inputs it came from.
   // Validity is derived rather than cleared on every change, so a preview for a
-  // superseded draft, filter, sticker or frame is simply not readable and can
-  // never be uploaded against inputs the guest has already moved on from.
+  // superseded draft, filter or frame is simply not readable and can never be
+  // uploaded against inputs the guest has already moved on from. Stickers are
+  // deliberately absent: they live in a DOM layer so dragging does not re-render
+  // the photos, and they are stamped onto the PNG only when saving.
   const [rendered, setRendered] = useState<{
     draft: Draft;
     filterKey: FilterKey;
-    sticker: StickerKey | null;
     frame: FramePreset | null;
     frameName: string | null;
     dataUrl: string;
@@ -375,17 +450,15 @@ export function StudioClient() {
   const preview =
     renderedForDraft &&
     renderedForDraft.filterKey === filterKey &&
-    renderedForDraft.sticker === sticker &&
     renderedForDraft.frame === activeFrame
       ? renderedForDraft.dataUrl
       : null;
   const shownPreview = preview ?? renderedForDraft?.dataUrl ?? null;
-  const shownSticker = preview
-    ? sticker
-    : (renderedForDraft?.sticker ?? null);
   const shownFrameName = preview
     ? (activeFrame?.name ?? null)
     : (renderedForDraft?.frameName ?? null);
+  const stickerPreset = sticker ? STICKERS[sticker] : null;
+  const hasPreview = shownPreview !== null;
 
   function updateCustomOptions(patch: Partial<CustomFrameOptions>) {
     setCustomOptions((current) => ({ ...current, ...patch }));
@@ -399,10 +472,11 @@ export function StudioClient() {
       shots: draft.shots,
       layoutType: draft.layoutType,
       filterKey,
-      sticker,
+      sticker: null,
       frame: activeFrame,
       eventLabel: null,
       transforms: draft.transforms,
+      source: draft.source,
     })
       .then(async (dataUrl) => {
         if (cancelled) return;
@@ -411,7 +485,6 @@ export function StudioClient() {
         setRendered({
           draft,
           filterKey,
-          sticker,
           frame: activeFrame,
           frameName: activeFrame?.name ?? null,
           dataUrl,
@@ -424,7 +497,76 @@ export function StudioClient() {
     return () => {
       cancelled = true;
     };
-  }, [draft, filterKey, sticker, activeFrame]);
+  }, [draft, filterKey, activeFrame]);
+
+  // Paint the draggable layer at twice its print size so the die-cut rim stays
+  // crisp on high-DPI screens. `hasPreview` is in the deps because the overlay
+  // only mounts once the first strip has decoded; without it the effect would
+  // run against a null ref and leave an empty canvas.
+  useEffect(() => {
+    const canvas = stickerCanvasRef.current;
+    if (!canvas || !stickerPreset) return;
+    let cancelled = false;
+    const ratio = 2;
+    canvas.width = STICKER_ART.w * ratio;
+    canvas.height = STICKER_ART.h * ratio;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const paint = () => {
+      if (cancelled) return;
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      paintSticker(ctx, stickerPreset);
+    };
+
+    // Sticker lettering is set in the display face; repaint after fonts settle
+    // so the overlay never shows a fallback the saved PNG would not use.
+    if (typeof document !== "undefined" && document.fonts) {
+      document.fonts.ready.then(paint).catch(paint);
+    } else {
+      paint();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [stickerPreset, hasPreview]);
+
+  // Keep the floating tools inside the print. The wrapper's rendered size
+  // changes with the viewport, so observe it instead of measuring once.
+  useEffect(() => {
+    const box = previewBoxRef.current;
+    if (!box) return;
+    const observer = new ResizeObserver(() => {
+      setPreviewSize({ w: box.offsetWidth, h: box.offsetHeight });
+    });
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [hasPreview]);
+
+  // Same for the bar itself: its real width drives the horizontal clamp.
+  useEffect(() => {
+    const toolbar = stickerToolbarRef.current;
+    if (!toolbar) return;
+    const observer = new ResizeObserver(() => {
+      setToolbarSize({ w: toolbar.offsetWidth, h: toolbar.offsetHeight });
+    });
+    observer.observe(toolbar);
+    return () => observer.disconnect();
+  }, [hasPreview, stickerSelected, sticker]);
+
+  // Tapping anywhere that is not the sticker or its tools dismisses them, the
+  // same way a photo editor closes a selection.
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest("[data-sticker-ui]")) return;
+      setStickerSelected(false);
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
 
   const save = useCallback(async () => {
     if (!draft || !preview || saving) return;
@@ -432,7 +574,20 @@ export function StudioClient() {
     setError(null);
 
     try {
-      const imageBlob = dataUrlToBlob(preview);
+      // The preview is deliberately sticker-free so dragging stays cheap. Stamp
+      // the sticker at save time using the same geometry the overlay used, so
+      // what the guest placed is what lands in the uploaded PNG.
+      const image =
+        sticker && stickerPreset
+          ? await addStickerToStrip({
+              base: preview,
+              sticker,
+              layoutType: draft.layoutType,
+              frame: activeFrame,
+              spot: stickerSpot,
+            })
+          : preview;
+      const imageBlob = dataUrlToBlob(image);
       const response = await fetch("/api/sessions", {
         method: "POST",
         headers: {
@@ -475,7 +630,18 @@ export function StudioClient() {
       setError(cause instanceof Error ? cause.message : "Foto gagal disimpan");
       setSaving(false);
     }
-  }, [draft, preview, saving, filterKey, publish, router]);
+  }, [
+    draft,
+    preview,
+    saving,
+    filterKey,
+    publish,
+    router,
+    sticker,
+    stickerPreset,
+    stickerSpot,
+    activeFrame,
+  ]);
 
   if (!hydrated) {
     return (
@@ -535,6 +701,167 @@ export function StudioClient() {
   const boothHref = `/booth?from=studio${
     draft.eventId ? `&event=${encodeURIComponent(draft.eventId)}` : ""
   }${draft.source === "upload" ? "&mode=upload" : ""}`;
+
+  // The overlay and the saved PNG share this one calculation, so dragging can
+  // never drift from what `addStickerToStrip` paints.
+  const stickerGeo = stickerPreset
+    ? stickerGeometry(stickerPreset, layout, {
+        ...stickerAnchors(activeFrame, layout),
+        spot: stickerSpot,
+      })
+    : null;
+
+  function currentStickerSpot(): StickerSpot | null {
+    if (!stickerGeo) return null;
+    // Anchor to the geometry that is actually on screen, not the raw stored
+    // fraction: a drag beyond the paper edge is clamped by `stickerGeometry`,
+    // and restarting from the raw value would snap the sticker back out.
+    return {
+      x: stickerGeo.cx / layout.canvas.w,
+      y: stickerGeo.cy / layout.canvas.h,
+      rotation: stickerSpot?.rotation ?? 0,
+      scale: stickerSpot?.scale ?? 1,
+    };
+  }
+
+  function startStickerDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    const startSpot = currentStickerSpot();
+    if (!startSpot) return;
+    event.preventDefault();
+    // Pointerdown's default action is focus; keep it available for keyboard
+    // nudging even though the event is cancelled to stop text selection.
+    event.currentTarget.focus({ preventScroll: true });
+    setStickerSelected(true);
+    if (!stickerSpot) setStickerSpot(startSpot);
+    stickerDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startSpot,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDraggingSticker(true);
+  }
+
+  function moveSticker(event: React.PointerEvent<HTMLButtonElement>) {
+    const drag = stickerDragRef.current;
+    const box = previewBoxRef.current;
+    if (!drag || !box || drag.pointerId !== event.pointerId) return;
+    const displayScale = box.offsetWidth / layout.canvas.w;
+    if (displayScale <= 0) return;
+
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    // The card is tilted, so undo that rotation before treating the pointer
+    // move as a move on the paper. Without this the sticker slides against the
+    // drag direction by about a degree.
+    const cos = Math.cos(TILT_RADIANS);
+    const sin = Math.sin(TILT_RADIANS);
+    const localX = dx * cos + dy * sin;
+    const localY = -dx * sin + dy * cos;
+
+    setStickerSpot({
+      ...drag.startSpot,
+      x: drag.startSpot.x + localX / displayScale / layout.canvas.w,
+      y: drag.startSpot.y + localY / displayScale / layout.canvas.h,
+    });
+  }
+
+  function endStickerDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    const drag = stickerDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    stickerDragRef.current = null;
+    setDraggingSticker(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function nudgeSticker(event: React.KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.currentTarget.blur();
+      setStickerSelected(false);
+      return;
+    }
+    const base = currentStickerSpot();
+    if (!base || !stickerGeo) return;
+    const directions: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+    };
+    const direction = directions[event.key];
+    if (!direction) return;
+    event.preventDefault();
+    const step = event.shiftKey ? 24 : 8;
+    setStickerSpot({
+      ...base,
+      x: base.x + (direction[0] * step) / layout.canvas.w,
+      y: base.y + (direction[1] * step) / layout.canvas.h,
+    });
+  }
+
+  function resizeSticker(factor: number) {
+    const base = currentStickerSpot();
+    if (!base) return;
+    setStickerSpot({ ...base, scale: clampScale(base.scale * factor) });
+  }
+
+  function rotateSticker(degrees: number) {
+    const base = currentStickerSpot();
+    if (!base) return;
+    setStickerSpot({ ...base, rotation: base.rotation + degrees });
+  }
+
+  function chooseSticker(key: StickerKey | null) {
+    setSticker(key);
+    setStickerSelected(key !== null);
+  }
+
+  function removeSticker() {
+    setSticker(null);
+    setStickerSelected(false);
+  }
+
+  // Where the floating tools sit: above the sticker when there is room, below
+  // it near the top edge, always clamped inside the print so a corner sticker
+  // cannot push the bar off the card.
+  const stickerToolbar =
+    stickerSelected && stickerPreset && stickerGeo
+      ? (() => {
+          const scale = previewSize.w > 0 ? previewSize.w / layout.canvas.w : 0;
+          const cx =
+            previewSize.w > 0
+              ? (stickerGeo.cx / layout.canvas.w) * previewSize.w
+              : previewSize.w / 2;
+          const cy =
+            previewSize.h > 0
+              ? (stickerGeo.cy / layout.canvas.h) * previewSize.h
+              : previewSize.h / 2;
+          const halfH = stickerGeo.extentY * stickerGeo.scale * scale;
+          const margin = 6;
+          const gap = 8;
+          const minLeft = toolbarSize.w / 2 + margin;
+          const left = Math.min(
+            Math.max(cx, minLeft),
+            Math.max(minLeft, previewSize.w - minLeft),
+          );
+          const above = cy - halfH - gap - toolbarSize.h;
+          const below = cy + halfH + gap;
+          const top =
+            above >= margin
+              ? above
+              : below + toolbarSize.h <= previewSize.h - margin
+                ? below
+                : Math.min(
+                    Math.max(above, margin),
+                    Math.max(margin, previewSize.h - toolbarSize.h - margin),
+                  );
+          return { left, top };
+        })()
+      : null;
 
   function requestBack() {
     if (draft && draft.shots.length > 0) {
@@ -610,26 +937,131 @@ export function StudioClient() {
         <h1 className="sr-only">Studio foto</h1>
         <div className="shell grid gap-10 py-[var(--page)] lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start">
           <div
-            className="w-full min-w-0 justify-self-center rounded-[var(--radius-xl)] border-2 border-ink bg-ink p-3 shadow-lift-3 lg:justify-self-end"
+            className="studio-preview-bleed w-full min-w-0 justify-self-center rounded-[var(--radius-xl)] border-2 border-ink bg-ink p-1.5 shadow-lift-3 lg:justify-self-start"
             style={{
-              transform: "rotate(-0.7deg)",
-              maxWidth: `calc(${(70 * layout.canvas.w) / layout.canvas.h}vh + 1.5rem)`,
+              transform: `rotate(${PREVIEW_TILT}deg)`,
+              maxWidth: `calc(${(70 * layout.canvas.w) / layout.canvas.h}vh + 1rem)`,
             }}
           >
             {shownPreview ? (
-              <img
-                src={shownPreview}
-                width={layout.canvas.w}
-                height={layout.canvas.h}
-                alt={`Pratinjau strip foto${
-                  shownSticker ? ` dengan stiker ${STICKERS[shownSticker].name}` : ""
-                }${shownFrameName ? ` dan frame ${shownFrameName}` : ""}`}
-                aria-busy={!preview}
-                className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded-[6px]"
-              />
+              <div
+                ref={previewBoxRef}
+                className="relative mx-auto w-full"
+                style={{
+                  aspectRatio: `${layout.canvas.w} / ${layout.canvas.h}`,
+                  maxWidth: `calc(${(70 * layout.canvas.w) / layout.canvas.h}vh)`,
+                }}
+              >
+                <img
+                  src={shownPreview}
+                  width={layout.canvas.w}
+                  height={layout.canvas.h}
+                  alt={`Pratinjau strip foto${
+                    stickerPreset
+                      ? ` dengan stiker ${stickerPreset.name}`
+                      : ""
+                  }${shownFrameName ? ` dan frame ${shownFrameName}` : ""}`}
+                  aria-busy={!preview}
+                  className="frame-inner absolute inset-0 block h-full w-full object-contain"
+                />
+                {stickerPreset && stickerGeo && (
+                  <button
+                    type="button"
+                    aria-label={`Stiker ${stickerPreset.name}. Geser untuk memindahkan, atau pakai tombol panah.`}
+                    title="Geser untuk memindahkan"
+                    data-sticker-ui="true"
+                    onPointerDown={startStickerDrag}
+                    onPointerMove={moveSticker}
+                    onPointerUp={endStickerDrag}
+                    onPointerCancel={endStickerDrag}
+                    onKeyDown={nudgeSticker}
+                    onFocus={() => setStickerSelected(true)}
+                    className={`absolute grid touch-none place-items-center rounded-[10px] bg-transparent p-0 ${
+                      draggingSticker
+                        ? "cursor-grabbing outline-2 outline-offset-2 outline-dashed outline-ink/70"
+                        : "cursor-grab hover:outline-2 hover:outline-offset-2 hover:outline-dashed hover:outline-ink/40"
+                    }`}
+                    style={{
+                      left: `${(stickerGeo.cx / layout.canvas.w) * 100}%`,
+                      top: `${(stickerGeo.cy / layout.canvas.h) * 100}%`,
+                      width: `${((STICKER_ART.w * stickerGeo.scale) / layout.canvas.w) * 100}%`,
+                      aspectRatio: `${STICKER_ART.w} / ${STICKER_ART.h}`,
+                      transform: `translate(-50%, -50%) rotate(${stickerGeo.rotation}deg)`,
+                      minHeight: 0,
+                      minWidth: 0,
+                    }}
+                  >
+                    <canvas
+                      ref={stickerCanvasRef}
+                      width={STICKER_ART.w * 2}
+                      height={STICKER_ART.h * 2}
+                      aria-hidden="true"
+                      className="pointer-events-none block h-full w-full"
+                    />
+                  </button>
+                )}
+                {stickerToolbar && stickerPreset && (
+                  <div
+                    ref={stickerToolbarRef}
+                    data-sticker-ui="true"
+                    role="toolbar"
+                    aria-label={`Atur stiker ${stickerPreset.name}`}
+                    className="absolute z-20 flex items-center gap-1 rounded-[var(--radius-pill)] border-2 border-ink bg-elev p-1 shadow-lift-2"
+                    style={{
+                      left: stickerToolbar.left,
+                      top: stickerToolbar.top,
+                      transform: "translateX(-50%)",
+                      visibility: previewSize.w > 0 ? "visible" : "hidden",
+                    }}
+                  >
+                    <StickerToolButton
+                      label="Perkecil"
+                      onClick={() => resizeSticker(0.9)}
+                      icon={
+                        <IconMinus size={16} stroke={3} aria-hidden="true" />
+                      }
+                    />
+                    <StickerToolButton
+                      label="Perbesar"
+                      onClick={() => resizeSticker(1.1)}
+                      icon={<IconPlus size={16} stroke={3} aria-hidden="true" />}
+                    />
+                    <StickerToolButton
+                      label="Putar kiri"
+                      onClick={() => rotateSticker(-15)}
+                      icon={
+                        <IconRotate size={16} stroke={2.5} aria-hidden="true" />
+                      }
+                    />
+                    <StickerToolButton
+                      label="Putar kanan"
+                      onClick={() => rotateSticker(15)}
+                      icon={
+                        <IconRotateClockwise
+                          size={16}
+                          stroke={2.5}
+                          aria-hidden="true"
+                        />
+                      }
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="mx-0.5 h-6 w-0.5 shrink-0 rounded-full bg-ink/20"
+                    />
+                    <StickerToolButton
+                      label="Hapus stiker"
+                      danger
+                      onClick={removeSticker}
+                      icon={
+                        <IconTrash size={16} stroke={2.5} aria-hidden="true" />
+                      }
+                    />
+                  </div>
+                )}
+              </div>
             ) : (
               <div
-                className="mx-auto grid w-full place-items-center rounded-[6px] bg-sunken text-ink-meta"
+                className="frame-inner mx-auto grid w-full place-items-center bg-sunken text-ink-meta"
                 style={{
                   aspectRatio: `${layout.canvas.w} / ${layout.canvas.h}`,
                   maxWidth: `${(70 * layout.canvas.w) / layout.canvas.h}vh`,
@@ -681,20 +1113,21 @@ export function StudioClient() {
                 </span>
               </legend>
               <p className="mt-2 text-small text-ink-body">
-                Ditempel di pojok kiri bawah strip, di atas frame.
+                Geser stiker di pratinjau. Ketuk stiker untuk membuka tombol
+                hapus, putar, dan ukuran.
               </p>
               <div className="mt-3 grid grid-cols-3 gap-2.5 max-sm:[&>button:last-child]:col-start-2 sm:grid-cols-4">
                 <StickerOption
                   stickerKey={null}
                   selected={sticker === null}
-                  onSelect={() => setSticker(null)}
+                  onSelect={() => chooseSticker(null)}
                 />
                 {STICKER_KEYS.map((key) => (
                   <StickerOption
                     key={key}
                     stickerKey={key}
                     selected={sticker === key}
-                    onSelect={() => setSticker(key)}
+                    onSelect={() => chooseSticker(key)}
                   />
                 ))}
               </div>
@@ -1020,7 +1453,6 @@ export function StudioClient() {
           description={`Kamu punya ${draft.shots.length} ${
             draft.source === "upload" ? "foto" : "bidikan"
           } yang belum disimpan ke galeri. Mau diapakan?`}
-          icon={<IconArrowLeft size={22} stroke={2.5} aria-hidden="true" />}
           onClose={() => setBackDialogOpen(false)}
           actions={[
             {

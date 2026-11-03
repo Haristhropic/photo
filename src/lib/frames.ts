@@ -1,5 +1,10 @@
 import { cloudinaryImageUrl } from "./image-url";
-import type { LayoutPreset, LayoutType, Rect } from "./layouts";
+import {
+  PAPER_MARGIN,
+  type LayoutPreset,
+  type LayoutType,
+  type Rect,
+} from "./layouts";
 
 /**
  * Built-in frame artwork.
@@ -14,7 +19,9 @@ import type { LayoutPreset, LayoutType, Rect } from "./layouts";
  *
  * Layout rule: keep the bottom 70px and the outer 34px of each side free of
  * key artwork. renderStrip prints the event label there, and the optional
- * sticker is stuck on top at the bottom-left corner.
+ * sticker is stuck on top at the bottom-left corner. Frame borders reach the
+ * photo edge exactly (see `frameBand`), so anything drawn in the paper margin
+ * has to share it with the border.
  */
 
 const INK = "#241428";
@@ -81,7 +88,7 @@ export type FramePreset = {
 /* primitives                                                                  */
 /* -------------------------------------------------------------------------- */
 
-function rrPath(
+export function roundedRectPath(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -116,19 +123,45 @@ function paint(
   }
 }
 
-/** A flat border ring: four rects, so corners are never double-painted. */
-function ring(
+/**
+ * A frame's border: a flat band from the canvas edge to the photograph.
+ *
+ * The window is rounded with the paper margin so the band's inner edge is the
+ * photo's own corner curve — one continuous shape instead of a square window
+ * with a rounded photo poking through its corners.
+ *
+ * A band is never thinner than the paper margin: the photo already starts at
+ * that margin, so a thinner border would leave a strip of bare paper between
+ * the print and the photo.
+ */
+export function frameBand(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
   thickness: number,
   color: string,
 ): void {
+  const inset = Math.max(thickness, PAPER_MARGIN);
+  const radius = Math.max(
+    0,
+    Math.min(PAPER_MARGIN, (w - inset * 2) / 2, (h - inset * 2) / 2),
+  );
+
+  ctx.beginPath();
+  ctx.rect(0, 0, w, h);
+  ctx.moveTo(inset + radius, inset);
+  ctx.lineTo(w - inset - radius, inset);
+  ctx.arcTo(w - inset, inset, w - inset, inset + radius, radius);
+  ctx.lineTo(w - inset, h - inset - radius);
+  ctx.arcTo(w - inset, h - inset, w - inset - radius, h - inset, radius);
+  ctx.lineTo(inset + radius, h - inset);
+  ctx.arcTo(inset, h - inset, inset, h - inset - radius, radius);
+  ctx.lineTo(inset, inset + radius);
+  ctx.arcTo(inset, inset, inset + radius, inset, radius);
+  ctx.closePath();
+
   ctx.fillStyle = color;
-  ctx.fillRect(0, 0, w, thickness);
-  ctx.fillRect(0, h - thickness, w, thickness);
-  ctx.fillRect(0, thickness, thickness, h - thickness * 2);
-  ctx.fillRect(w - thickness, thickness, thickness, h - thickness * 2);
+  ctx.fill("evenodd");
 }
 
 function innerRule(
@@ -139,9 +172,17 @@ function innerRule(
   lineWidth: number,
   color: string,
 ): void {
+  // The rule traces the border's window, so it curves with the photo corner
+  // instead of cutting a square across it.
+  const x = inset + lineWidth / 2;
+  const radius = Math.max(
+    0,
+    Math.min(PAPER_MARGIN, (w - x * 2) / 2, (h - x * 2) / 2),
+  );
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
-  ctx.strokeRect(inset + lineWidth / 2, inset + lineWidth / 2, w - 2 * inset - lineWidth, h - 2 * inset - lineWidth);
+  roundedRectPath(ctx, x, x, w - x * 2, h - x * 2, radius);
+  ctx.stroke();
 }
 
 function withAlpha(hex: string, alpha: number): string {
@@ -308,6 +349,86 @@ function markerLine(
   ctx.stroke();
 }
 
+/**
+ * A wobbly marker stroke that closes on itself around a rounded rect.
+ *
+ * `markerLine` can only draw straight strokes, so a hand-drawn frame built from
+ * it has square corners and cannot follow the photo's rounded window. This
+ * walks the same rounded path `frameBand` uses and shakes it outwards, so the
+ * scribble keeps the hand-drawn character and still hugs the print.
+ */
+function markerLoop(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  radius: number,
+  lineWidth: number,
+  color: string,
+  wobble = 2.2,
+  phase = 0,
+): void {
+  const r = Math.max(0, Math.min(radius, w / 2, h / 2));
+  if (w <= 0 || h <= 0) return;
+
+  type Point = { x: number; y: number; nx: number; ny: number };
+  const points: Point[] = [];
+  const step = 18;
+  const edge = (
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    nx: number,
+    ny: number,
+  ) => {
+    const count = Math.max(1, Math.round(Math.hypot(x2 - x1, y2 - y1) / step));
+    for (let i = 0; i < count; i++) {
+      const t = i / count;
+      points.push({ x: x1 + (x2 - x1) * t, y: y1 + (y2 - y1) * t, nx, ny });
+    }
+  };
+  const arc = (cx: number, cy: number, from: number, to: number) => {
+    const count = Math.max(2, Math.round((Math.abs(to - from) * r) / step));
+    for (let i = 0; i < count; i++) {
+      const a = from + ((to - from) * i) / count;
+      points.push({
+        x: cx + Math.cos(a) * r,
+        y: cy + Math.sin(a) * r,
+        nx: Math.cos(a),
+        ny: Math.sin(a),
+      });
+    }
+  };
+
+  edge(x + r, y, x + w - r, y, 0, -1);
+  arc(x + w - r, y + r, -Math.PI / 2, 0);
+  edge(x + w, y + r, x + w, y + h - r, 1, 0);
+  arc(x + w - r, y + h - r, 0, Math.PI / 2);
+  edge(x + w - r, y + h, x + r, y + h, 0, 1);
+  arc(x + r, y + h - r, Math.PI / 2, Math.PI);
+  edge(x, y + h - r, x, y + r, -1, 0);
+  arc(x + r, y + r, Math.PI, Math.PI * 1.5);
+
+  ctx.beginPath();
+  const total = points.length;
+  for (let i = 0; i <= total; i++) {
+    const point = points[i % total];
+    const t = i / total;
+    const offset = Math.sin(t * Math.PI * 3.2 + phase) * wobble;
+    const px = point.x + point.nx * offset;
+    const py = point.y + point.ny * offset;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.stroke();
+}
+
 /* -------------------------------------------------------------------------- */
 /* bitmap frame assets                                                         */
 /* -------------------------------------------------------------------------- */
@@ -367,9 +488,9 @@ export function getFrameImage(src: string): HTMLImageElement | null {
 function drawPita(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
   const { w, h } = layout.canvas;
   const u = w / 900;
-  const band = 22 * u;
+  const band = Math.max(22 * u, PAPER_MARGIN);
 
-  ring(ctx, w, h, band, PINK);
+  frameBand(ctx, w, h, band, PINK);
 
   // Polka dots sit inside the ring only.
   ctx.fillStyle = PAPER;
@@ -430,7 +551,7 @@ function drawBow(
     ctx.restore();
   }
 
-  rrPath(ctx, -r * 0.26, -r * 0.36, r * 0.52, r * 0.7, r * 0.17);
+  roundedRectPath(ctx, -r * 0.26, -r * 0.36, r * 0.52, r * 0.7, r * 0.17);
   paint(ctx, PINK, INK, ink);
 
   ctx.beginPath();
@@ -443,9 +564,9 @@ function drawBow(
 function drawKucing(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
   const { w, h } = layout.canvas;
   const u = w / 900;
-  const band = 28 * u;
+  const band = Math.max(28 * u, PAPER_MARGIN);
 
-  ring(ctx, w, h, band, MINT);
+  frameBand(ctx, w, h, band, MINT);
 
   paw(ctx, 0.2 * w, band * 0.5, 11 * u, PAPER, -0.2, INK, 1.8 * u);
   paw(ctx, 0.36 * w, band * 0.5, 11 * u, PAPER, 0.25, INK, 1.8 * u);
@@ -535,15 +656,15 @@ function drawCat(
 function drawMata(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
   const { w, h } = layout.canvas;
   const u = w / 900;
+  const band = Math.max(20 * u, PAPER_MARGIN);
 
   // A paper band, then two ink rules: the frame looks hand-ruled rather than
   // printed, which is what makes the stuck-on eyes feel at home.
-  ring(ctx, w, h, 20 * u, CREAM);
+  frameBand(ctx, w, h, band, CREAM);
   ctx.strokeStyle = INK;
   ctx.lineWidth = 5 * u;
   ctx.strokeRect(2.5 * u, 2.5 * u, w - 5 * u, h - 5 * u);
-  ctx.lineWidth = 2.5 * u;
-  ctx.strokeRect(20.5 * u, 20.5 * u, w - 41 * u, h - 41 * u);
+  innerRule(ctx, w, h, band, 2.5 * u, INK);
 
   const eyes: Array<{ x: number; y: number; r: number; look: [number, number] }> = [
     { x: 0.12 * w, y: 27 * u, r: 26 * u, look: [-0.35, 0.25] },
@@ -579,17 +700,34 @@ function drawSpidol(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
   const { w, h } = layout.canvas;
   const u = w / 900;
 
-  // One marker box, drawn a little past each corner so it closes, then a
-  // lighter second pass as if the marker went round twice.
-  markerLine(ctx, 22 * u, 34 * u, w - 22 * u, 30 * u, 4 * u, INK, 1.5, 0.4);
-  markerLine(ctx, w - 26 * u, 26 * u, w - 30 * u, h - 26 * u, 4 * u, INK, 1.5, 1.9);
-  markerLine(ctx, w - 26 * u, h - 30 * u, 22 * u, h - 26 * u, 4 * u, INK, 1.5, 3.1);
-  markerLine(ctx, 26 * u, h - 26 * u, 30 * u, 26 * u, 4 * u, INK, 1.5, 4.4);
-
-  markerLine(ctx, 38 * u, 44 * u, w - 34 * u, 40 * u, 1.6 * u, PLUM, 1.2, 0.9);
-  markerLine(ctx, w - 36 * u, 38 * u, w - 40 * u, h - 36 * u, 1.6 * u, PLUM, 1.2, 2.2);
-  markerLine(ctx, w - 36 * u, h - 40 * u, 34 * u, h - 36 * u, 1.6 * u, PLUM, 1.2, 3.6);
-  markerLine(ctx, 36 * u, h - 36 * u, 40 * u, 38 * u, 1.6 * u, PLUM, 1.2, 5.1);
+  // The box traces the photo's window, so the marker goes round the print
+  // instead of around a square and the scribble meets the rounded corners.
+  const inset = PAPER_MARGIN;
+  const inner = PAPER_MARGIN + 14 * u;
+  markerLoop(
+    ctx,
+    inset,
+    inset,
+    w - inset * 2,
+    h - inset * 2,
+    inset,
+    4 * u,
+    INK,
+    2.2 * u,
+    0.4,
+  );
+  markerLoop(
+    ctx,
+    inner,
+    inner,
+    w - inner * 2,
+    h - inner * 2,
+    Math.max(0, inset - 14 * u),
+    1.6 * u,
+    PLUM,
+    1.2 * u,
+    1.6,
+  );
 
   drawStarBurst(ctx, 0.11 * w, 92 * u, 42 * u, BUTTER);
 
@@ -599,7 +737,7 @@ function drawSpidol(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
 
   for (let i = 0; i < 2; i++) {
     const x = 0.32 * w + i * 28 * u;
-    rrPath(ctx, x, 40 * u, 7 * u, 30 * u, 3.5 * u);
+    roundedRectPath(ctx, x, 40 * u, 7 * u, 30 * u, 3.5 * u);
     paint(ctx, ORANGE, null);
     ctx.beginPath();
     ctx.arc(x + 3.5 * u, 79 * u, 4 * u, 0, Math.PI * 2);
@@ -652,9 +790,9 @@ function drawStarBurst(
 function drawHantu(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
   const { w, h } = layout.canvas;
   const u = w / 900;
-  const band = 28 * u;
+  const band = Math.max(28 * u, PAPER_MARGIN);
 
-  ring(ctx, w, h, band, INK);
+  frameBand(ctx, w, h, band, INK);
   innerRule(ctx, w, h, band, 2.5 * u, PLUM);
 
   drawSlime(ctx, w, u);
@@ -749,9 +887,9 @@ function drawGhost(
 function drawNeon(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
   const { w, h } = layout.canvas;
   const u = w / 900;
-  const band = 30 * u;
+  const band = Math.max(30 * u, PAPER_MARGIN);
 
-  ring(ctx, w, h, band, INK);
+  frameBand(ctx, w, h, band, INK);
 
   ctx.save();
   ctx.strokeStyle = MINT;
@@ -787,8 +925,8 @@ function drawBalap(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
   const u = w / 900;
   const square = 26 * u;
   const top = square * 2;
-  const bottom = 20 * u;
-  const curb = 18 * u;
+  const bottom = Math.max(20 * u, PAPER_MARGIN);
+  const curb = Math.max(18 * u, PAPER_MARGIN);
 
   ctx.save();
   for (let row = 0; row < 2; row++) {
@@ -799,12 +937,34 @@ function drawBalap(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
       }
     }
   }
+
+  // The bottom band ends exactly at the photo's edge, so its top border is the
+  // photo's rounded corner. Extra height is painted there and clipped away
+  // outside the corner: otherwise the black blocks stop at the square bounding
+  // box and leave a paper bite out of each bottom corner.
+  ctx.save();
+  roundedRectPath(
+    ctx,
+    PAPER_MARGIN,
+    PAPER_MARGIN,
+    w - PAPER_MARGIN * 2,
+    h - PAPER_MARGIN * 2,
+    PAPER_MARGIN,
+  );
+  ctx.rect(0, 0, w, h);
+  ctx.clip("evenodd");
   for (let col = 0; col * square < w; col++) {
     if (col % 2 === 0) {
       ctx.fillStyle = INK;
-      ctx.fillRect(col * square, h - bottom, square, bottom);
+      ctx.fillRect(
+        col * square,
+        h - bottom - PAPER_MARGIN,
+        square,
+        bottom + PAPER_MARGIN,
+      );
     }
   }
+  ctx.restore();
 
   // Curbs: alternating blocks down both edges, like a track.
   const from = top;
@@ -1044,7 +1204,14 @@ const SWATCH_LAYOUT: LayoutPreset = {
   blurb: "",
   shotCount: 1,
   canvas: { w: 900, h: 900 },
-  slots: [{ x: 48, y: 48, w: 804, h: 804 }],
+  slots: [
+    {
+      x: PAPER_MARGIN,
+      y: PAPER_MARGIN,
+      w: 900 - PAPER_MARGIN * 2,
+      h: 900 - PAPER_MARGIN * 2,
+    },
+  ],
 };
 
 /** Fill a square with the top edge of the artwork, without distorting it. */
@@ -1094,7 +1261,9 @@ export function drawFrameSwatch(
   gradient.addColorStop(0.55, "#ffe3c2");
   gradient.addColorStop(1, "#ffd7e4");
   ctx.fillStyle = gradient;
-  ctx.fillRect(slot.x, slot.y, slot.w, slot.h);
+  // Rounded like the real photo, so the swatch shows the frame's actual window.
+  roundedRectPath(ctx, slot.x, slot.y, slot.w, slot.h, PAPER_MARGIN);
+  ctx.fill();
 
   ctx.fillStyle = "rgba(36,20,40,0.26)";
   ctx.beginPath();

@@ -1249,7 +1249,7 @@ export function BoothClient({
                   <img
                     src={shot}
                     alt={`Bidikan ${i + 1}`}
-                    className="aspect-3/4 w-full rounded-[6px] object-cover"
+                    className="h-auto w-full rounded-[6px]"
                   />
                 </div>
               ))}

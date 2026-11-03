@@ -1,5 +1,9 @@
-import type { FramePreset } from "./frames";
-import type { LayoutPreset } from "./layouts";
+import {
+  frameBand,
+  roundedRectPath,
+  type FramePreset,
+} from "./frames";
+import { PAPER_MARGIN, type LayoutPreset } from "./layouts";
 import { displayFamily } from "./stickers";
 
 /**
@@ -58,18 +62,30 @@ export const CUSTOM_FRAME_DEFAULTS: CustomFrameOptions = {
 
 const INK = "#241428";
 
-function ring(
+/** A thin rule that follows the photo's window instead of a square frame. */
+function windowRule(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
-  thickness: number,
+  inset: number,
+  lineWidth: number,
   color: string,
 ): void {
-  ctx.fillStyle = color;
-  ctx.fillRect(0, 0, w, thickness);
-  ctx.fillRect(0, h - thickness, w, thickness);
-  ctx.fillRect(0, thickness, thickness, h - thickness * 2);
-  ctx.fillRect(w - thickness, thickness, thickness, h - thickness * 2);
+  const x = inset + lineWidth / 2;
+  // Parallel to the photo window: the further out the rule sits, the larger its
+  // corner radius, so the pair stays concentric instead of drifting apart.
+  const radius = Math.max(
+    0,
+    Math.min(
+      PAPER_MARGIN + Math.max(0, PAPER_MARGIN - x),
+      (w - x * 2) / 2,
+      (h - x * 2) / 2,
+    ),
+  );
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  roundedRectPath(ctx, x, x, w - x * 2, h - x * 2, radius);
+  ctx.stroke();
 }
 
 function formatDate(): string {
@@ -123,18 +139,38 @@ function drawCaption(ctx: CanvasRenderingContext2D, layout: LayoutPreset, option
 
   const { w } = layout.canvas;
   const family = displayFamily();
-  const size = Math.max(13, Math.min(18, Math.round(w / 60)));
-  const maxWidth = w - 120;
+  const size = Math.max(12, Math.min(16, Math.round(w / 66)));
+  const maxWidth = w - 2 * (PAPER_MARGIN + 18);
   const fitted = fitCaption(ctx, text, maxWidth, size, family);
 
   ctx.save();
   ctx.font = `800 ${fitted.size}px ${family}`;
-  ctx.fillStyle = INK;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  // The layouts reserve the outer 48px as paper margin. The caption sits in
-  // that top strip, clear of the border and of the sticker/event label below.
-  ctx.fillText(fitted.text, w / 2, 35);
+
+  // The margin is only one frame band wide now, and a ring frame paints it, so
+  // the caption gets a paper plate instead of fighting the accent colour. It
+  // reads as a printed label on the border — the same stuck-on language as the
+  // sticker, without covering a face.
+  const cy = PAPER_MARGIN / 2 + 1;
+  const plateH = Math.min(PAPER_MARGIN - 6, fitted.size + 6);
+  const plateW = Math.min(
+    w - 2 * (PAPER_MARGIN + 10),
+    ctx.measureText(fitted.text).width + 22,
+  );
+  ctx.fillStyle = options.paper;
+  roundedRectPath(
+    ctx,
+    (w - plateW) / 2,
+    cy - plateH / 2,
+    plateW,
+    plateH,
+    plateH / 2,
+  );
+  ctx.fill();
+
+  ctx.fillStyle = INK;
+  ctx.fillText(fitted.text, w / 2, cy);
   ctx.restore();
 }
 
@@ -150,8 +186,8 @@ export function customFramePreset(options: CustomFrameOptions): FramePreset {
       const u = w / 900;
 
       if (options.style === "dots") {
-        const thickness = 16 * u;
-        ring(ctx, w, h, thickness, options.accent);
+        const thickness = Math.max(16 * u, PAPER_MARGIN);
+        frameBand(ctx, w, h, thickness, options.accent);
         ctx.fillStyle = options.paper;
         const step = 30 * u;
         for (let y = thickness / 2; y < h; y += step) {
@@ -168,14 +204,12 @@ export function customFramePreset(options: CustomFrameOptions): FramePreset {
           }
         }
       } else if (options.style === "double") {
-        ctx.strokeStyle = options.accent;
-        ctx.lineWidth = 4 * u;
-        ctx.strokeRect(7 * u, 7 * u, w - 14 * u, h - 14 * u);
-        ctx.strokeStyle = INK;
-        ctx.lineWidth = 2.5 * u;
-        ctx.strokeRect(16 * u, 16 * u, w - 32 * u, h - 32 * u);
+        // Two rules, both tracing the photo's window: a square pair would cut
+        // across the photo's rounded corners.
+        windowRule(ctx, w, h, 8 * u, 4 * u, options.accent);
+        windowRule(ctx, w, h, PAPER_MARGIN, 2.5 * u, INK);
       } else {
-        ring(ctx, w, h, 14 * u, options.accent);
+        frameBand(ctx, w, h, Math.max(14 * u, PAPER_MARGIN), options.accent);
       }
 
       drawCaption(ctx, layout, options);

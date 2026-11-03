@@ -70,7 +70,7 @@ export function LivePhotoOverlay({ canvas, slots, clips }: LivePhotoOverlayProps
               muted
               playsInline
               preload="metadata"
-              className={`absolute inset-0 size-full rounded-[6px] object-cover ${isPlaying ? "block" : "hidden"}`}
+              className={`absolute inset-0 size-full rounded-[6px] object-contain ${isPlaying ? "block" : "hidden"}`}
             />
           </div>
         );

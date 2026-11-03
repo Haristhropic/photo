@@ -16,7 +16,14 @@ export type LayoutPreset = {
   slots: Rect[];
 };
 
-const PAD = 48;
+/**
+ * The white paper margin around the photos. It doubles as the radius a photo
+ * corner takes where it meets that margin: the strip is clipped with a radius
+ * twice the margin, so a square photo corner would leave a thinner band of
+ * paper at the corner than along the edges.
+ */
+export const PAPER_MARGIN = 24;
+const PAD = PAPER_MARGIN;
 const GAP = 24;
 
 function verticalStrip(
@@ -35,6 +42,17 @@ function verticalStrip(
     h: slotH,
   }));
   return { type, label, blurb, shotCount, canvas, slots };
+}
+
+function grid2x2(canvasW: number, canvasH: number): Rect[] {
+  const slotW = (canvasW - PAD * 2 - GAP) / 2;
+  const slotH = (canvasH - PAD * 2 - GAP) / 2;
+  return [
+    { x: PAD, y: PAD, w: slotW, h: slotH },
+    { x: PAD + slotW + GAP, y: PAD, w: slotW, h: slotH },
+    { x: PAD, y: PAD + slotH + GAP, w: slotW, h: slotH },
+    { x: PAD + slotW + GAP, y: PAD + slotH + GAP, w: slotW, h: slotH },
+  ];
 }
 
 export const LAYOUTS: Record<LayoutType, LayoutPreset> = {
@@ -56,12 +74,7 @@ export const LAYOUTS: Record<LayoutType, LayoutPreset> = {
     blurb: "Empat bidikan dalam kotak",
     shotCount: 4,
     canvas: { w: 1200, h: 1200 },
-    slots: [
-      { x: PAD, y: PAD, w: 540, h: 540 },
-      { x: 612, y: PAD, w: 540, h: 540 },
-      { x: PAD, y: 612, w: 540, h: 540 },
-      { x: 612, y: 612, w: 540, h: 540 },
-    ],
+    slots: grid2x2(1200, 1200),
   },
   SINGLE: {
     type: "SINGLE",
@@ -69,7 +82,7 @@ export const LAYOUTS: Record<LayoutType, LayoutPreset> = {
     blurb: "Satu bidikan besar",
     shotCount: 1,
     canvas: { w: 1000, h: 1000 },
-    slots: [{ x: PAD, y: PAD, w: 904, h: 904 }],
+    slots: [{ x: PAD, y: PAD, w: 1000 - PAD * 2, h: 1000 - PAD * 2 }],
   },
 };
 

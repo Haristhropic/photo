@@ -8,10 +8,11 @@ import type { LayoutPreset } from "./layouts";
  * same paint function drives the picker swatch and the exported PNG, so a
  * sticker cannot look one way in the studio and another on the saved strip.
  *
- * Placement: the pack is slapped on the bottom-left corner, partly over the
- * last photo and partly over the paper margin, always clear of the faces.
- * Bitmap event frames can pass a lower edge so the sticker stays above their
- * branded footer instead of covering the event art.
+ * Placement: the pack lands on the bottom-left corner by default, partly over
+ * the last photo and partly over the paper margin, always clear of the faces.
+ * A guest can drag it anywhere on the print (the studio stores a `StickerSpot`),
+ * and bitmap event frames can pass a lower edge so the default spot stays above
+ * their branded footer instead of covering the event art.
  */
 
 const INK = "#241428";
@@ -24,6 +25,25 @@ const ORANGE = "#ff7a1a";
 
 const HALF_W = 193;
 const HALF_H = 123;
+
+/** The sticker's own artwork box, in its local units. */
+export const STICKER_ART = { w: HALF_W * 2, h: HALF_H * 2 };
+
+/** How far a guest can shrink or grow a sticker from its layout size. */
+export const STICKER_SCALE_MIN = 0.55;
+export const STICKER_SCALE_MAX = 1.8;
+
+/**
+ * Where a guest put the sticker, as a fraction of the strip's canvas so the
+ * same spot survives every layout size. Rotation is relative to the preset's
+ * own tilt and `scale` multiplies the layout-derived size.
+ */
+export type StickerSpot = {
+  x: number;
+  y: number;
+  rotation: number;
+  scale: number;
+};
 
 type PathFn = (ctx: CanvasRenderingContext2D) => void;
 
@@ -521,32 +541,97 @@ export const STICKERS: Record<StickerKey, StickerPreset> = {
   },
 };
 
-/** Where the sticker sits, in strip pixels, for any layout. */
-export function drawSticker(
-  ctx: CanvasRenderingContext2D,
+function clampTo(value: number, low: number, high: number): number {
+  // The box can be wider than the canvas at the largest scale; centre it then.
+  if (low > high) return (low + high) / 2;
+  return Math.min(Math.max(value, low), high);
+}
+
+export type StickerGeometry = {
+  /** Centre in canvas pixels. */
+  cx: number;
+  cy: number;
+  /** Canvas pixels per sticker unit, including the guest's scale. */
+  scale: number;
+  /** Total tilt in degrees, preset plus guest. */
+  rotation: number;
+  radians: number;
+  /** Half-size of the rotated die-cut rim, in sticker units. */
+  extentX: number;
+  extentY: number;
+};
+
+/**
+ * Where a sticker lands, in strip pixels, for any layout. Both the renderer and
+ * the studio's draggable layer call this, so the preview and the saved PNG can
+ * never disagree about the position.
+ */
+export function stickerGeometry(
   sticker: StickerPreset,
   layout: LayoutPreset,
-  options: { photoWidth?: number; bottom?: number } = {},
-): void {
+  options: {
+    photoWidth?: number;
+    bottom?: number;
+    spot?: StickerSpot | null;
+  } = {},
+): StickerGeometry {
   const { w, h } = layout.canvas;
   const slotWidth = options.photoWidth ?? layout.slots[0]?.w ?? w;
   // Size against the photo, not the canvas: a 2x2 photo is smaller than a strip.
-  const scale = (slotWidth * 0.32) / 360;
-  const radians = (sticker.rotation * Math.PI) / 180;
+  const scale = ((slotWidth * 0.32) / 360) * (options.spot?.scale ?? 1);
+  const rotation = sticker.rotation + (options.spot?.rotation ?? 0);
+  const radians = (rotation * Math.PI) / 180;
   const cos = Math.abs(Math.cos(radians));
   const sin = Math.abs(Math.sin(radians));
   // Rotated bounds of the die-cut rim, so the pack never clips the paper edge.
   const extentX = HALF_W * cos + HALF_H * sin;
   const extentY = HALF_W * sin + HALF_H * cos;
-  const cx = 44 + extentX * scale;
+  const spot = options.spot;
+  const cx = spot
+    ? clampTo(spot.x * w, extentX * scale, w - extentX * scale)
+    : 44 + extentX * scale;
   // Bitmap event frames can pass a lower edge above the canvas bottom so the
   // sticker lands on the last photo instead of over the frame's footer.
-  const cy = (options.bottom ?? h) - 20 - extentY * scale;
+  const cy = spot
+    ? clampTo(spot.y * h, extentY * scale, h - extentY * scale)
+    : (options.bottom ?? h) - 20 - extentY * scale;
+
+  return { cx, cy, scale, rotation, radians, extentX, extentY };
+}
+
+/** Paint the sticker onto the strip. Placement comes from `stickerGeometry`. */
+export function drawSticker(
+  ctx: CanvasRenderingContext2D,
+  sticker: StickerPreset,
+  layout: LayoutPreset,
+  options: {
+    photoWidth?: number;
+    bottom?: number;
+    spot?: StickerSpot | null;
+  } = {},
+): void {
+  const geo = stickerGeometry(sticker, layout, options);
 
   ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(radians);
-  ctx.scale(scale, scale);
+  ctx.translate(geo.cx, geo.cy);
+  ctx.rotate(geo.radians);
+  ctx.scale(geo.scale, geo.scale);
+  sticker.paint(ctx, displayFamily());
+  ctx.restore();
+}
+
+/**
+ * Paint one sticker centred in its own square-ish box, unrotated. The studio
+ * uses this for the draggable layer and rotates it with CSS, which keeps the
+ * preview in step with the print without re-rendering the whole strip.
+ */
+export function paintSticker(
+  ctx: CanvasRenderingContext2D,
+  sticker: StickerPreset,
+): void {
+  ctx.clearRect(0, 0, STICKER_ART.w, STICKER_ART.h);
+  ctx.save();
+  ctx.translate(HALF_W, HALF_H);
   sticker.paint(ctx, displayFamily());
   ctx.restore();
 }

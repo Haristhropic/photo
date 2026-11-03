@@ -132,3 +132,65 @@ export function drawPhotoCover(
   );
   ctx.restore();
 }
+
+/**
+ * Camera shots have no guest-chosen crop, so a hard `cover` can slice off the
+ * top of a head whenever the slot's aspect ratio differs from the 4:3 camera
+ * frame (a 2x2 slot is square; a strip slot is wider than 4:3).
+ *
+ * Instead, paint the whole frame inside the slot and fill the leftover space
+ * with a blurred, filtered copy of the same photo. The slot still reads edge
+ * to edge, but nothing the guest framed is cropped away.
+ */
+export function drawPhotoFit(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  rect: Rect,
+  filter: string,
+  transform?: unknown,
+): void {
+  const sourceW = img.naturalWidth;
+  const sourceH = img.naturalHeight;
+  if (sourceW <= 0 || sourceH <= 0 || rect.w <= 0 || rect.h <= 0) return;
+
+  const blur = Math.max(24, Math.round(Math.min(rect.w, rect.h) * 0.18));
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x, rect.y, rect.w, rect.h);
+  ctx.clip();
+
+  // Overscan the backdrop by the blur radius; otherwise the blur samples
+  // transparent pixels at the slot's edge and fades the fill out.
+  ctx.filter =
+    filter && filter !== "none" ? `${filter} blur(${blur}px)` : `blur(${blur}px)`;
+  drawPhotoCover(
+    ctx,
+    img,
+    {
+      x: rect.x - blur,
+      y: rect.y - blur,
+      w: rect.w + blur * 2,
+      h: rect.h + blur * 2,
+    },
+    transform,
+  );
+  ctx.filter = "none";
+
+  // A light scrim separates the sharp photo from its own blurred fill.
+  ctx.fillStyle = "rgba(18, 10, 24, 0.26)";
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+
+  const scale = Math.min(rect.w / sourceW, rect.h / sourceH);
+  const w = sourceW * scale;
+  const h = sourceH * scale;
+  ctx.filter = filter || "none";
+  ctx.drawImage(
+    img,
+    rect.x + (rect.w - w) / 2,
+    rect.y + (rect.h - h) / 2,
+    w,
+    h,
+  );
+  ctx.restore();
+}
