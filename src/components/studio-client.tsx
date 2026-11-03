@@ -5,7 +5,6 @@ import {
   IconArrowLeft,
   IconCamera,
   IconCheck,
-  IconDeviceFloppy,
   IconFrame,
   IconLayoutGrid,
   IconMinus,
@@ -34,7 +33,6 @@ import {
   clearBoothRun,
   clearDraft,
   getDraftSnapshot,
-  restoreDraftToBooth,
   subscribeDraft,
 } from "@/lib/draft-store";
 import { deleteRunClips, takeClip } from "@/lib/live-photo";
@@ -872,17 +870,12 @@ export function StudioClient() {
     }
   }
 
-  function confirmBackToBooth(keep: boolean) {
+  function confirmBackToBooth() {
     setBackDialogOpen(false);
-    if (keep) {
-      // Rebuild the booth's own run snapshot so the layout and photos are
-      // waiting there, not just in the studio's draft key.
-      if (draft) restoreDraftToBooth(draft);
-      router.push(boothHref);
-      return;
-    }
-    // The discarded draft breaks the studio leg of the journey, so the booth
-    // must drop the "from=studio" trail and aim its back pill at Beranda.
+    // The "save draft & back" option was removed, so this dialog now only
+    // discards the unsaved draft and starts the booth fresh: the previous
+    // draft broke the studio handoff, so dropping it (without keeping a run)
+    // is the only safe traversal back to the booth.
     // Event context still matters; upload guests keep their upload editor.
     const discardParams: string[] = [];
     if (draft?.eventId) {
@@ -901,6 +894,7 @@ export function StudioClient() {
         : "/booth",
     );
   }
+
 
   // "Ambil ulang" / "Ganti foto" is an explicit retake, not a back action:
   // start the booth empty so the guest can shoot or upload again. The studio
@@ -1457,21 +1451,11 @@ export function StudioClient() {
           onClose={() => setBackDialogOpen(false)}
           actions={[
             {
-              label: "Simpan ke draft & kembali",
-              description:
-                "Foto dan layout tetap tersimpan, siap dilanjutkan di booth.",
-              icon: (
-                <IconDeviceFloppy size={20} stroke={2.5} aria-hidden="true" />
-              ),
-              tone: "primary",
-              onClick: () => confirmBackToBooth(true),
-            },
-            {
               label: "Buang foto & kembali",
               description: "Foto dihapus, booth mulai lagi dengan sesi kosong.",
               icon: <IconTrash size={20} stroke={2.5} aria-hidden="true" />,
               tone: "danger",
-              onClick: () => confirmBackToBooth(false),
+              onClick: () => confirmBackToBooth(),
             },
             {
               label: "Batal, tetap di studio",
