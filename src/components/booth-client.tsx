@@ -374,7 +374,6 @@ export function BoothClient({
     const runId = liveEnabled && liveSupported ? crypto.randomUUID() : null;
     liveRunIdRef.current = runId;
     liveMetaRef.current = [];
-    const recorderHandles: { stop(): Promise<LiveClip | null>; cancel(): void }[] = [];
 
     const taken: string[] = [];
     try {

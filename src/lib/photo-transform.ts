@@ -134,6 +134,20 @@ export function drawPhotoCover(
 }
 
 /**
+ * How much of the slot a fitted photo may leave empty, as a fraction of the
+ * covered size, before the blurred fill stops looking like a printed edge and
+ * starts looking like a margin around the photo.
+ *
+ * A strip slot (852×566) is ~1.51:1 against the 4:3 camera frame, so fitting
+ * leaves ~12% and the thin band reads as part of the print. A 2x2 cell or the
+ * single layout is square, leaves ~25%, and the wide band made the photo look
+ * inset. The strip layouts keep their near-full-bleed fit; squarer slots get
+ * the same centre crop the camera preview already shows, so the photo fills
+ * the cell edge to edge.
+ */
+const MAX_FIT_SLACK = 0.16;
+
+/**
  * Camera shots have no guest-chosen crop, so a hard `cover` can slice off the
  * top of a head whenever the slot's aspect ratio differs from the 4:3 camera
  * frame (a 2x2 slot is square; a strip slot is wider than 4:3).
@@ -141,6 +155,9 @@ export function drawPhotoCover(
  * Instead, paint the whole frame inside the slot and fill the leftover space
  * with a blurred, filtered copy of the same photo. The slot still reads edge
  * to edge, but nothing the guest framed is cropped away.
+ *
+ * When the mismatch is too large for that trick (see `MAX_FIT_SLACK`), the
+ * bands would read as a margin, so the shot is centre-cropped instead.
  */
 export function drawPhotoFit(
   ctx: CanvasRenderingContext2D,
@@ -152,6 +169,13 @@ export function drawPhotoFit(
   const sourceW = img.naturalWidth;
   const sourceH = img.naturalHeight;
   if (sourceW <= 0 || sourceH <= 0 || rect.w <= 0 || rect.h <= 0) return;
+
+  const containScale = Math.min(rect.w / sourceW, rect.h / sourceH);
+  const coverScale = Math.max(rect.w / sourceW, rect.h / sourceH);
+  if (coverScale > 0 && 1 - containScale / coverScale > MAX_FIT_SLACK) {
+    drawPhotoCover(ctx, img, rect, transform);
+    return;
+  }
 
   const blur = Math.max(24, Math.round(Math.min(rect.w, rect.h) * 0.18));
 
