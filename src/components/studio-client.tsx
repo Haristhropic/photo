@@ -27,6 +27,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
 } from "react";
 
 import {
@@ -917,6 +918,12 @@ export function StudioClient() {
       ? "max-sm:[&>button:last-child]:col-start-2"
       : "";
 
+  // A square layout (grid, single) would otherwise stretch to the full width of
+  // the studio's left column, so it stopped reading as a left-anchored object
+  // the way the strip previews do. `.studio-preview-card` caps it on the
+  // two-column layout and leaves the right side of the column empty.
+  const previewIsWide = layout.canvas.w >= layout.canvas.h;
+
   return (
     <div className="flex flex-1 flex-col">
       <StudioHeader
@@ -932,11 +939,14 @@ export function StudioClient() {
         <h1 className="sr-only">Studio foto</h1>
         <div className="shell grid gap-10 py-[var(--page)] lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start">
           <div
-            className="studio-preview-bleed w-full min-w-0 justify-self-center rounded-[var(--radius-xl)] border-2 border-ink bg-ink p-1.5 shadow-lift-3 lg:justify-self-start"
-            style={{
-              transform: `rotate(${PREVIEW_TILT}deg)`,
-              maxWidth: `calc(${(70 * layout.canvas.w) / layout.canvas.h}vh + 1rem)`,
-            }}
+            className="studio-preview-bleed studio-preview-card w-full min-w-0 justify-self-center rounded-[var(--radius-xl)] border-2 border-ink bg-ink p-1.5 shadow-lift-3 lg:justify-self-start"
+            data-wide={previewIsWide ? "true" : undefined}
+            style={
+              {
+                transform: `rotate(${PREVIEW_TILT}deg)`,
+                "--preview-max": `calc(${(70 * layout.canvas.w) / layout.canvas.h}vh + 1rem)`,
+              } as CSSProperties
+            }
           >
             {shownPreview ? (
               <div

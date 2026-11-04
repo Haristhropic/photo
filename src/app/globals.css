@@ -253,6 +253,23 @@
 }
 
 /*
+ * The preview is sized from the viewport height so every layout gets the same
+ * photo height. A square layout (grid, single) would then also grow to the full
+ * width of the studio's left column, which flattened the left-anchored
+ * composition the strip previews have. On the two-column studio, cap the card
+ * and leave the right side of the column empty.
+ */
+.studio-preview-card {
+  max-width: var(--preview-max);
+}
+
+@media (min-width: 64rem) {
+  .studio-preview-card[data-wide="true"] {
+    max-width: min(var(--preview-max), 76%);
+  }
+}
+
+/*
  * The photo sits inside the strip's ink frame, so its corners must follow the
  * card's radius minus the frame thickness (2px border + 6px padding). That
  * keeps the black edge an even width around every corner instead of pooling
