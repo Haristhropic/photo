@@ -243,30 +243,12 @@
 }
 
 /*
- * Studio preview sits left of the centered shell so the strip reads as
- * anchored to the left, without hugging the page edge: it cancels half of
- * the shell's centering offset, landing in the left-center of the page.
- * The controls keep their own grid column.
- */
-.studio-preview-bleed {
-  margin-inline-start: min(0px, calc((var(--shell) - 100vw) / 4));
-}
-
-/*
  * The preview is sized from the viewport height so every layout gets the same
- * photo height. A square layout (grid, single) would then also grow to the full
- * width of the studio's left column, which flattened the left-anchored
- * composition the strip previews have. On the two-column studio, cap the card
- * and leave the right side of the column empty.
+ * photo height, then centered inside the studio's left column rather than
+ * stretching to fill it.
  */
 .studio-preview-card {
   max-width: var(--preview-max);
-}
-
-@media (min-width: 64rem) {
-  .studio-preview-card[data-wide="true"] {
-    max-width: min(var(--preview-max), 76%);
-  }
 }
 
 /*
