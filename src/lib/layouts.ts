@@ -23,6 +23,8 @@ export type LayoutPreset = {
  * paper at the corner than along the edges.
  */
 export const PAPER_MARGIN = 24;
+/** The print's own corner: concentric with the photo corners above. */
+export const PRINT_RADIUS = PAPER_MARGIN * 2;
 const PAD = PAPER_MARGIN;
 const GAP = 24;
 

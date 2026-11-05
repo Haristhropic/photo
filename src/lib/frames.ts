@@ -1,6 +1,7 @@
 import { cloudinaryImageUrl } from "./image-url";
 import {
   PAPER_MARGIN,
+  PRINT_RADIUS,
   type LayoutPreset,
   type LayoutType,
   type Rect,
@@ -661,9 +662,20 @@ function drawMata(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
   // A paper band, then two ink rules: the frame looks hand-ruled rather than
   // printed, which is what makes the stuck-on eyes feel at home.
   frameBand(ctx, w, h, band, CREAM);
+  // The outer rule follows the print's cut, so it curves at the corner instead
+  // of being chopped off by it.
+  const edge = 2.5 * u;
+  roundedRectPath(
+    ctx,
+    edge,
+    edge,
+    w - edge * 2,
+    h - edge * 2,
+    Math.max(0, PRINT_RADIUS - edge),
+  );
   ctx.strokeStyle = INK;
   ctx.lineWidth = 5 * u;
-  ctx.strokeRect(2.5 * u, 2.5 * u, w - 5 * u, h - 5 * u);
+  ctx.stroke();
   innerRule(ctx, w, h, band, 2.5 * u, INK);
 
   const eyes: Array<{ x: number; y: number; r: number; look: [number, number] }> = [
@@ -896,7 +908,17 @@ function drawNeon(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
   ctx.lineWidth = 4.5 * u;
   ctx.shadowColor = "rgba(61,217,160,0.55)";
   ctx.shadowBlur = 12 * u;
-  ctx.strokeRect(10 * u, 10 * u, w - 20 * u, h - 20 * u);
+  // Both neon lines are parallel to the print's cut, so the glow bends around
+  // the corner with the paper instead of stopping short of it.
+  roundedRectPath(
+    ctx,
+    10 * u,
+    10 * u,
+    w - 20 * u,
+    h - 20 * u,
+    Math.max(0, PRINT_RADIUS - 10 * u),
+  );
+  ctx.stroke();
   ctx.restore();
 
   ctx.save();
@@ -904,7 +926,15 @@ function drawNeon(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
   ctx.lineWidth = 2.5 * u;
   ctx.shadowColor = "rgba(255,61,139,0.5)";
   ctx.shadowBlur = 8 * u;
-  ctx.strokeRect(21 * u, 21 * u, w - 42 * u, h - 42 * u);
+  roundedRectPath(
+    ctx,
+    21 * u,
+    21 * u,
+    w - 42 * u,
+    h - 42 * u,
+    Math.max(0, PRINT_RADIUS - 21 * u),
+  );
+  ctx.stroke();
   ctx.restore();
 
   bolt(ctx, 66 * u, 94 * u, 50 * u, -0.35, BUTTER, 14 * u);

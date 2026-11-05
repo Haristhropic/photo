@@ -19,7 +19,7 @@ import { LivePhotoOverlay } from "@/components/live-photo-player";
 import { SiteFooter } from "@/components/site-footer";
 import { db } from "@/db";
 import { events, photoSessions } from "@/db/schema";
-import { LAYOUTS } from "@/lib/layouts";
+import { LAYOUTS, PRINT_RADIUS } from "@/lib/layouts";
 import { absoluteUrl } from "@/lib/site";
 import { Logo } from "@/components/logo";
 
@@ -81,6 +81,9 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
   });
 
   const layout = LAYOUTS[session.layoutType];
+  // Share of the print's width taken by its baked corner, used to keep the
+  // mount and the photo window concentric at any rendered size.
+  const printEdge = PRINT_RADIUS / layout.canvas.w;
 
   return (
     <Shell
@@ -92,28 +95,43 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
     >
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start">
         <div
-          className="relative w-full min-w-0 justify-self-center rounded-[var(--radius-xl)] border-2 border-ink bg-ink shadow-lift-3 lg:justify-self-end"
+          className="w-full min-w-0 justify-self-center lg:justify-self-end"
           style={{
-            transform: "rotate(-0.8deg)",
+            containerType: "inline-size",
             maxWidth: `calc(${(70 * layout.canvas.w) / layout.canvas.h}vh + 1.5rem)`,
           }}
         >
-          <div className="p-3">
-            <div
-              className="relative w-full max-h-[70vh] overflow-hidden rounded-[6px]"
-              style={{ aspectRatio: `${layout.canvas.w}/${layout.canvas.h}` }}
-            >
-              <Image
-                src={session.finalPhotoUrl}
-                alt="Strip foto hasil"
-                fill
-                sizes="(min-width: 1024px) 45vw, 90vw"
-                priority
-                className="object-cover"
-              />
-              {session.liveClips && session.liveClips.length > 0 && (
-                <LivePhotoOverlay canvas={layout.canvas} slots={layout.slots} clips={session.liveClips} />
-              )}
+          <div
+            className="relative w-full border-2 border-ink bg-ink shadow-lift-3"
+            style={{
+              transform: "rotate(-0.8deg)",
+              // Same concentric corner as the studio: the print's baked radius
+              // plus the mount's 14px inset (2px border + 12px padding).
+              borderRadius: `calc(${printEdge * 100}cqw + ${14 - printEdge * 28}px)`,
+            }}
+          >
+            <div className="p-3">
+              <div
+                className="relative w-full max-h-[70vh] overflow-hidden"
+                style={{
+                  aspectRatio: `${layout.canvas.w}/${layout.canvas.h}`,
+                  // Clips older, square-cornered prints to the same silhouette
+                  // the studio now bakes in.
+                  borderRadius: `calc(${printEdge * 100}cqw + ${-printEdge * 28}px)`,
+                }}
+              >
+                <Image
+                  src={session.finalPhotoUrl}
+                  alt="Strip foto hasil"
+                  fill
+                  sizes="(min-width: 1024px) 45vw, 90vw"
+                  priority
+                  className="object-cover"
+                />
+                {session.liveClips && session.liveClips.length > 0 && (
+                  <LivePhotoOverlay canvas={layout.canvas} slots={layout.slots} clips={session.liveClips} />
+                )}
+              </div>
             </div>
           </div>
         </div>

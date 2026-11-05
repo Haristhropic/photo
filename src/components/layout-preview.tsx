@@ -1,4 +1,9 @@
-import { LAYOUTS, PAPER_MARGIN, type LayoutType } from "@/lib/layouts";
+import {
+  LAYOUTS,
+  PAPER_MARGIN,
+  PRINT_RADIUS,
+  type LayoutType,
+} from "@/lib/layouts";
 
 type LayoutPreviewProps = {
   type: LayoutType;
@@ -36,7 +41,7 @@ export function LayoutPreview({
       <rect
         width={layout.canvas.w}
         height={layout.canvas.h}
-        rx={layout.canvas.w * 0.02}
+        rx={PRINT_RADIUS}
         fill="var(--bg)"
         stroke="var(--ink)"
         strokeWidth="2"

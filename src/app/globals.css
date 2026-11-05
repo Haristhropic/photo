@@ -242,25 +242,6 @@
   padding-inline: var(--gutter);
 }
 
-/*
- * The preview is sized from the viewport height so every layout gets the same
- * photo height, then centered inside the studio's left column rather than
- * stretching to fill it.
- */
-.studio-preview-card {
-  max-width: var(--preview-max);
-}
-
-/*
- * The photo sits inside the strip's ink frame, so its corners must follow the
- * card's radius minus the frame thickness (2px border + 6px padding). That
- * keeps the black edge an even width around every corner instead of pooling
- * into wedges.
- */
-@utility frame-inner {
-  border-radius: calc(var(--radius-xl) - 0.5rem);
-}
-
 /* Sticker press: the sheet lifts and settles. One authored moment, reused. */
 @utility pressable {
   transition:

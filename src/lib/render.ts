@@ -2,6 +2,7 @@ import {
   FILTERS,
   LAYOUTS,
   PAPER_MARGIN,
+  PRINT_RADIUS,
   type FilterKey,
   type LayoutPreset,
   type LayoutType,
@@ -11,6 +12,7 @@ import {
   framePhotoSlots,
   frameSupportsLayout,
   preloadFrameImage,
+  roundedRectPath,
   type FramePreset,
 } from "./frames";
 import {
@@ -91,6 +93,29 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 const PAPER_EDGE_TOLERANCE = 1.5;
 
 type CornerRadii = { tl: number; tr: number; br: number; bl: number };
+
+/**
+ * Cut the canvas down to the print's silhouette. Everything the renderer
+ * paints - paper, photos, frame art, sticker - is clipped by this path, so the
+ * preview, the exported PNG and the result page all share one corner shape.
+ * The radius is twice the paper margin, which puts it on the same centre as
+ * the photo's own corner and keeps the paper band an even width around it.
+ */
+function clipToPrint(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+): void {
+  roundedRectPath(
+    ctx,
+    0,
+    0,
+    width,
+    height,
+    Math.min(PRINT_RADIUS, width / 2, height / 2),
+  );
+  ctx.clip();
+}
 
 /**
  * Photos that sit against the paper margin take the margin's curve at their
@@ -192,6 +217,11 @@ export async function renderStrip(options: {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D tidak tersedia");
 
+  // The print's rounded silhouette is baked in, not applied by CSS, so the
+  // exported PNG matches the studio exactly.
+  ctx.save();
+  clipToPrint(ctx, width, height);
+
   // Sticker artwork is set in the app's display face; wait for it so the PNG
   // never bakes a fallback font that the live DOM has already replaced.
   if (typeof document !== "undefined" && document.fonts) {
@@ -266,6 +296,7 @@ export async function renderStrip(options: {
     ctx.fillText(eventLabel, x, baseline);
   }
 
+  ctx.restore();
   return canvas.toDataURL("image/png");
 }
 
@@ -294,6 +325,11 @@ export async function addStickerToStrip(options: {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D tidak tersedia");
 
+  // Keep the sticker inside the print: a dragged sticker can hang over the
+  // paper edge, and the saved corner must stay the one the preview shows.
+  ctx.save();
+  clipToPrint(ctx, canvas.width, canvas.height);
+
   // The base already carries the paper, photos, frame and any filter, so the
   // sticker is the only new ink. Draw at natural size to avoid a resample.
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
@@ -314,5 +350,6 @@ export async function addStickerToStrip(options: {
     spot: options.spot,
   });
 
+  ctx.restore();
   return canvas.toDataURL("image/png");
 }

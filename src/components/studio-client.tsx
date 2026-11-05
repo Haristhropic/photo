@@ -51,6 +51,7 @@ import {
   FILTERS,
   FILTER_ORDER,
   LAYOUTS,
+  PRINT_RADIUS,
   type FilterKey,
 } from "@/lib/layouts";
 import {
@@ -925,6 +926,13 @@ export function StudioClient() {
       ? "max-sm:[&>button:last-child]:col-start-2"
       : "";
 
+  // The card's corner is the exported print's corner plus the card's 8px inset
+  // (2px border + 6px padding), so the ink mount keeps an even width around the
+  // curved print instead of pooling into the corners. The print radius is baked
+  // into the PNG (`clipToPrint`), and the preview shows that same shape.
+  const printEdge = PRINT_RADIUS / layout.canvas.w;
+  const cardRadius = `calc(${printEdge * 100}cqw + ${8 - printEdge * 16}px)`;
+
   return (
     <div className="flex flex-1 flex-col">
       <StudioHeader
@@ -940,148 +948,160 @@ export function StudioClient() {
         <h1 className="sr-only">Studio foto</h1>
         <div className="shell grid gap-10 py-[var(--page)] lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start">
           <div
-            className="studio-preview-card w-full min-w-0 justify-self-center rounded-[var(--radius-xl)] border-2 border-ink bg-ink p-1.5 shadow-lift-3"
-            style={
-              {
-                transform: `rotate(${PREVIEW_TILT}deg)`,
-                "--preview-max": `calc(${(PREVIEW_HEIGHT_VH * layout.canvas.w) / layout.canvas.h}vh + 1rem)`,
-              } as CSSProperties
-            }
+            className="w-full min-w-0 justify-self-center"
+            style={{
+              containerType: "inline-size",
+              maxWidth: `calc(${(PREVIEW_HEIGHT_VH * layout.canvas.w) / layout.canvas.h}vh + 1rem)`,
+            }}
           >
-            {shownPreview ? (
-              <div
-                ref={previewBoxRef}
-                className="relative mx-auto w-full"
-                style={{
-                  aspectRatio: `${layout.canvas.w} / ${layout.canvas.h}`,
-                  maxWidth: `calc(${(PREVIEW_HEIGHT_VH * layout.canvas.w) / layout.canvas.h}vh)`,
-                }}
-              >
-                <img
-                  src={shownPreview}
-                  width={layout.canvas.w}
-                  height={layout.canvas.h}
-                  alt={`Pratinjau strip foto${
-                    stickerPreset
-                      ? ` dengan stiker ${stickerPreset.name}`
-                      : ""
-                  }${shownFrameName ? ` dan frame ${shownFrameName}` : ""}`}
-                  aria-busy={!preview}
-                  className="frame-inner absolute inset-0 block h-full w-full object-contain"
-                />
-                {stickerPreset && stickerGeo && (
-                  <button
-                    type="button"
-                    aria-label={`Stiker ${stickerPreset.name}. Geser untuk memindahkan, atau pakai tombol panah.`}
-                    title="Geser untuk memindahkan"
-                    data-sticker-ui="true"
-                    onPointerDown={startStickerDrag}
-                    onPointerMove={moveSticker}
-                    onPointerUp={endStickerDrag}
-                    onPointerCancel={endStickerDrag}
-                    onKeyDown={nudgeSticker}
-                    onFocus={() => setStickerSelected(true)}
-                    className={`absolute grid touch-none place-items-center rounded-[10px] bg-transparent p-0 ${
-                      draggingSticker
-                        ? "cursor-grabbing outline-2 outline-offset-2 outline-dashed outline-ink/70"
-                        : "cursor-grab hover:outline-2 hover:outline-offset-2 hover:outline-dashed hover:outline-ink/40"
-                    }`}
-                    style={{
-                      left: `${(stickerGeo.cx / layout.canvas.w) * 100}%`,
-                      top: `${(stickerGeo.cy / layout.canvas.h) * 100}%`,
-                      width: `${((STICKER_ART.w * stickerGeo.scale) / layout.canvas.w) * 100}%`,
-                      aspectRatio: `${STICKER_ART.w} / ${STICKER_ART.h}`,
-                      transform: `translate(-50%, -50%) rotate(${stickerGeo.rotation}deg)`,
-                      minHeight: 0,
-                      minWidth: 0,
-                    }}
-                  >
-                    <canvas
-                      ref={stickerCanvasRef}
-                      width={STICKER_ART.w * 2}
-                      height={STICKER_ART.h * 2}
-                      aria-hidden="true"
-                      className="pointer-events-none block h-full w-full"
-                    />
-                  </button>
-                )}
-                {stickerToolbar && stickerPreset && (
-                  <div
-                    ref={stickerToolbarRef}
-                    data-sticker-ui="true"
-                    role="toolbar"
-                    aria-label={`Atur stiker ${stickerPreset.name}`}
-                    className="absolute z-20 flex items-center gap-1 rounded-[var(--radius-pill)] border-2 border-ink bg-elev p-1 shadow-lift-2"
-                    style={{
-                      left: stickerToolbar.left,
-                      top: stickerToolbar.top,
-                      transform: "translateX(-50%)",
-                      visibility: previewSize.w > 0 ? "visible" : "hidden",
-                    }}
-                  >
-                    <StickerToolButton
-                      label="Perkecil"
-                      onClick={() => resizeSticker(0.9)}
-                      icon={
-                        <IconMinus size={16} stroke={3} aria-hidden="true" />
-                      }
-                    />
-                    <StickerToolButton
-                      label="Perbesar"
-                      onClick={() => resizeSticker(1.1)}
-                      icon={<IconPlus size={16} stroke={3} aria-hidden="true" />}
-                    />
-                    <StickerToolButton
-                      label="Putar kiri"
-                      onClick={() => rotateSticker(-15)}
-                      icon={
-                        <IconRotate size={16} stroke={2.5} aria-hidden="true" />
-                      }
-                    />
-                    <StickerToolButton
-                      label="Putar kanan"
-                      onClick={() => rotateSticker(15)}
-                      icon={
-                        <IconRotateClockwise
-                          size={16}
-                          stroke={2.5}
-                          aria-hidden="true"
-                        />
-                      }
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="mx-0.5 h-6 w-0.5 shrink-0 rounded-full bg-ink/20"
-                    />
-                    <StickerToolButton
-                      label="Hapus stiker"
-                      danger
-                      onClick={removeSticker}
-                      icon={
-                        <IconTrash size={16} stroke={2.5} aria-hidden="true" />
-                      }
-                    />
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div
-                className="frame-inner mx-auto grid w-full place-items-center bg-sunken text-ink-meta"
-                style={{
-                  aspectRatio: `${layout.canvas.w} / ${layout.canvas.h}`,
-                  maxWidth: `${(70 * layout.canvas.w) / layout.canvas.h}vh`,
-                }}
-              >
-                <span className="font-display text-label font-bold tracking-[0.14em] uppercase">
-                  Merender
+            <div
+              className="w-full border-2 border-ink bg-ink p-1.5 shadow-lift-3"
+              style={
+                {
+                  transform: `rotate(${PREVIEW_TILT}deg)`,
+                  "--card-radius": cardRadius,
+                  borderRadius: "var(--card-radius)",
+                } as CSSProperties
+              }
+            >
+              {shownPreview ? (
+                <div
+                  ref={previewBoxRef}
+                  className="relative mx-auto w-full"
+                  style={{
+                    aspectRatio: `${layout.canvas.w} / ${layout.canvas.h}`,
+                    maxWidth: `calc(${(PREVIEW_HEIGHT_VH * layout.canvas.w) / layout.canvas.h}vh)`,
+                  }}
+                >
+                  <img
+                    src={shownPreview}
+                    width={layout.canvas.w}
+                    height={layout.canvas.h}
+                    alt={`Pratinjau strip foto${
+                      stickerPreset
+                        ? ` dengan stiker ${stickerPreset.name}`
+                        : ""
+                    }${shownFrameName ? ` dan frame ${shownFrameName}` : ""}`}
+                    aria-busy={!preview}
+                    className="absolute inset-0 block h-full w-full object-contain"
+                  />
+                  {stickerPreset && stickerGeo && (
+                    <button
+                      type="button"
+                      aria-label={`Stiker ${stickerPreset.name}. Geser untuk memindahkan, atau pakai tombol panah.`}
+                      title="Geser untuk memindahkan"
+                      data-sticker-ui="true"
+                      onPointerDown={startStickerDrag}
+                      onPointerMove={moveSticker}
+                      onPointerUp={endStickerDrag}
+                      onPointerCancel={endStickerDrag}
+                      onKeyDown={nudgeSticker}
+                      onFocus={() => setStickerSelected(true)}
+                      className={`absolute grid touch-none place-items-center rounded-[10px] bg-transparent p-0 ${
+                        draggingSticker
+                          ? "cursor-grabbing outline-2 outline-offset-2 outline-dashed outline-ink/70"
+                          : "cursor-grab hover:outline-2 hover:outline-offset-2 hover:outline-dashed hover:outline-ink/40"
+                      }`}
+                      style={{
+                        left: `${(stickerGeo.cx / layout.canvas.w) * 100}%`,
+                        top: `${(stickerGeo.cy / layout.canvas.h) * 100}%`,
+                        width: `${((STICKER_ART.w * stickerGeo.scale) / layout.canvas.w) * 100}%`,
+                        aspectRatio: `${STICKER_ART.w} / ${STICKER_ART.h}`,
+                        transform: `translate(-50%, -50%) rotate(${stickerGeo.rotation}deg)`,
+                        minHeight: 0,
+                        minWidth: 0,
+                      }}
+                    >
+                      <canvas
+                        ref={stickerCanvasRef}
+                        width={STICKER_ART.w * 2}
+                        height={STICKER_ART.h * 2}
+                        aria-hidden="true"
+                        className="pointer-events-none block h-full w-full"
+                      />
+                    </button>
+                  )}
+                  {stickerToolbar && stickerPreset && (
+                    <div
+                      ref={stickerToolbarRef}
+                      data-sticker-ui="true"
+                      role="toolbar"
+                      aria-label={`Atur stiker ${stickerPreset.name}`}
+                      className="absolute z-20 flex items-center gap-1 rounded-[var(--radius-pill)] border-2 border-ink bg-elev p-1 shadow-lift-2"
+                      style={{
+                        left: stickerToolbar.left,
+                        top: stickerToolbar.top,
+                        transform: "translateX(-50%)",
+                        visibility: previewSize.w > 0 ? "visible" : "hidden",
+                      }}
+                    >
+                      <StickerToolButton
+                        label="Perkecil"
+                        onClick={() => resizeSticker(0.9)}
+                        icon={
+                          <IconMinus size={16} stroke={3} aria-hidden="true" />
+                        }
+                      />
+                      <StickerToolButton
+                        label="Perbesar"
+                        onClick={() => resizeSticker(1.1)}
+                        icon={
+                          <IconPlus size={16} stroke={3} aria-hidden="true" />
+                        }
+                      />
+                      <StickerToolButton
+                        label="Putar kiri"
+                        onClick={() => rotateSticker(-15)}
+                        icon={
+                          <IconRotate size={16} stroke={2.5} aria-hidden="true" />
+                        }
+                      />
+                      <StickerToolButton
+                        label="Putar kanan"
+                        onClick={() => rotateSticker(15)}
+                        icon={
+                          <IconRotateClockwise
+                            size={16}
+                            stroke={2.5}
+                            aria-hidden="true"
+                          />
+                        }
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="mx-0.5 h-6 w-0.5 shrink-0 rounded-full bg-ink/20"
+                      />
+                      <StickerToolButton
+                        label="Hapus stiker"
+                        danger
+                        onClick={removeSticker}
+                        icon={
+                          <IconTrash size={16} stroke={2.5} aria-hidden="true" />
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  className="mx-auto grid w-full place-items-center bg-sunken text-ink-meta"
+                  style={{
+                    aspectRatio: `${layout.canvas.w} / ${layout.canvas.h}`,
+                    maxWidth: `calc(${(PREVIEW_HEIGHT_VH * layout.canvas.w) / layout.canvas.h}vh)`,
+                    borderRadius: "calc(var(--card-radius) - 8px)",
+                  }}
+                >
+                  <span className="font-display text-label font-bold tracking-[0.14em] uppercase">
+                    Merender
+                  </span>
+                </div>
+              )}
+              {shownPreview && !preview && (
+                <span role="status" className="sr-only">
+                  Memperbarui pratinjau
                 </span>
-              </div>
-            )}
-            {shownPreview && !preview && (
-              <span role="status" className="sr-only">
-                Memperbarui pratinjau
-              </span>
-            )}
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col gap-8">
