@@ -305,6 +305,13 @@ function StudioHeader({
 const PREVIEW_TILT = -0.7;
 const TILT_RADIANS = (PREVIEW_TILT * Math.PI) / 180;
 
+/**
+ * Every layout prints at the same height so switching formats does not resize
+ * the studio. The card is capped a little above the fold so the print reads
+ * big without crowding the header or running past the bottom of the screen.
+ */
+const PREVIEW_HEIGHT_VH = 76;
+
 function clampScale(scale: number): number {
   return Math.min(STICKER_SCALE_MAX, Math.max(STICKER_SCALE_MIN, scale));
 }
@@ -937,7 +944,7 @@ export function StudioClient() {
             style={
               {
                 transform: `rotate(${PREVIEW_TILT}deg)`,
-                "--preview-max": `calc(${(70 * layout.canvas.w) / layout.canvas.h}vh + 1rem)`,
+                "--preview-max": `calc(${(PREVIEW_HEIGHT_VH * layout.canvas.w) / layout.canvas.h}vh + 1rem)`,
               } as CSSProperties
             }
           >
@@ -947,7 +954,7 @@ export function StudioClient() {
                 className="relative mx-auto w-full"
                 style={{
                   aspectRatio: `${layout.canvas.w} / ${layout.canvas.h}`,
-                  maxWidth: `calc(${(70 * layout.canvas.w) / layout.canvas.h}vh)`,
+                  maxWidth: `calc(${(PREVIEW_HEIGHT_VH * layout.canvas.w) / layout.canvas.h}vh)`,
                 }}
               >
                 <img
