@@ -143,9 +143,12 @@ export function frameBand(
   color: string,
 ): void {
   const inset = Math.max(thickness, PAPER_MARGIN);
+  // Concentric with the print's cut: the window's radius shrinks by exactly the
+  // band's inset. A fixed radius would bulge the border through the corner on
+  // any canvas wider than a strip, where the band is thicker than the margin.
   const radius = Math.max(
     0,
-    Math.min(PAPER_MARGIN, (w - inset * 2) / 2, (h - inset * 2) / 2),
+    Math.min(PRINT_RADIUS - inset, (w - inset * 2) / 2, (h - inset * 2) / 2),
   );
 
   ctx.beginPath();
@@ -174,11 +177,12 @@ function innerRule(
   color: string,
 ): void {
   // The rule traces the border's window, so it curves with the photo corner
-  // instead of cutting a square across it.
+  // instead of cutting a square across it. Its radius follows the same
+  // concentric rule as `frameBand`, keeping the rule parallel at the corner.
   const x = inset + lineWidth / 2;
   const radius = Math.max(
     0,
-    Math.min(PAPER_MARGIN, (w - x * 2) / 2, (h - x * 2) / 2),
+    Math.min(PRINT_RADIUS - x, (w - x * 2) / 2, (h - x * 2) / 2),
   );
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
@@ -959,6 +963,13 @@ function drawBalap(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
   const curb = Math.max(18 * u, PAPER_MARGIN);
 
   ctx.save();
+  // The flag band is two squares tall, so it runs past the paper margin and
+  // over the top of the photos. Back it with paper before the checker: without
+  // that, the empty squares show the photo through and the band reads as
+  // stripes. The print's clip rounds its outer corners.
+  ctx.fillStyle = PAPER;
+  ctx.fillRect(0, 0, w, top);
+
   for (let row = 0; row < 2; row++) {
     for (let col = 0; col * square < w; col++) {
       if ((row + col) % 2 === 0) {

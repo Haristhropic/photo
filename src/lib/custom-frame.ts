@@ -3,7 +3,7 @@ import {
   roundedRectPath,
   type FramePreset,
 } from "./frames";
-import { PAPER_MARGIN, type LayoutPreset } from "./layouts";
+import { PAPER_MARGIN, PRINT_RADIUS, type LayoutPreset } from "./layouts";
 import { displayFamily } from "./stickers";
 
 /**
@@ -72,15 +72,11 @@ function windowRule(
   color: string,
 ): void {
   const x = inset + lineWidth / 2;
-  // Parallel to the photo window: the further out the rule sits, the larger its
-  // corner radius, so the pair stays concentric instead of drifting apart.
+  // Parallel to the print's cut: the rule's radius shrinks by its inset, so the
+  // pair stays concentric instead of drifting apart.
   const radius = Math.max(
     0,
-    Math.min(
-      PAPER_MARGIN + Math.max(0, PAPER_MARGIN - x),
-      (w - x * 2) / 2,
-      (h - x * 2) / 2,
-    ),
+    Math.min(PRINT_RADIUS - x, (w - x * 2) / 2, (h - x * 2) / 2),
   );
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
