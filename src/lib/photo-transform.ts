@@ -148,6 +148,25 @@ export function drawPhotoCover(
 const MAX_FIT_SLACK = 0.16;
 
 /**
+ * Whether a camera shot is shown whole inside a slot (`contain`, with the
+ * blurred fill behind it) rather than centre-cropped (`cover`).
+ *
+ * Kept as one rule so the printed still and its Live Photo clip are framed
+ * identically: the overlay asks the same question of the video's own size.
+ */
+export function photoFitsWholeFrame(
+  sourceW: number,
+  sourceH: number,
+  rectW: number,
+  rectH: number,
+): boolean {
+  if (sourceW <= 0 || sourceH <= 0 || rectW <= 0 || rectH <= 0) return true;
+  const containScale = Math.min(rectW / sourceW, rectH / sourceH);
+  const coverScale = Math.max(rectW / sourceW, rectH / sourceH);
+  return coverScale > 0 && 1 - containScale / coverScale <= MAX_FIT_SLACK;
+}
+
+/**
  * Camera shots have no guest-chosen crop, so a hard `cover` can slice off the
  * top of a head whenever the slot's aspect ratio differs from the 4:3 camera
  * frame (a 2x2 slot is square; a strip slot is wider than 4:3).
@@ -170,9 +189,7 @@ export function drawPhotoFit(
   const sourceH = img.naturalHeight;
   if (sourceW <= 0 || sourceH <= 0 || rect.w <= 0 || rect.h <= 0) return;
 
-  const containScale = Math.min(rect.w / sourceW, rect.h / sourceH);
-  const coverScale = Math.max(rect.w / sourceW, rect.h / sourceH);
-  if (coverScale > 0 && 1 - containScale / coverScale > MAX_FIT_SLACK) {
+  if (!photoFitsWholeFrame(sourceW, sourceH, rect.w, rect.h)) {
     drawPhotoCover(ctx, img, rect, transform);
     return;
   }

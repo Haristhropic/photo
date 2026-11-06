@@ -28,6 +28,45 @@ export const PRINT_RADIUS = PAPER_MARGIN * 2;
 const PAD = PAPER_MARGIN;
 const GAP = 24;
 
+/** How close a slot edge must sit to the paper margin to count as "outer". */
+const PAPER_EDGE_TOLERANCE = 1.5;
+
+export type CornerRadii = { tl: number; tr: number; br: number; bl: number };
+
+/**
+ * Photos that sit against the paper margin take the margin's curve at their
+ * outer corners. The print is clipped with a radius of twice the margin, so a
+ * square photo corner would leave a thinner band of paper there than along the
+ * edges. Rounding the corner by the margin keeps that band an even width, which
+ * is what makes the photo and the frame read as one shape.
+ *
+ * Slots that are flush with the canvas edge, or inset well past the margin,
+ * keep square corners: they belong to a frame artwork, not to the paper.
+ *
+ * Shared by the canvas renderer and the Live Photo overlay so a playing clip
+ * covers exactly the printed photo, corner for corner.
+ */
+export function photoSlotRadii(
+  slot: Rect,
+  canvas: { w: number; h: number },
+): CornerRadii {
+  const onEdge = (inset: number) =>
+    Math.abs(inset - PAPER_MARGIN) <= PAPER_EDGE_TOLERANCE;
+  const radius = Math.min(PAPER_MARGIN, slot.w / 2, slot.h / 2);
+
+  const left = onEdge(slot.x);
+  const right = onEdge(canvas.w - (slot.x + slot.w));
+  const top = onEdge(slot.y);
+  const bottom = onEdge(canvas.h - (slot.y + slot.h));
+
+  return {
+    tl: left && top ? radius : 0,
+    tr: right && top ? radius : 0,
+    br: right && bottom ? radius : 0,
+    bl: left && bottom ? radius : 0,
+  };
+}
+
 function verticalStrip(
   type: LayoutType,
   label: string,

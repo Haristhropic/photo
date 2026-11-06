@@ -1,8 +1,9 @@
 import {
   FILTERS,
   LAYOUTS,
-  PAPER_MARGIN,
   PRINT_RADIUS,
+  photoSlotRadii,
+  type CornerRadii,
   type FilterKey,
   type LayoutPreset,
   type LayoutType,
@@ -89,11 +90,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 /* photo slot geometry                                                         */
 /* -------------------------------------------------------------------------- */
 
-/** How close a slot edge must sit to the paper margin to count as "outer". */
-const PAPER_EDGE_TOLERANCE = 1.5;
-
-type CornerRadii = { tl: number; tr: number; br: number; bl: number };
-
 /**
  * Cut the canvas down to the print's silhouette. Everything the renderer
  * paints - paper, photos, frame art, sticker - is clipped by this path, so the
@@ -119,31 +115,8 @@ function clipToPrint(
 
 /**
  * Photos that sit against the paper margin take the margin's curve at their
- * outer corners. The strip is clipped with a radius of twice the margin, so a
- * square photo corner leaves a thinner band of paper at the corner than along
- * the edges. Rounding the corner by the margin keeps that band an even width,
- * which is what makes the photo and the frame read as one shape.
- *
- * Slots that are flush with the canvas edge, or inset well past the margin,
- * keep square corners: they belong to a frame artwork, not to the paper.
+ * outer corners (see `photoSlotRadii` in layouts).
  */
-function photoSlotRadii(slot: Rect, canvas: { w: number; h: number }): CornerRadii {
-  const onEdge = (inset: number) =>
-    Math.abs(inset - PAPER_MARGIN) <= PAPER_EDGE_TOLERANCE;
-  const radius = Math.min(PAPER_MARGIN, slot.w / 2, slot.h / 2);
-
-  const left = onEdge(slot.x);
-  const right = onEdge(canvas.w - (slot.x + slot.w));
-  const top = onEdge(slot.y);
-  const bottom = onEdge(canvas.h - (slot.y + slot.h));
-
-  return {
-    tl: left && top ? radius : 0,
-    tr: right && top ? radius : 0,
-    br: right && bottom ? radius : 0,
-    bl: left && bottom ? radius : 0,
-  };
-}
 
 function photoSlotPath(
   ctx: CanvasRenderingContext2D,

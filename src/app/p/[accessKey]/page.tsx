@@ -5,6 +5,7 @@ import {
   IconClockHour4,
   IconHome,
   IconLayoutGrid,
+  IconPlayerPlayFilled,
   IconQrcode,
   IconShare,
 } from "@tabler/icons-react";
@@ -19,7 +20,7 @@ import { LivePhotoOverlay } from "@/components/live-photo-player";
 import { SiteFooter } from "@/components/site-footer";
 import { db } from "@/db";
 import { events, photoSessions } from "@/db/schema";
-import { LAYOUTS, PRINT_RADIUS } from "@/lib/layouts";
+import { LAYOUTS, PRINT_RADIUS, isFilterKey } from "@/lib/layouts";
 import { absoluteUrl } from "@/lib/site";
 import { Logo } from "@/components/logo";
 
@@ -43,6 +44,7 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
       expiresAt: photoSessions.expiresAt,
       layoutType: photoSessions.layoutType,
       liveClips: photoSessions.liveClips,
+      filterKey: photoSessions.filterKey,
       eventTitle: events.title,
       isExpired: sql<number>`${photoSessions.expiresAt} < (now() at time zone 'utc')`,
     })
@@ -133,10 +135,25 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
                 className="object-cover"
               />
               {session.liveClips && session.liveClips.length > 0 && (
-                <LivePhotoOverlay canvas={layout.canvas} slots={layout.slots} clips={session.liveClips} />
+                <LivePhotoOverlay
+                  canvas={layout.canvas}
+                  slots={layout.slots}
+                  clips={session.liveClips}
+                  filterKey={
+                    isFilterKey(session.filterKey)
+                      ? session.filterKey
+                      : "original"
+                  }
+                />
               )}
             </div>
           </div>
+          {session.liveClips && session.liveClips.length > 0 && (
+            <p className="mt-4 flex items-center justify-center gap-2 font-display text-label font-bold tracking-[0.12em] text-ink-meta uppercase">
+              <IconPlayerPlayFilled size={13} aria-hidden="true" />
+              {session.liveClips.length} Live Photo
+            </p>
+          )}
         </div>
 
         <div className="flex min-w-0 flex-col gap-6">
