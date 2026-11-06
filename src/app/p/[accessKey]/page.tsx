@@ -28,6 +28,10 @@ export const metadata: Metadata = {
   description: "Unduh strip fotomu atau bagikan tautannya.",
 };
 
+/** Matches the studio's preview cap so the print reads the same size on both
+ *  screens; the result has no rail to sit beside, so it can use the same cap. */
+const PREVIEW_HEIGHT_VH = 76;
+
 export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
   const { accessKey } = await props.params;
 
@@ -61,10 +65,11 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
 
   const expired = Boolean(session.isExpired);
   const shareUrl = absoluteUrl(`/p/${accessKey}`);
+  const layout = LAYOUTS[session.layoutType];
 
   if (expired) {
     return (
-      <Shell title="Foto sudah kedaluwarsa">
+      <Shell title="Foto sudah kedaluwarsa" layoutLabel={layout.label}>
         <p className="text-lead text-ink-body">
           Foto ini sudah dihapus sesuai kebijakan retensi. Minta tamu membuka
           booth lagi.
@@ -80,7 +85,6 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
     color: { dark: "#111114", light: "#ffffff" },
   });
 
-  const layout = LAYOUTS[session.layoutType];
   // Share of the print's width taken by its baked corner, used to keep the
   // mount and the photo window concentric at any rendered size.
   const printEdge = PRINT_RADIUS / layout.canvas.w;
@@ -88,50 +92,49 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
   return (
     <Shell
       title="Fotomu sudah jadi"
+      layoutLabel={layout.label}
       back={{
         href: `/booth`,
         label: "Booth",
       }}
     >
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start">
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start">
         <div
-          className="w-full min-w-0 justify-self-center lg:justify-self-end"
+          className="w-full min-w-0 justify-self-center"
           style={{
             containerType: "inline-size",
-            maxWidth: `calc(${(70 * layout.canvas.w) / layout.canvas.h}vh + 1.5rem)`,
+            maxWidth: `calc(${(PREVIEW_HEIGHT_VH * layout.canvas.w) / layout.canvas.h}vh + 1rem)`,
           }}
         >
           <div
-            className="relative w-full border-2 border-ink bg-ink shadow-lift-3"
+            className="relative w-full border-2 border-ink bg-ink p-1.5 shadow-lift-3"
             style={{
-              transform: "rotate(-0.8deg)",
+              transform: "rotate(-0.7deg)",
               // Same concentric corner as the studio: the print's baked radius
-              // plus the mount's 14px inset (2px border + 12px padding).
-              borderRadius: `calc(${printEdge * 100}cqw + ${14 - printEdge * 28}px)`,
+              // plus the mount's 8px inset (2px border + 6px padding).
+              borderRadius: `calc(${printEdge * 100}cqw + ${8 - printEdge * 16}px)`,
             }}
           >
-            <div className="p-3">
-              <div
-                className="relative w-full max-h-[70vh] overflow-hidden"
-                style={{
-                  aspectRatio: `${layout.canvas.w}/${layout.canvas.h}`,
-                  // Clips older, square-cornered prints to the same silhouette
-                  // the studio now bakes in.
-                  borderRadius: `calc(${printEdge * 100}cqw + ${-printEdge * 28}px)`,
-                }}
-              >
-                <Image
-                  src={session.finalPhotoUrl}
-                  alt="Strip foto hasil"
-                  fill
-                  sizes="(min-width: 1024px) 45vw, 90vw"
-                  priority
-                  className="object-cover"
-                />
-                {session.liveClips && session.liveClips.length > 0 && (
-                  <LivePhotoOverlay canvas={layout.canvas} slots={layout.slots} clips={session.liveClips} />
-                )}
-              </div>
+            <div
+              className="relative w-full overflow-hidden"
+              style={{
+                aspectRatio: `${layout.canvas.w}/${layout.canvas.h}`,
+                // Clips older, square-cornered prints to the same silhouette
+                // the studio now bakes in.
+                borderRadius: `calc(${printEdge * 100}cqw - ${printEdge * 16}px)`,
+              }}
+            >
+              <Image
+                src={session.finalPhotoUrl}
+                alt="Strip foto hasil"
+                fill
+                sizes="(min-width: 1024px) 45vw, 90vw"
+                priority
+                className="object-cover"
+              />
+              {session.liveClips && session.liveClips.length > 0 && (
+                <LivePhotoOverlay canvas={layout.canvas} slots={layout.slots} clips={session.liveClips} />
+              )}
             </div>
           </div>
         </div>
@@ -226,10 +229,12 @@ function Shell({
   title,
   children,
   back,
+  layoutLabel,
 }: {
   title: string;
   children: React.ReactNode;
   back?: { href: string; label: string; ariaLabel?: string };
+  layoutLabel?: string;
 }) {
   return (
     <div className="flex flex-1 flex-col">
@@ -242,16 +247,27 @@ function Shell({
           >
             <Logo className="h-12 w-auto" />
           </Link>
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <BackLink
               href={back?.href ?? "/"}
               label={back?.label ?? "Beranda"}
               ariaLabel={back?.ariaLabel}
             />
-            <span className="inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
+            <span className="hidden items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-butter px-4 py-1.5 font-display text-label font-extrabold tracking-[0.12em] text-ink uppercase sm:inline-flex">
               <IconQrcode size={16} stroke={2.5} aria-hidden="true" />
               Hasil
             </span>
+            {layoutLabel && (
+              <span className="inline-flex min-w-0 items-center gap-2 truncate rounded-[var(--radius-pill)] border-2 border-ink bg-mint px-4 py-1.5 font-display text-label font-bold tracking-[0.12em] text-ink uppercase">
+                <IconLayoutGrid
+                  size={16}
+                  stroke={2.5}
+                  aria-hidden="true"
+                  className="shrink-0"
+                />
+                <span className="truncate">{layoutLabel}</span>
+              </span>
+            )}
           </div>
         </div>
       </header>
