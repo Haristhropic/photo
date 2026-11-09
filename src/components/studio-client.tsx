@@ -3,16 +3,15 @@
 import {
   IconArrowBackUp,
   IconArrowLeft,
+  IconArrowsDiagonal2,
   IconCamera,
   IconCheck,
   IconFrame,
   IconLayoutGrid,
-  IconMinus,
   IconPalette,
   IconPhoto,
-  IconPlus,
+  IconRestore,
   IconRotate,
-  IconRotateClockwise,
   IconSticker,
   IconTrash,
   IconWand,
@@ -164,37 +163,6 @@ function StickerOption({
   );
 }
 
-function StickerToolButton({
-  label,
-  icon,
-  onClick,
-  danger = false,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  onClick: () => void;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className={`grid size-8 shrink-0 place-items-center rounded-full border-2 border-ink shadow-lift-1 ${
-        danger
-          ? "bg-pink text-ink hover:bg-[var(--mix-coral)]"
-          : "bg-elev text-ink hover:bg-butter"
-      }`}
-      // The global button rule sets a 44px tap target, which would break a
-      // floating bar this small; the bar itself provides the spacing.
-      style={{ minHeight: 0, minWidth: 0 }}
-    >
-      {icon}
-    </button>
-  );
-}
-
 function FrameOption({
   frame,
   selected,
@@ -317,6 +285,12 @@ function clampScale(scale: number): number {
   return Math.min(STICKER_SCALE_MAX, Math.max(STICKER_SCALE_MIN, scale));
 }
 
+/** Keep the stored angle readable: a guest can spin past a full turn, but the
+ *  saved spot only needs the equivalent -180..180 angle. */
+function normalizeDegrees(value: number): number {
+  return ((((value + 180) % 360) + 360) % 360) - 180;
+}
+
 export function StudioClient() {
   const router = useRouter();
   const hydrated = useSyncExternalStore(
@@ -336,17 +310,39 @@ export function StudioClient() {
   const [stickerSpot, setStickerSpot] = useState<StickerSpot | null>(null);
   const [stickerSelected, setStickerSelected] = useState(false);
   const [draggingSticker, setDraggingSticker] = useState(false);
-  const [previewSize, setPreviewSize] = useState({ w: 0, h: 0 });
-  const [toolbarSize, setToolbarSize] = useState({ w: 190, h: 44 });
   const stickerCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stickerToolbarRef = useRef<HTMLDivElement | null>(null);
+  const stickerLayerRef = useRef<HTMLDivElement | null>(null);
   const previewBoxRef = useRef<HTMLDivElement | null>(null);
-  const stickerDragRef = useRef<{
+  // Every pointer currently held on the sticker. One pointer means a drag; a
+  // second one turns the gesture into a pinch that scales and rotates at once.
+  const stickerPointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const stickerMoveRef = useRef<{
     pointerId: number;
     startX: number;
     startY: number;
     startSpot: StickerSpot;
   } | null>(null);
+  const stickerPinchRef = useRef<{
+    startSpot: StickerSpot;
+    startDistance: number;
+    startAngle: number;
+    startMidX: number;
+    startMidY: number;
+  } | null>(null);
+  // A drag on one of the corner handles. The maths runs from the sticker's
+  // centre in screen space, which cancels the card's own tilt.
+  const stickerHandleRef = useRef<{
+    mode: "rotate" | "scale";
+    pointerId: number;
+    centerX: number;
+    centerY: number;
+    startAngle: number;
+    startDistance: number;
+    startSpot: StickerSpot;
+  } | null>(null);
+  // Assigned after each render so the native wheel listener can read the
+  // latest spot without being re-bound mid-gesture.
+  const scaleStickerRef = useRef<(factor: number) => void>(() => {});
   const [frameKey, setFrameKey] = useState<FrameKey | null>(null);
   const [frameCategory, setFrameCategory] = useState<FrameCategory | "all">(
     "all",
@@ -539,28 +535,31 @@ export function StudioClient() {
     };
   }, [stickerPreset, hasPreview]);
 
-  // Keep the floating tools inside the print. The wrapper's rendered size
-  // changes with the viewport, so observe it instead of measuring once.
+  // A mouse wheel over the sticker scales it in place. React attaches wheel
+  // listeners passively, so this one is native to be able to stop the page
+  // from scrolling under the pointer.
   useEffect(() => {
-    const box = previewBoxRef.current;
-    if (!box) return;
-    const observer = new ResizeObserver(() => {
-      setPreviewSize({ w: box.offsetWidth, h: box.offsetHeight });
-    });
-    observer.observe(box);
-    return () => observer.disconnect();
-  }, [hasPreview]);
+    const layer = stickerLayerRef.current;
+    if (!layer) return;
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY === 0) return;
+      event.preventDefault();
+      scaleStickerRef.current(Math.exp(-event.deltaY * 0.0012));
+    };
+    layer.addEventListener("wheel", onWheel, { passive: false });
+    return () => layer.removeEventListener("wheel", onWheel);
+  }, [sticker, hasPreview]);
 
-  // Same for the bar itself: its real width drives the horizontal clamp.
+  // The wheel listener is bound per sticker layer, so it reads the scale action
+  // through a ref. Updating that ref after every render keeps the wheel working
+  // from the spot currently on screen without re-binding during the gesture.
   useEffect(() => {
-    const toolbar = stickerToolbarRef.current;
-    if (!toolbar) return;
-    const observer = new ResizeObserver(() => {
-      setToolbarSize({ w: toolbar.offsetWidth, h: toolbar.offsetHeight });
-    });
-    observer.observe(toolbar);
-    return () => observer.disconnect();
-  }, [hasPreview, stickerSelected, sticker]);
+    scaleStickerRef.current = (factor: number) => {
+      const base = activeStickerSpot();
+      if (!base) return;
+      setStickerSpot({ ...base, scale: clampScale(base.scale * factor) });
+    };
+  });
 
   // Tapping anywhere that is not the sticker or its tools dismisses them, the
   // same way a photo editor closes a selection.
@@ -731,35 +730,27 @@ export function StudioClient() {
     };
   }
 
-  function startStickerDrag(event: React.PointerEvent<HTMLButtonElement>) {
-    if (event.button !== 0) return;
-    const startSpot = currentStickerSpot();
-    if (!startSpot) return;
-    event.preventDefault();
-    // Pointerdown's default action is focus; keep it available for keyboard
-    // nudging even though the event is cancelled to stop text selection.
-    event.currentTarget.focus({ preventScroll: true });
-    setStickerSelected(true);
-    if (!stickerSpot) setStickerSpot(startSpot);
-    stickerDragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      startSpot,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setDraggingSticker(true);
+  /** The spot a gesture should start from, seeding the state on first contact
+   *  so the sticker does not jump away from its default corner. */
+  function activeStickerSpot(): StickerSpot | null {
+    const base = currentStickerSpot();
+    if (!base) return null;
+    if (!stickerSpot) setStickerSpot(base);
+    return base;
   }
 
-  function moveSticker(event: React.PointerEvent<HTMLButtonElement>) {
-    const drag = stickerDragRef.current;
+  function moveStickerByPointer(
+    clientX: number,
+    clientY: number,
+    start: { startX: number; startY: number; startSpot: StickerSpot },
+  ) {
     const box = previewBoxRef.current;
-    if (!drag || !box || drag.pointerId !== event.pointerId) return;
+    if (!box) return;
     const displayScale = box.offsetWidth / layout.canvas.w;
     if (displayScale <= 0) return;
 
-    const dx = event.clientX - drag.startX;
-    const dy = event.clientY - drag.startY;
+    const dx = clientX - start.startX;
+    const dy = clientY - start.startY;
     // The card is tilted, so undo that rotation before treating the pointer
     // move as a move on the paper. Without this the sticker slides against the
     // drag direction by about a degree.
@@ -769,20 +760,214 @@ export function StudioClient() {
     const localY = -dx * sin + dy * cos;
 
     setStickerSpot({
-      ...drag.startSpot,
-      x: drag.startSpot.x + localX / displayScale / layout.canvas.w,
-      y: drag.startSpot.y + localY / displayScale / layout.canvas.h,
+      ...start.startSpot,
+      x: start.startSpot.x + localX / displayScale / layout.canvas.w,
+      y: start.startSpot.y + localY / displayScale / layout.canvas.h,
     });
   }
 
-  function endStickerDrag(event: React.PointerEvent<HTMLButtonElement>) {
-    const drag = stickerDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    stickerDragRef.current = null;
-    setDraggingSticker(false);
+  function startStickerPointer(event: React.PointerEvent<HTMLButtonElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const base = activeStickerSpot();
+    if (!base) return;
+    event.preventDefault();
+    // Pointerdown's default action is focus; keep it available for keyboard
+    // nudging even though the event is cancelled to stop text selection.
+    event.currentTarget.focus({ preventScroll: true });
+    setStickerSelected(true);
+    setDraggingSticker(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    stickerPointersRef.current.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+
+    if (stickerPointersRef.current.size === 1) {
+      stickerMoveRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        startSpot: base,
+      };
+      stickerPinchRef.current = null;
+      return;
+    }
+
+    if (stickerPointersRef.current.size === 2) {
+      const [first, second] = [...stickerPointersRef.current.values()];
+      const distance = Math.hypot(second.x - first.x, second.y - first.y);
+      stickerPinchRef.current = {
+        startSpot: base,
+        startDistance: Math.max(distance, 1),
+        startAngle:
+          Math.atan2(second.y - first.y, second.x - first.x) *
+          (180 / Math.PI),
+        startMidX: (first.x + second.x) / 2,
+        startMidY: (first.y + second.y) / 2,
+      };
+      stickerMoveRef.current = null;
+    }
+  }
+
+  function moveStickerPointer(event: React.PointerEvent<HTMLButtonElement>) {
+    if (!stickerPointersRef.current.has(event.pointerId)) return;
+    stickerPointersRef.current.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+
+    const pinch = stickerPinchRef.current;
+    const box = previewBoxRef.current;
+    if (pinch && stickerPointersRef.current.size >= 2 && box) {
+      const [first, second] = [...stickerPointersRef.current.values()];
+      const distance = Math.hypot(second.x - first.x, second.y - first.y);
+      const angle =
+        Math.atan2(second.y - first.y, second.x - first.x) * (180 / Math.PI);
+      const midX = (first.x + second.x) / 2;
+      const midY = (first.y + second.y) / 2;
+      const displayScale = box.offsetWidth / layout.canvas.w;
+      if (displayScale <= 0) return;
+
+      const dx = midX - pinch.startMidX;
+      const dy = midY - pinch.startMidY;
+      const cos = Math.cos(TILT_RADIANS);
+      const sin = Math.sin(TILT_RADIANS);
+
+      setStickerSpot({
+        ...pinch.startSpot,
+        x:
+          pinch.startSpot.x +
+          (dx * cos + dy * sin) / displayScale / layout.canvas.w,
+        y:
+          pinch.startSpot.y +
+          (-dx * sin + dy * cos) / displayScale / layout.canvas.h,
+        // Screen y grows downward, so a clockwise finger turn is a positive
+        // angle here - the same sign CSS `rotate()` uses.
+        rotation: normalizeDegrees(
+          pinch.startSpot.rotation + (angle - pinch.startAngle),
+        ),
+        scale: clampScale(
+          pinch.startSpot.scale * (distance / pinch.startDistance),
+        ),
+      });
+      return;
+    }
+
+    const move = stickerMoveRef.current;
+    if (!move || move.pointerId !== event.pointerId) return;
+    moveStickerByPointer(event.clientX, event.clientY, move);
+  }
+
+  function endStickerPointer(event: React.PointerEvent<HTMLButtonElement>) {
+    stickerPointersRef.current.delete(event.pointerId);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+
+    if (stickerPointersRef.current.size === 1) {
+      // Lifting one of two fingers should not drop the sticker: the finger
+      // still down takes over as a plain drag from where it is now.
+      const [pointerId, point] = [...stickerPointersRef.current.entries()][0];
+      const base = currentStickerSpot();
+      stickerPinchRef.current = null;
+      stickerMoveRef.current = base
+        ? {
+            pointerId,
+            startX: point.x,
+            startY: point.y,
+            startSpot: base,
+          }
+        : null;
+      return;
+    }
+
+    if (stickerPointersRef.current.size === 0) {
+      stickerMoveRef.current = null;
+      stickerPinchRef.current = null;
+      setDraggingSticker(false);
+    }
+  }
+
+  function startStickerHandle(
+    mode: "rotate" | "scale",
+    event: React.PointerEvent<HTMLSpanElement>,
+  ) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const base = activeStickerSpot();
+    const layer = stickerLayerRef.current;
+    if (!base || !layer) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const rect = layer.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    stickerHandleRef.current = {
+      mode,
+      pointerId: event.pointerId,
+      centerX,
+      centerY,
+      startAngle:
+        Math.atan2(event.clientY - centerY, event.clientX - centerX) *
+        (180 / Math.PI),
+      startDistance: Math.max(
+        Math.hypot(event.clientX - centerX, event.clientY - centerY),
+        1,
+      ),
+      startSpot: base,
+    };
+    setStickerSelected(true);
+    setDraggingSticker(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveStickerHandle(event: React.PointerEvent<HTMLSpanElement>) {
+    const handle = stickerHandleRef.current;
+    if (!handle || handle.pointerId !== event.pointerId) return;
+
+    if (handle.mode === "rotate") {
+      const angle =
+        Math.atan2(
+          event.clientY - handle.centerY,
+          event.clientX - handle.centerX,
+        ) *
+        (180 / Math.PI);
+      let rotation = handle.startSpot.rotation + (angle - handle.startAngle);
+      // Shift gives the deliberate print angles without taking free rotation
+      // away from the normal drag. Snap the angle the guest actually sees,
+      // which includes the preset's own tilt, not just the relative offset.
+      if (event.shiftKey) {
+        const presetAngle = stickerPreset?.rotation ?? 0;
+        rotation =
+          Math.round((presetAngle + rotation) / 15) * 15 - presetAngle;
+      }
+      setStickerSpot({
+        ...handle.startSpot,
+        rotation: normalizeDegrees(rotation),
+      });
+      return;
+    }
+
+    const distance = Math.hypot(
+      event.clientX - handle.centerX,
+      event.clientY - handle.centerY,
+    );
+    setStickerSpot({
+      ...handle.startSpot,
+      scale: clampScale(
+        handle.startSpot.scale * (distance / handle.startDistance),
+      ),
+    });
+  }
+
+  function endStickerHandle(event: React.PointerEvent<HTMLSpanElement>) {
+    const handle = stickerHandleRef.current;
+    if (!handle || handle.pointerId !== event.pointerId) return;
+    stickerHandleRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setDraggingSticker(false);
   }
 
   function nudgeSticker(event: React.KeyboardEvent<HTMLButtonElement>) {
@@ -793,7 +978,29 @@ export function StudioClient() {
       return;
     }
     const base = currentStickerSpot();
-    if (!base || !stickerGeo) return;
+    if (!base) return;
+
+    // Shift turns the horizontal arrows into rotation; +/- stays a size
+    // change, so the whole transform is reachable without a pointer.
+    if (
+      event.shiftKey &&
+      (event.key === "ArrowLeft" || event.key === "ArrowRight")
+    ) {
+      event.preventDefault();
+      rotateSticker(event.key === "ArrowLeft" ? -5 : 5);
+      return;
+    }
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      resizeSticker(1.06);
+      return;
+    }
+    if (event.key === "-" || event.key === "_") {
+      event.preventDefault();
+      resizeSticker(1 / 1.06);
+      return;
+    }
+
     const directions: Record<string, [number, number]> = {
       ArrowLeft: [-1, 0],
       ArrowRight: [1, 0],
@@ -812,15 +1019,40 @@ export function StudioClient() {
   }
 
   function resizeSticker(factor: number) {
-    const base = currentStickerSpot();
+    const base = activeStickerSpot();
     if (!base) return;
     setStickerSpot({ ...base, scale: clampScale(base.scale * factor) });
   }
 
   function rotateSticker(degrees: number) {
-    const base = currentStickerSpot();
+    const base = activeStickerSpot();
     if (!base) return;
-    setStickerSpot({ ...base, rotation: base.rotation + degrees });
+    setStickerSpot({
+      ...base,
+      rotation: normalizeDegrees(base.rotation + degrees),
+    });
+  }
+
+  function resetSticker() {
+    setStickerSpot(null);
+    setStickerSelected(true);
+  }
+
+  // The sliders work in the guest's terms (a percentage and a total angle), so
+  // they convert to the spot's relative rotation before saving.
+  function setStickerScaleValue(percent: number) {
+    const base = activeStickerSpot();
+    if (!base) return;
+    setStickerSpot({ ...base, scale: clampScale(percent / 100) });
+  }
+
+  function setStickerRotationValue(degrees: number) {
+    const base = activeStickerSpot();
+    if (!base || !stickerPreset) return;
+    setStickerSpot({
+      ...base,
+      rotation: normalizeDegrees(degrees - stickerPreset.rotation),
+    });
   }
 
   function chooseSticker(key: StickerKey | null) {
@@ -832,44 +1064,6 @@ export function StudioClient() {
     setSticker(null);
     setStickerSelected(false);
   }
-
-  // Where the floating tools sit: above the sticker when there is room, below
-  // it near the top edge, always clamped inside the print so a corner sticker
-  // cannot push the bar off the card.
-  const stickerToolbar =
-    stickerSelected && stickerPreset && stickerGeo
-      ? (() => {
-          const scale = previewSize.w > 0 ? previewSize.w / layout.canvas.w : 0;
-          const cx =
-            previewSize.w > 0
-              ? (stickerGeo.cx / layout.canvas.w) * previewSize.w
-              : previewSize.w / 2;
-          const cy =
-            previewSize.h > 0
-              ? (stickerGeo.cy / layout.canvas.h) * previewSize.h
-              : previewSize.h / 2;
-          const halfH = stickerGeo.extentY * stickerGeo.scale * scale;
-          const margin = 6;
-          const gap = 8;
-          const minLeft = toolbarSize.w / 2 + margin;
-          const left = Math.min(
-            Math.max(cx, minLeft),
-            Math.max(minLeft, previewSize.w - minLeft),
-          );
-          const above = cy - halfH - gap - toolbarSize.h;
-          const below = cy + halfH + gap;
-          const top =
-            above >= margin
-              ? above
-              : below + toolbarSize.h <= previewSize.h - margin
-                ? below
-                : Math.min(
-                    Math.max(above, margin),
-                    Math.max(margin, previewSize.h - toolbarSize.h - margin),
-                  );
-          return { left, top };
-        })()
-      : null;
 
   function requestBack() {
     if (draft && draft.shots.length > 0) {
@@ -986,99 +1180,85 @@ export function StudioClient() {
                     className="absolute inset-0 block h-full w-full object-contain"
                   />
                   {stickerPreset && stickerGeo && (
-                    <button
-                      type="button"
-                      aria-label={`Stiker ${stickerPreset.name}. Geser untuk memindahkan, atau pakai tombol panah.`}
-                      title="Geser untuk memindahkan"
+                    <div
+                      ref={stickerLayerRef}
                       data-sticker-ui="true"
-                      onPointerDown={startStickerDrag}
-                      onPointerMove={moveSticker}
-                      onPointerUp={endStickerDrag}
-                      onPointerCancel={endStickerDrag}
-                      onKeyDown={nudgeSticker}
-                      onFocus={() => setStickerSelected(true)}
-                      className={`absolute grid touch-none place-items-center rounded-[10px] bg-transparent p-0 ${
-                        draggingSticker
-                          ? "cursor-grabbing outline-2 outline-offset-2 outline-dashed outline-ink/70"
-                          : "cursor-grab hover:outline-2 hover:outline-offset-2 hover:outline-dashed hover:outline-ink/40"
-                      }`}
+                      className="absolute z-10"
                       style={{
                         left: `${(stickerGeo.cx / layout.canvas.w) * 100}%`,
                         top: `${(stickerGeo.cy / layout.canvas.h) * 100}%`,
                         width: `${((STICKER_ART.w * stickerGeo.scale) / layout.canvas.w) * 100}%`,
                         aspectRatio: `${STICKER_ART.w} / ${STICKER_ART.h}`,
                         transform: `translate(-50%, -50%) rotate(${stickerGeo.rotation}deg)`,
-                        minHeight: 0,
-                        minWidth: 0,
                       }}
                     >
-                      <canvas
-                        ref={stickerCanvasRef}
-                        width={STICKER_ART.w * 2}
-                        height={STICKER_ART.h * 2}
-                        aria-hidden="true"
-                        className="pointer-events-none block h-full w-full"
-                      />
-                    </button>
-                  )}
-                  {stickerToolbar && stickerPreset && (
-                    <div
-                      ref={stickerToolbarRef}
-                      data-sticker-ui="true"
-                      role="toolbar"
-                      aria-label={`Atur stiker ${stickerPreset.name}`}
-                      className="absolute z-20 flex items-center gap-1 rounded-[var(--radius-pill)] border-2 border-ink bg-elev p-1 shadow-lift-2"
-                      style={{
-                        left: stickerToolbar.left,
-                        top: stickerToolbar.top,
-                        transform: "translateX(-50%)",
-                        visibility: previewSize.w > 0 ? "visible" : "hidden",
-                      }}
-                    >
-                      <StickerToolButton
-                        label="Perkecil"
-                        onClick={() => resizeSticker(0.9)}
-                        icon={
-                          <IconMinus size={16} stroke={3} aria-hidden="true" />
-                        }
-                      />
-                      <StickerToolButton
-                        label="Perbesar"
-                        onClick={() => resizeSticker(1.1)}
-                        icon={
-                          <IconPlus size={16} stroke={3} aria-hidden="true" />
-                        }
-                      />
-                      <StickerToolButton
-                        label="Putar kiri"
-                        onClick={() => rotateSticker(-15)}
-                        icon={
-                          <IconRotate size={16} stroke={2.5} aria-hidden="true" />
-                        }
-                      />
-                      <StickerToolButton
-                        label="Putar kanan"
-                        onClick={() => rotateSticker(15)}
-                        icon={
-                          <IconRotateClockwise
-                            size={16}
-                            stroke={2.5}
+                      <button
+                        type="button"
+                        aria-label={`Stiker ${stickerPreset.name}. Geser untuk memindahkan, cubit dengan dua jari untuk mengubah ukuran dan memutar, atau pakai tombol panah.`}
+                        title="Geser untuk memindahkan · cubit untuk mengubah ukuran dan memutar"
+                        onPointerDown={startStickerPointer}
+                        onPointerMove={moveStickerPointer}
+                        onPointerUp={endStickerPointer}
+                        onPointerCancel={endStickerPointer}
+                        onKeyDown={nudgeSticker}
+                        onFocus={() => setStickerSelected(true)}
+                        className={`absolute inset-0 touch-none rounded-[10px] bg-transparent p-0 ${
+                          draggingSticker
+                            ? "cursor-grabbing outline-2 outline-offset-2 outline-dashed outline-ink/70"
+                            : stickerSelected
+                              ? "cursor-grab outline-2 outline-offset-2 outline-dashed outline-ink/60 hover:outline-ink/80"
+                              : "cursor-grab outline-2 outline-offset-2 outline-dashed outline-ink/25 hover:outline-ink/60"
+                        }`}
+                        style={{ minHeight: 0, minWidth: 0 }}
+                      >
+                        <canvas
+                          ref={stickerCanvasRef}
+                          width={STICKER_ART.w * 2}
+                          height={STICKER_ART.h * 2}
+                          aria-hidden="true"
+                          className="pointer-events-none block h-full w-full"
+                        />
+                      </button>
+                      {stickerSelected && (
+                        <>
+                          <span
+                            role="presentation"
                             aria-hidden="true"
-                          />
-                        }
-                      />
-                      <span
-                        aria-hidden="true"
-                        className="mx-0.5 h-6 w-0.5 shrink-0 rounded-full bg-ink/20"
-                      />
-                      <StickerToolButton
-                        label="Hapus stiker"
-                        danger
-                        onClick={removeSticker}
-                        icon={
-                          <IconTrash size={16} stroke={2.5} aria-hidden="true" />
-                        }
-                      />
+                            title="Putar stiker · tahan Shift untuk sudut 15°"
+                            onPointerDown={(event) =>
+                              startStickerHandle("rotate", event)
+                            }
+                            onPointerMove={moveStickerHandle}
+                            onPointerUp={endStickerHandle}
+                            onPointerCancel={endStickerHandle}
+                            className="absolute -top-10 left-1/2 grid size-9 -translate-x-1/2 touch-none place-items-center rounded-full border-2 border-ink bg-butter text-ink shadow-lift-1 hover:bg-[var(--mix-coral)]"
+                          >
+                            <IconRotate
+                              size={16}
+                              stroke={2.6}
+                              aria-hidden="true"
+                            />
+                          </span>
+                          <span
+                            role="presentation"
+                            aria-hidden="true"
+                            title="Ubah ukuran stiker"
+                            onPointerDown={(event) =>
+                              startStickerHandle("scale", event)
+                            }
+                            onPointerMove={moveStickerHandle}
+                            onPointerUp={endStickerHandle}
+                            onPointerCancel={endStickerHandle}
+                            className="absolute -right-4 -bottom-4 grid size-9 touch-none place-items-center rounded-full border-2 border-ink bg-mint text-ink shadow-lift-1 hover:bg-sky"
+                          >
+                            <IconArrowsDiagonal2
+                              size={16}
+                              stroke={2.6}
+                              aria-hidden="true"
+                            />
+                          </span>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1138,8 +1318,9 @@ export function StudioClient() {
                 </span>
               </legend>
               <p className="mt-2 text-small text-ink-body">
-                Geser stiker di pratinjau. Ketuk stiker untuk membuka tombol
-                hapus, putar, dan ukuran.
+                Geser stiker di pratinjau untuk memindahkan. Cubit dengan dua
+                jari, putar kenop, atau tarik sudut untuk mengubah ukuran dan
+                sudut. Slider di bawah menyetel dengan tepat.
               </p>
               <div className="mt-3 grid grid-cols-3 gap-2.5 max-sm:[&>button:last-child]:col-start-2 sm:grid-cols-4">
                 <StickerOption
@@ -1156,6 +1337,94 @@ export function StudioClient() {
                   />
                 ))}
               </div>
+              {sticker && (
+                <div
+                  role="group"
+                  aria-label={`Atur stiker ${STICKERS[sticker].name}`}
+                  data-sticker-ui="true"
+                  className="mt-4 grid gap-3 rounded-[var(--radius-lg)] border-2 border-ink bg-sunken p-4 shadow-lift-1"
+                >
+                  <div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <label
+                        htmlFor="sticker-scale"
+                        className="font-display text-label font-extrabold tracking-[0.1em] text-ink uppercase"
+                      >
+                        Ukuran
+                      </label>
+                      <span className="font-display text-small font-bold tabular-nums text-ink">
+                        {Math.round((stickerSpot?.scale ?? 1) * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      id="sticker-scale"
+                      type="range"
+                      min={STICKER_SCALE_MIN * 100}
+                      max={STICKER_SCALE_MAX * 100}
+                      step={1}
+                      value={Math.round((stickerSpot?.scale ?? 1) * 100)}
+                      onChange={(event) =>
+                        setStickerScaleValue(Number(event.target.value))
+                      }
+                      className="mt-1 block w-full accent-[var(--pink)]"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <label
+                        htmlFor="sticker-rotation"
+                        className="font-display text-label font-extrabold tracking-[0.1em] text-ink uppercase"
+                      >
+                        Putaran
+                      </label>
+                      <span className="font-display text-small font-bold tabular-nums text-ink">
+                        {Math.round(
+                          normalizeDegrees(
+                            (stickerPreset?.rotation ?? 0) +
+                              (stickerSpot?.rotation ?? 0),
+                          ),
+                        )}
+                        °
+                      </span>
+                    </div>
+                    <input
+                      id="sticker-rotation"
+                      type="range"
+                      min={-180}
+                      max={180}
+                      step={1}
+                      value={Math.round(
+                        normalizeDegrees(
+                          (stickerPreset?.rotation ?? 0) +
+                            (stickerSpot?.rotation ?? 0),
+                        ),
+                      )}
+                      onChange={(event) =>
+                        setStickerRotationValue(Number(event.target.value))
+                      }
+                      className="mt-1 block w-full accent-[var(--pink)]"
+                    />
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={resetSticker}
+                      className="pressable inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-4 py-2 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-butter"
+                    >
+                      <IconRestore size={16} stroke={2.5} aria-hidden="true" />
+                      Atur ulang
+                    </button>
+                    <button
+                      type="button"
+                      onClick={removeSticker}
+                      className="pressable inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-pink px-4 py-2 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-[var(--mix-coral)]"
+                    >
+                      <IconTrash size={16} stroke={2.5} aria-hidden="true" />
+                      Hapus stiker
+                    </button>
+                  </div>
+                </div>
+              )}
             </fieldset>
 
             <fieldset>

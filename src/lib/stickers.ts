@@ -29,9 +29,11 @@ const HALF_H = 123;
 /** The sticker's own artwork box, in its local units. */
 export const STICKER_ART = { w: HALF_W * 2, h: HALF_H * 2 };
 
-/** How far a guest can shrink or grow a sticker from its layout size. */
-export const STICKER_SCALE_MIN = 0.55;
-export const STICKER_SCALE_MAX = 1.8;
+/** How far a guest can shrink or grow a sticker from its layout size. The
+ *  upper end still keeps the widest sticker inside the print once its rotated
+ *  bounds are clamped by `stickerGeometry`. */
+export const STICKER_SCALE_MIN = 0.35;
+export const STICKER_SCALE_MAX = 2.4;
 
 /**
  * Where a guest put the sticker, as a fraction of the strip's canvas so the
