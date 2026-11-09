@@ -66,7 +66,7 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
   }
 
   const expired = Boolean(session.isExpired);
-  const shareUrl = absoluteUrl(`/p/${accessKey}`);
+  const shareUrl = await absoluteUrl(`/p/${accessKey}`);
   const layout = LAYOUTS[session.layoutType];
 
   if (expired) {

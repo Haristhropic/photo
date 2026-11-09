@@ -113,7 +113,7 @@ sudah ikut di-commit.
 | `DATABASE_URL` | Connection string Neon, mis. `postgresql://USER:PASS@ep-x-pooler.region.aws.neon.tech/neondb?sslmode=require` |
 | `STORAGE_DIR` | Folder penyimpanan lokal untuk pengembangan, default `./storage`. Di Vercel folder ini sementara |
 | `BLOB_READ_WRITE_TOKEN` | Token Vercel Blob untuk penyimpanan foto yang persisten. Wajib di Vercel, opsional di lokal. Vercel mengisinya otomatis saat Blob store dihubungkan |
-| `NEXT_PUBLIC_BASE_URL` | URL dasar untuk QR dan tautan berbagi |
+| `NEXT_PUBLIC_BASE_URL` | Cadangan URL dasar untuk QR dan tautan berbagi. Normalnya dipakai origin dari request, jadi opsional |
 | `SESSION_SECRET` | Kunci HMAC untuk cookie sesi admin |
 | `CRON_SECRET` | Bearer token untuk `/api/cron/cleanup`; wajib di produksi |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Kredensial admin untuk `db:seed` |
@@ -128,8 +128,8 @@ terisi.
 
 Checklist minimum sebelum produksi:
 
-1. Isi `DATABASE_URL`, `SESSION_SECRET`, `CRON_SECRET`, `NEXT_PUBLIC_BASE_URL`
-   (origin HTTPS publik), dan kredensial Cloudinary.
+1. Isi `DATABASE_URL`, `SESSION_SECRET`, `CRON_SECRET`, dan kredensial
+   Cloudinary.
 2. Di database baru, jalankan `npm run db:migrate`, lalu `npm run db:seed`
    sekali. Ganti `ADMIN_EMAIL`/`ADMIN_PASSWORD` sebelum seed; kredensial contoh
    hanya untuk lokal.
@@ -144,8 +144,9 @@ Checklist minimum sebelum produksi:
 6. Kamera hanya aktif di HTTPS atau `localhost`.
 
 Untuk Vercel: import repo GitHub, set environment variables di atas, hubungkan
-Blob store, lalu deploy branch `main`. `NEXT_PUBLIC_BASE_URL` harus diisi domain
-produksi (mis. `https://photo.vercel.app`) agar QR dan tautan berbagi stabil.
+Blob store, lalu deploy branch `main`. QR dan tautan berbagi mengikuti domain
+yang sedang dibuka tamu, jadi tetap benar di domain produksi, preview, maupun
+IP LAN saat pengembangan. `NEXT_PUBLIC_BASE_URL` hanya cadangan.
 
 Verifikasi rilis: `npm run typecheck`, `npm run lint`, `npm run build`,
 `npm run e2e`, lalu `node scripts/responsive-check.mjs` saat server produksi
