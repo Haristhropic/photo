@@ -40,6 +40,12 @@ export type Draft = {
   live?: { runId: string; slots: { slot: number; mime: string; durationMs: number }[] };
 };
 
+/** One sticker as the renderer needs it: which artwork and where it sits. */
+export type StickerStamp = {
+  key: StickerKey;
+  spot?: StickerSpot | null;
+};
+
 // The studio re-renders on every filter, sticker and frame change. Without a
 // cache each click decoded the same camera shots again, so the preview blinked
 // through a blank frame while the photos loaded. The largest layout has four
@@ -158,17 +164,15 @@ export async function renderStrip(options: {
   shots: string[];
   layoutType: LayoutType;
   filterKey: FilterKey;
-  sticker: StickerKey | null;
-  /** Guest-dragged sticker position; null keeps the default corner spot. */
-  stickerSpot?: StickerSpot | null;
+  /** Stickers are optional here; the studio draws them as DOM layers. */
+  stickers?: StickerStamp[];
   frame: FramePreset | null;
   eventLabel: string | null;
   transforms?: ShotTransform[];
   /** Which flow produced the shots. Camera shots get the safe fit crop. */
   source?: "camera" | "upload";
 }): Promise<string> {
-  const { shots, layoutType, filterKey, sticker, eventLabel, transforms } =
-    options;
+  const { shots, layoutType, filterKey, eventLabel, transforms } = options;
   const layout = LAYOUTS[layoutType];
   const { w: width, h: height } = layout.canvas;
 
@@ -245,11 +249,14 @@ export async function renderStrip(options: {
     frame.draw(ctx, layout);
   }
 
-  if (sticker) {
-    drawSticker(ctx, STICKERS[sticker], layout, {
-      ...stickerAnchors(frame, layout),
-      spot: options.stickerSpot,
-    });
+  if (options.stickers?.length) {
+    const anchors = stickerAnchors(frame, layout);
+    for (const stamp of options.stickers) {
+      drawSticker(ctx, STICKERS[stamp.key], layout, {
+        ...anchors,
+        spot: stamp.spot,
+      });
+    }
   }
 
   if (eventLabel) {
@@ -274,19 +281,18 @@ export async function renderStrip(options: {
 }
 
 /**
- * Stamp a guest-dragged sticker onto an already rendered strip.
+ * Stamp the guest's stickers onto an already rendered strip.
  *
- * The studio keeps the preview free of the sticker so the DOM layer can move
+ * The studio keeps the preview free of stickers so the DOM layers can move
  * without re-rendering four photos on every pointer move. At save time the
- * same geometry is painted onto the cached PNG, which means the overlay the
- * guest positioned is exactly what gets uploaded.
+ * same geometry is painted onto the cached PNG, in the same order, which means
+ * the layers the guest positioned are exactly what gets uploaded.
  */
 export async function addStickerToStrip(options: {
   base: string;
-  sticker: StickerKey;
+  stickers: StickerStamp[];
   layoutType: LayoutType;
   frame: FramePreset | null;
-  spot?: StickerSpot | null;
 }): Promise<string> {
   const layout = LAYOUTS[options.layoutType];
   const image = await loadImage(options.base);
@@ -318,10 +324,13 @@ export async function addStickerToStrip(options: {
       ? requestedFrame
       : null;
 
-  drawSticker(ctx, STICKERS[options.sticker], layout, {
-    ...stickerAnchors(frame, layout),
-    spot: options.spot,
-  });
+  const anchors = stickerAnchors(frame, layout);
+  for (const stamp of options.stickers) {
+    drawSticker(ctx, STICKERS[stamp.key], layout, {
+      ...anchors,
+      spot: stamp.spot,
+    });
+  }
 
   ctx.restore();
   return canvas.toDataURL("image/png");
