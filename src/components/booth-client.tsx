@@ -7,6 +7,7 @@ import {
   IconArrowRight,
   IconCamera,
   IconCheck,
+  IconInfoCircle,
   IconLayoutGrid,
   IconPalette,
   IconPhoto,
@@ -1073,13 +1074,20 @@ export function BoothClient({
                 role="status"
                 className="mt-6 flex max-w-[var(--measure)] flex-col gap-3 rounded-[var(--radius)] border-2 border-ink bg-butter p-4 shadow-lift-1 sm:flex-row sm:items-center sm:justify-between sm:gap-5"
               >
-                <p className="text-small font-semibold text-ink">
-                  {shots.length === 1
-                    ? "Satu foto lebih pas di layout Single, satu bidikan besar."
-                    : `${shots.length} foto lebih pas di layout ${
-                        LAYOUTS[recommendedLayout].label
-                      }, tanpa slot kosong.`}
-                </p>
+                <div>
+                  <p className="inline-flex items-center gap-1.5 font-display text-[11px] font-extrabold tracking-[0.12em] text-ink-body uppercase">
+                    <IconInfoCircle size={14} stroke={2.5} aria-hidden="true" />
+                    Saran opsional
+                  </p>
+                  <p className="mt-1.5 text-small font-semibold text-ink">
+                    {shots.length === 1
+                      ? "Satu foto lebih pas di layout Single, satu bidikan besar."
+                      : `${shots.length} foto lebih pas di layout ${
+                          LAYOUTS[recommendedLayout].label
+                        }, tanpa slot kosong.`}{" "}
+                    Layout yang sekarang tetap bisa dipakai.
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => applyLayout(recommendedLayout)}
