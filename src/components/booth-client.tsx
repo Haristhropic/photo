@@ -83,9 +83,9 @@ const LAYOUTS_BY_CAPACITY = [...LAYOUT_ORDER].sort(
   (a, b) => LAYOUTS[a].shotCount - LAYOUTS[b].shotCount,
 );
 
-/** Pick the smallest layout that can hold `count` photos. Uploads use this so a
- *  two- or three-photo selection gets the matching frame set instead of being
- *  left in the four-slot default, while four files still grow to Strip 4. */
+/** The smallest layout that holds `count` photos exactly - the layout a guest
+ *  with that many photos should be using (1 = Single, 2 = Strip 2, 3 = Strip 3,
+ *  4 = Strip 4). Shrinking is offered as a recommendation, not applied. */
 function layoutForShotCount(count: number): LayoutType {
   const fit = Math.min(Math.max(count, 1), MAX_SHOT_COUNT);
   return (
@@ -94,17 +94,17 @@ function layoutForShotCount(count: number): LayoutType {
   );
 }
 
-/** Pick the upload layout without overriding an explicit four-photo choice.
- *  Two and three photos always use their exact strip so the matching admin
- *  frames are available, while four photos keep a chosen Strip 4 or Grid 2x2. */
+/** Uploads only ever grow the layout. A photo count that already fits keeps the
+ *  frame the guest picked, so adding photos one at a time never drags the
+ *  layout smaller under them; once the count passes the chosen capacity the
+ *  smallest layout that holds every photo takes over. */
 function layoutForUploadCount(
   current: LayoutType,
   count: number,
 ): LayoutType {
   const fit = Math.min(Math.max(count, 1), MAX_SHOT_COUNT);
-  if (fit <= 1) return current;
-  if (fit <= 3) return layoutForShotCount(fit);
-  return LAYOUTS[current].shotCount === 4 ? current : layoutForShotCount(4);
+  if (fit <= LAYOUTS[current].shotCount) return current;
+  return layoutForShotCount(fit);
 }
 
 function resolveBackTarget(from: string | undefined): { href: string; label: string } {
@@ -506,11 +506,10 @@ export function BoothClient({
     const replaceAt = replaceIndexRef.current;
     replaceIndexRef.current = null;
 
-    // Match the layout to the number of photos selected, not just grow when the
-    // current one is full. A two-photo upload therefore opens Strip 2 and sees
-    // its two-photo frames, and three photos move to Strip 3. Four photos keep
-    // an explicitly chosen Strip 4 or Grid 2x2. Single-photo uploads keep the
-    // existing Single shortcut.
+    // Bring the layout up to the number of photos selected when they no longer
+    // fit. A selection that already fits keeps the current frame; the upload
+    // screen then recommends the tighter layout (1 = Single, 2 = Strip 2,
+    // 3 = Strip 3) instead of shrinking the choice silently.
     const nextCount = shots.length + list.length;
     const targetType =
       replaceAt === null
@@ -576,7 +575,7 @@ export function BoothClient({
         setImportNotice(`Cuma ${accepted.length} foto pertama yang dipakai.`);
       } else if (replaceAt === null && finalLayoutType !== layoutType) {
         setImportNotice(
-          `Layout diganti ke ${LAYOUTS[finalLayoutType].label} supaya semua foto muat.`,
+          `Layout naik ke ${LAYOUTS[finalLayoutType].label} supaya semua foto muat.`,
         );
       }
     } finally {
@@ -591,11 +590,8 @@ export function BoothClient({
     const nextShots = shots.filter((_, i) => i !== index);
     setShots(nextShots);
     setTransforms((current) => current.filter((_, i) => i !== index));
-    // Removing a photo should hand back the matching frame set too. Leave a
-    // lone photo in place so the existing Single shortcut can offer its layout.
-    if (nextShots.length >= 2) {
-      setLayoutType(layoutForShotCount(nextShots.length));
-    }
+    // Keep the chosen frame. Removing a photo surfaces the tighter layout as a
+    // recommendation rather than switching under the guest's hands.
     setCropIndex(null);
   }
 
@@ -623,14 +619,19 @@ export function BoothClient({
     setCropIndex(null);
   }
 
-  function useSingleLayout() {
+  /** Apply a layout the upload screen recommended. A recommendation is only
+   *  offered when the photos already fit the tighter frame, so the trim below
+   *  is a safety net rather than a way to drop photos. */
+  function applyLayout(type: LayoutType) {
+    const capacity = LAYOUTS[type].shotCount;
     importRunRef.current += 1;
     setImporting(false);
-    setLayoutType("SINGLE");
-    setShots((current) => current.slice(0, 1));
-    setTransforms((current) => current.slice(0, 1));
+    setLayoutType(type);
+    setShots((current) => current.slice(0, capacity));
+    setTransforms((current) => current.slice(0, capacity));
     setSource("upload");
     setStatus("upload");
+    setCropIndex(null);
     setImportError(null);
     setImportNotice(null);
   }
@@ -666,17 +667,20 @@ export function BoothClient({
     router.push("/studio");
   }
 
-  const possibleSingleShortcut =
+  /** The tighter layout that fits the uploaded photos exactly. One photo
+   *  recommends Single, two recommend Strip 2, three recommend Strip 3 - even
+   *  when a four-slot layout is selected. Null once the photos fill (or
+   *  overfill) the chosen frame. */
+  const recommendedLayout =
     source === "upload" &&
-    preset.shotCount > 1 &&
-    shots.length === 1 &&
-    !importing;
+    !importing &&
+    shots.length > 0 &&
+    shots.length < preset.shotCount
+      ? layoutForShotCount(shots.length)
+      : null;
   const canContinue = shots.length >= preset.shotCount;
   const canAddMore =
-    source === "upload" &&
-    shots.length < MAX_SHOT_COUNT &&
-    (shots.length < preset.shotCount ||
-      layoutForShotCount(shots.length + 1) !== layoutType);
+    source === "upload" && shots.length < MAX_SHOT_COUNT;
 
   /** The header back link only needs a gate when it leaves the booth for the
    *  result or the studio; Beranda and Event stay one-tap. */
@@ -928,10 +932,10 @@ export function BoothClient({
             <div className="max-w-[var(--measure)]">
               <h1 className="font-display text-h2 font-extrabold">Susun fotomu</h1>
               <p className="mt-3 text-lead text-ink-body">
-                Pilih {preset.shotCount} foto dari galeri, bisa sampai empat.
-                Kalau foto yang kamu pilih lebih banyak, layout otomatis
-                menyesuaikan. Foto asli tetap di HP; hanya strip akhir yang
-                diunggah nanti. Geser dan zoom tiap foto lewat tombol Atur.
+                Pilih foto dari galeri, maksimal empat. Layout ikut menyesuaikan
+                jumlah foto, dan kami sarankan yang paling pas. Foto asli tetap
+                di HP; hanya strip akhir yang diunggah nanti. Geser dan zoom
+                tiap foto lewat tombol Atur.
               </p>
             </div>
 
@@ -1064,19 +1068,25 @@ export function BoothClient({
               })}
             </div>
 
-            {possibleSingleShortcut && (
-              <div className="mt-6 max-w-[var(--measure)] rounded-[var(--radius)] border-2 border-ink bg-sky p-4 shadow-lift-1">
+            {recommendedLayout && (
+              <div
+                role="status"
+                className="mt-6 flex max-w-[var(--measure)] flex-col gap-3 rounded-[var(--radius)] border-2 border-ink bg-butter p-4 shadow-lift-1 sm:flex-row sm:items-center sm:justify-between sm:gap-5"
+              >
                 <p className="text-small font-semibold text-ink">
-                  Cuma punya satu foto? Layout Single lebih pas untuk satu
-                  bidikan besar.
+                  {shots.length === 1
+                    ? "Satu foto lebih pas di layout Single, satu bidikan besar."
+                    : `${shots.length} foto lebih pas di layout ${
+                        LAYOUTS[recommendedLayout].label
+                      }, tanpa slot kosong.`}
                 </p>
                 <button
                   type="button"
-                  onClick={useSingleLayout}
-                  className="pressable mt-3 inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-4 py-2 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-butter"
+                  onClick={() => applyLayout(recommendedLayout)}
+                  className="pressable inline-flex shrink-0 items-center justify-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-4 py-2 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-mint"
                 >
-                  <IconPhoto size={18} stroke={2.5} aria-hidden="true" />
-                  Pakai layout Single
+                  <IconLayoutGrid size={18} stroke={2.5} aria-hidden="true" />
+                  Pakai {LAYOUTS[recommendedLayout].label}
                 </button>
               </div>
             )}
@@ -1091,7 +1101,7 @@ export function BoothClient({
                 <IconCheck size={22} stroke={2.5} aria-hidden="true" />
                 Lanjut ke studio
               </button>
-              {(!canContinue || canAddMore) && (
+              {canAddMore && (
                 <button
                   type="button"
                   onClick={() => openPicker(null)}
