@@ -4,6 +4,7 @@ import { and, count, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { photoSessions } from "@/db/schema";
+import { requireAdmin } from "@/lib/auth";
 import { destroyAsset, isCloudinaryConfigured } from "@/lib/cloudinary";
 import { deleteStoredFile } from "@/lib/storage";
 
@@ -52,8 +53,11 @@ function denyUnauthorized(request: Request): Response | null {
 }
 
 export async function POST(request: Request) {
+  // Schedulers authenticate with CRON_SECRET. The admin dashboard triggers the
+  // same job from a signed-in session, so allow that path too instead of
+  // forcing the browser to know the cron secret.
   const denied = denyUnauthorized(request);
-  if (denied) return denied;
+  if (denied && !(await requireAdmin())) return denied;
 
   const expired = await db
     .select({

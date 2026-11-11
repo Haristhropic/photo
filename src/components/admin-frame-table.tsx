@@ -1,8 +1,23 @@
 "use client";
 
-import { IconCheck, IconPencil, IconTrash, IconX } from "@tabler/icons-react";
-import { useState } from "react";
+import {
+  IconCheck,
+  IconExternalLink,
+  IconPencil,
+  IconSearch,
+  IconTrash,
+  IconX,
+} from "@tabler/icons-react";
+import { useMemo, useState } from "react";
 
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  AdminNotice,
+  BTN,
+  FIELD,
+  LABEL,
+  SectionEmpty,
+} from "@/components/admin-ui";
 import { adminRequest } from "@/lib/admin-api";
 import {
   FRAME_CATEGORIES,
@@ -37,24 +52,141 @@ export function AdminFrameTable({
   eventOptions: EventOption[];
   onChanged: () => void;
 }) {
-  if (frames.length === 0) {
-    return (
-      <p className="bg-elev p-6 text-ink-body">
-        Belum ada frame. Unggah PNG transparan di atas.
-      </p>
+  const [query, setQuery] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<FrameRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const needle = query.trim().toLowerCase();
+  const visible = useMemo(() => {
+    if (!needle) return frames;
+    return frames.filter((frame) =>
+      [
+        frame.name,
+        frame.eventTitle ?? "",
+        LAYOUTS[frame.layoutType as LayoutType]?.label ?? frame.layoutType,
+        FRAME_CATEGORY_LABEL[frame.category as FrameCategory] ?? frame.category,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle),
     );
+  }, [frames, needle]);
+
+  async function confirmDelete() {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await adminRequest(`/api/admin/frames/${pendingDelete.id}`, {
+        method: "DELETE",
+      });
+      setPendingDelete(null);
+      onChanged();
+    } catch (cause) {
+      setDeleteError(
+        cause instanceof Error ? cause.message : "Gagal menghapus frame",
+      );
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
-    <div className="grid gap-4">
-      {frames.map((frame) => (
-        <FrameItem
-          key={frame.id}
-          frame={frame}
-          eventOptions={eventOptions}
-          onChanged={onChanged}
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-small font-semibold text-meta">
+          {needle
+            ? `${visible.length} dari ${frames.length} frame`
+            : `${frames.length} frame`}
+        </p>
+        <label className="relative block w-full sm:max-w-72">
+          <span className="sr-only">Cari frame</span>
+          <IconSearch
+            size={16}
+            stroke={2.5}
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-meta"
+          />
+          <input
+            value={query}
+            onChange={(changeEvent) => setQuery(changeEvent.target.value)}
+            placeholder="Cari nama, layout, atau event"
+            className={`${FIELD} mt-0 pl-9`}
+          />
+        </label>
+      </div>
+
+      {deleteError && <AdminNotice tone="error">{deleteError}</AdminNotice>}
+
+      {frames.length === 0 ? (
+        <SectionEmpty
+          title="Belum ada frame"
+          hint="Unggah PNG transparan di panel Unggah frame. Jendela foto dideteksi otomatis."
         />
-      ))}
+      ) : visible.length === 0 ? (
+        <SectionEmpty
+          title="Tidak ada frame yang cocok"
+          hint="Coba kata kunci lain, atau kosongkan pencarian."
+          action={
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className={BTN.quiet}
+            >
+              <IconX size={16} stroke={2.5} aria-hidden="true" />
+              Kosongkan pencarian
+            </button>
+          }
+        />
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {visible.map((frame) => (
+            <FrameItem
+              key={frame.id}
+              frame={frame}
+              eventOptions={eventOptions}
+              onChanged={onChanged}
+              onRequestDelete={() => {
+                setDeleteError(null);
+                setPendingDelete(frame);
+              }}
+            />
+          ))}
+        </ul>
+      )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Hapus frame?"
+        description={
+          <>
+            Frame{" "}
+            <strong className="font-extrabold text-ink">
+              {pendingDelete?.name}
+            </strong>{" "}
+            akan dilepas dari semua event, dan file aslinya dihapus permanen
+            dari Cloudinary atau penyimpanan lokal. Foto tamu tidak terpengaruh.
+          </>
+        }
+        icon={<IconTrash size={20} stroke={2.5} aria-hidden="true" />}
+        onClose={() => setPendingDelete(null)}
+        actions={[
+          {
+            label: deleting ? "Menghapus..." : "Hapus frame",
+            icon: <IconTrash size={20} stroke={2.5} aria-hidden="true" />,
+            tone: "danger",
+            onClick: confirmDelete,
+          },
+          {
+            label: "Batal",
+            icon: <IconX size={20} stroke={2.5} aria-hidden="true" />,
+            tone: "neutral",
+            onClick: () => setPendingDelete(null),
+          },
+        ]}
+      />
     </div>
   );
 }
@@ -63,10 +195,12 @@ function FrameItem({
   frame,
   eventOptions,
   onChanged,
+  onRequestDelete,
 }: {
   frame: FrameRow;
   eventOptions: EventOption[];
   onChanged: () => void;
+  onRequestDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(frame.name);
@@ -107,28 +241,21 @@ function FrameItem({
     }
   }
 
-  async function remove() {
-    const confirmed = window.confirm(
-      `Hapus frame "${frame.name}"? File di Cloudinary akan dihapus permanen.`,
-    );
-    if (!confirmed || busy) return;
+  const layoutLabel = LAYOUTS[layoutType]?.label ?? frame.layoutType;
+  const categoryLabel =
+    FRAME_CATEGORY_LABEL[category as FrameCategory] ?? frame.category;
 
-    setBusy(true);
-    setError(null);
-
-    try {
-      await adminRequest(`/api/admin/frames/${frame.id}`, { method: "DELETE" });
-      onChanged();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Gagal menghapus frame");
-      setBusy(false);
-    }
-  }
-
-  if (!editing) {
-    return (
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-lg)] border-2 border-ink bg-elev p-6 shadow-lift-1">
-        <div className="flex min-w-0 items-center gap-4">
+  return (
+    <li className="flex flex-col rounded-[var(--radius)] border-2 border-line-soft bg-bg">
+      <div className="flex items-start gap-3 border-b-2 border-line-soft bg-sunken/45 px-4 py-3">
+        <a
+          href={frame.imageUrl}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Buka file frame ${frame.name}`}
+          title="Buka file PNG"
+          className="pressable grid size-20 shrink-0 place-items-center rounded-[var(--radius-sm)] border-2 border-ink bg-butter"
+        >
           <img
             src={adminThumbnailUrl(frame.imageUrl, 160)}
             alt={`Frame ${frame.name}`}
@@ -136,164 +263,175 @@ function FrameItem({
             height={160}
             loading="lazy"
             decoding="async"
-            className="size-16 shrink-0 rounded-[var(--radius)] border-2 border-ink bg-butter object-contain"
+            className="max-h-16 w-auto max-w-16 object-contain"
           />
-          <div className="min-w-0">
-            <p className="font-display text-h3 font-extrabold">{frame.name}</p>
-            <p className="mt-1 font-display text-label font-bold tracking-[0.08em] text-ink-meta">
-              {LAYOUTS[layoutType]?.label ?? frame.layoutType} /{" "}
-              {FRAME_CATEGORY_LABEL[category] ?? category} /{" "}
-              {frame.eventTitle ?? "tanpa event"}
-            </p>
-            <p className="mt-1 text-small font-semibold text-ink-body">
-              {frame.imageWidth} x {frame.imageHeight} / {frame.windows.length}{" "}
-              jendela /{" "}
-              <span
-                className={`inline-flex rounded-[var(--radius-pill)] border-2 border-ink px-2 py-0.5 font-display text-[11px] font-extrabold tracking-[0.08em] uppercase ${
-                  frame.imagePublicId ? "bg-mint" : "bg-butter"
-                }`}
+        </a>
+        <div className="min-w-0 flex-1">
+          <h3 className="font-display text-[1rem] leading-snug font-extrabold break-words text-ink">
+            {frame.name}
+          </h3>
+          <p className="mt-1 text-small font-semibold text-meta">
+            {layoutLabel} · {categoryLabel}
+          </p>
+          <p className="mt-0.5 truncate text-small font-semibold text-ink-body">
+            {frame.eventTitle ?? "Tanpa event"}
+          </p>
+        </div>
+      </div>
+
+      {editing ? (
+        <div className="flex flex-1 flex-col gap-3 p-4">
+          <div className="grid gap-3">
+            <div>
+              <label htmlFor={`frame-name-${frame.id}`} className={LABEL}>
+                Nama
+              </label>
+              <input
+                id={`frame-name-${frame.id}`}
+                value={name}
+                autoFocus
+                onChange={(changeEvent) => setName(changeEvent.target.value)}
+                className={FIELD}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor={`frame-layout-${frame.id}`} className={LABEL}>
+                  Layout
+                </label>
+                <select
+                  id={`frame-layout-${frame.id}`}
+                  value={layoutType}
+                  onChange={(changeEvent) =>
+                    setLayoutType(changeEvent.target.value as LayoutType)
+                  }
+                  className={FIELD}
+                >
+                  {LAYOUT_ORDER.map((key) => (
+                    <option key={key} value={key}>
+                      {LAYOUTS[key].label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor={`frame-category-${frame.id}`} className={LABEL}>
+                  Kategori
+                </label>
+                <select
+                  id={`frame-category-${frame.id}`}
+                  value={category}
+                  onChange={(changeEvent) =>
+                    setCategory(changeEvent.target.value as FrameCategory)
+                  }
+                  className={FIELD}
+                >
+                  {FRAME_CATEGORIES.map((key) => (
+                    <option key={key} value={key}>
+                      {FRAME_CATEGORY_LABEL[key]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label htmlFor={`frame-event-${frame.id}`} className={LABEL}>
+                Event
+              </label>
+              <select
+                id={`frame-event-${frame.id}`}
+                value={eventId}
+                onChange={(changeEvent) => setEventId(changeEvent.target.value)}
+                className={FIELD}
               >
-                {frame.imagePublicId ? "Cloudinary" : "Lokal"}
-              </span>
-            </p>
+                <option value="">Tanpa event (global)</option>
+                {eventOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {error && <AdminNotice tone="error">{error}</AdminNotice>}
+
+          <div className="mt-auto flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={save}
+              disabled={busy || name.trim().length === 0}
+              className={BTN.save}
+            >
+              <IconCheck size={16} stroke={2.5} aria-hidden="true" />
+              {busy ? "Menyimpan..." : "Simpan"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                reset();
+                setEditing(false);
+              }}
+              className={BTN.quiet}
+            >
+              <IconX size={16} stroke={2.5} aria-hidden="true" />
+              Batal
+            </button>
           </div>
         </div>
-
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              reset();
-              setEditing(true);
-            }}
-            aria-label={`Ubah frame ${frame.name}`}
-            className="pressable inline-flex size-11 items-center justify-center rounded-[var(--radius)] border-2 border-ink bg-elev text-ink shadow-lift-1 hover:bg-butter"
-          >
-            <IconPencil size={18} stroke={2.5} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={remove}
-            disabled={busy}
-            aria-label={`Hapus frame ${frame.name}`}
-            className="pressable inline-flex size-11 items-center justify-center rounded-[var(--radius)] border-2 border-ink bg-elev text-ink shadow-lift-1 hover:bg-pink disabled:opacity-45"
-          >
-            <IconTrash size={18} stroke={2.5} aria-hidden="true" />
-          </button>
-        </div>
-
-        {error && <p className="w-full rounded-[var(--radius)] border-2 border-ink bg-pink px-3 py-2 text-small font-semibold text-ink">{error}</p>}
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-elev p-6">
-      <div className="flex flex-wrap items-start gap-4">
-        <img
-          src={adminThumbnailUrl(frame.imageUrl, 160)}
-          alt={`Frame ${frame.name}`}
-          width={160}
-          height={160}
-          loading="lazy"
-          decoding="async"
-          className="size-20 shrink-0 rounded-[var(--radius)] border-2 border-ink bg-butter object-contain"
-        />
-
-        <div className="grid flex-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <label htmlFor={`frame-name-${frame.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
-              Nama
-            </label>
-            <input
-              id={`frame-name-${frame.id}`}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 text-small font-semibold text-ink outline-none focus:bg-butter"
+      ) : (
+        <div className="flex flex-1 flex-col gap-3 p-4">
+          <dl className="grid grid-cols-3 gap-3">
+            <FrameStat label="Ukuran" value={`${frame.imageWidth}×${frame.imageHeight}`} />
+            <FrameStat label="Jendela" value={String(frame.windows.length)} />
+            <FrameStat
+              label="Penyimpanan"
+              value={frame.imagePublicId ? "Cloudinary" : "Lokal"}
             />
-          </div>
+          </dl>
 
-          <div>
-            <label htmlFor={`frame-layout-${frame.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
-              Layout
-            </label>
-            <select
-              id={`frame-layout-${frame.id}`}
-              value={layoutType}
-              onChange={(e) => setLayoutType(e.target.value as LayoutType)}
-              className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 text-small font-semibold text-ink outline-none focus:bg-butter"
+          <div className="mt-auto flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                reset();
+                setEditing(true);
+              }}
+              className={BTN.quiet}
             >
-              {LAYOUT_ORDER.map((key) => (
-                <option key={key} value={key}>
-                  {LAYOUTS[key].label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor={`frame-category-${frame.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
-              Kategori
-            </label>
-            <select
-              id={`frame-category-${frame.id}`}
-              value={category}
-              onChange={(e) => setCategory(e.target.value as FrameCategory)}
-              className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 text-small font-semibold text-ink outline-none focus:bg-butter"
+              <IconPencil size={16} stroke={2.5} aria-hidden="true" />
+              Ubah
+            </button>
+            <button type="button" onClick={onRequestDelete} className={BTN.danger}>
+              <IconTrash size={16} stroke={2.5} aria-hidden="true" />
+              Hapus
+            </button>
+            <a
+              href={frame.imageUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={`${BTN.icon} ml-auto`}
+              aria-label={`Buka file frame ${frame.name} di tab baru`}
+              title="Buka PNG"
             >
-              {FRAME_CATEGORIES.map((key) => (
-                <option key={key} value={key}>
-                  {FRAME_CATEGORY_LABEL[key]}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor={`frame-event-${frame.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
-              Event
-            </label>
-            <select
-              id={`frame-event-${frame.id}`}
-              value={eventId}
-              onChange={(e) => setEventId(e.target.value)}
-              className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 text-small font-semibold text-ink outline-none focus:bg-butter"
-            >
-              <option value="">Tanpa event</option>
-              {eventOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.title}
-                </option>
-              ))}
-            </select>
+              <IconExternalLink size={17} stroke={2.5} aria-hidden="true" />
+            </a>
           </div>
         </div>
-      </div>
+      )}
+    </li>
+  );
+}
 
-      {error && <p className="mt-3 rounded-[var(--radius)] border-2 border-ink bg-pink px-3 py-2 text-small font-semibold text-ink">{error}</p>}
-
-      <div className="mt-4 flex gap-2">
-        <button
-          type="button"
-          onClick={save}
-          disabled={busy || name.trim().length === 0}
-          className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-mint px-5 py-2.5 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-butter disabled:opacity-45"
-        >
-          <IconCheck size={18} stroke={2.5} aria-hidden="true" />
-          Simpan
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            reset();
-            setEditing(false);
-          }}
-          className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-5 py-2.5 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-sunken"
-        >
-          <IconX size={18} stroke={2.5} aria-hidden="true" />
-          Batal
-        </button>
-      </div>
+function FrameStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="font-display text-[0.72rem] font-bold text-meta">
+        {label}
+      </dt>
+      <dd className="mt-0.5 text-small font-bold tabular-nums text-ink">
+        {value}
+      </dd>
     </div>
   );
 }

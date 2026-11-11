@@ -5,15 +5,9 @@ import {
   IconPlayerStopFilled,
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
 
-import {
-  FILTERS,
-  photoSlotRadii,
-  type FilterKey,
-  type Rect,
-} from "@/lib/layouts";
-import { photoFitsWholeFrame } from "@/lib/photo-transform";
+import { liveSlotFrame } from "@/lib/live-frame";
+import type { FilterKey, Rect } from "@/lib/layouts";
 
 type LiveClip = { slot: number; url: string; mime: string; durationMs: number };
 
@@ -24,12 +18,6 @@ type LivePhotoOverlayProps = {
   /** The print's filter, so a playing clip doesn't turn colourful mid-print. */
   filterKey?: FilterKey;
 };
-
-/** The booth asks for 1280x960, so a clip is 4:3 until its metadata says
- *  otherwise. Using it as the pre-metadata default keeps the first frame from
- *  jumping between contain and cover. */
-const CAMERA_W = 4;
-const CAMERA_H = 3;
 
 /**
  * Turns the printed photos into playable clips.
@@ -120,7 +108,6 @@ export function LivePhotoOverlay({
   }, [fail, clips]);
 
   const ordered = [...clips].sort((a, b) => a.slot - b.slot);
-  const filter = FILTERS[filterKey]?.css ?? "none";
 
   return (
     <>
@@ -128,47 +115,16 @@ export function LivePhotoOverlay({
         const slot = slots[clip.slot];
         if (!slot || failed.includes(clip.slot)) return null;
 
-        const size = sizes[clip.slot];
-        const wholeFrame = photoFitsWholeFrame(
-          size?.w ?? CAMERA_W,
-          size?.h ?? CAMERA_H,
-          slot.w,
-          slot.h,
-        );
-
-        const radii = photoSlotRadii(slot, canvas);
-        // Border radii are percentages of the box; pairing each with the box's
-        // other axis keeps the corner a circle, not an ellipse.
-        const px = (radius: number, axis: number) =>
-          `${(radius / axis) * 100}%`;
-        const borderRadius = `${px(radii.tl, slot.w)} ${px(radii.tr, slot.w)} ${px(
-          radii.br,
-          slot.w,
-        )} ${px(radii.bl, slot.w)} / ${px(radii.tl, slot.h)} ${px(
-          radii.tr,
-          slot.h,
-        )} ${px(radii.br, slot.h)} ${px(radii.bl, slot.h)}`;
+        const { box, video: videoStyle } = liveSlotFrame(slot, canvas, {
+          size: sizes[clip.slot],
+          filterKey,
+        });
 
         const isPlaying = playing === clip.slot;
         const label = `Live Photo foto ${clip.slot + 1}`;
 
-        const videoStyle: CSSProperties = {
-          objectFit: wholeFrame ? "contain" : "cover",
-          borderRadius,
-          filter: filter === "none" ? undefined : filter,
-        };
-
         return (
-          <div
-            key={clip.slot}
-            className="absolute"
-            style={{
-              left: `${(slot.x / canvas.w) * 100}%`,
-              top: `${(slot.y / canvas.h) * 100}%`,
-              width: `${(slot.w / canvas.w) * 100}%`,
-              height: `${(slot.h / canvas.h) * 100}%`,
-            }}
-          >
+          <div key={clip.slot} className="absolute" style={box}>
             <video
               ref={(el) => {
                 videoRefs.current[clip.slot] = el;
@@ -207,7 +163,7 @@ export function LivePhotoOverlay({
               aria-label={`${isPlaying ? "Hentikan" : "Putar"} ${label}`}
               title={`${isPlaying ? "Hentikan" : "Putar"} ${label}`}
               className="group absolute inset-0 z-10 cursor-pointer focus-visible:outline-none"
-              style={{ borderRadius }}
+              style={{ borderRadius: videoStyle.borderRadius }}
             >
               <span
                 aria-hidden="true"

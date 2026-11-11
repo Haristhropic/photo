@@ -1,16 +1,30 @@
 "use client";
 
-import { IconEyeOff, IconTrash } from "@tabler/icons-react";
+import {
+  IconExternalLink,
+  IconEyeOff,
+  IconTrash,
+  IconX,
+} from "@tabler/icons-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import {
+  AdminMetrics,
+  AdminNotice,
+  AdminPanel,
+  BTN,
+  SectionEmpty,
+  formatDate,
+} from "@/components/admin-ui";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { adminRequest } from "@/lib/admin-api";
 import {
+  FILTERS,
   LAYOUTS,
   type FilterKey,
   type LayoutType,
-  FILTERS,
 } from "@/lib/layouts";
 import { adminThumbnailUrl } from "@/lib/image-url";
 
@@ -23,15 +37,7 @@ export type StoragePhoto = {
   eventTitle: string | null;
 };
 
-function formatDate(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+type PendingAction = { kind: "unpublish" | "delete"; photo: StoragePhoto };
 
 export function AdminStorage({
   photos,
@@ -49,197 +55,187 @@ export function AdminStorage({
   totalPages: number;
 }) {
   const router = useRouter();
+  const [pending, setPending] = useState<PendingAction | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<{ id: string; message: string } | null>(
     null,
   );
 
-  async function unpublish(photo: StoragePhoto) {
-    const label = photo.eventTitle ?? "tanpa event";
-    const confirmed = window.confirm(
-      `Sembunyikan foto ${label} dari galeri publik? Salinan privat tamu tetap bisa dibuka lewat link hasil.`,
-    );
-    if (!confirmed || busyId) return;
+  function ask(kind: PendingAction["kind"], photo: StoragePhoto) {
+    setError(null);
+    setPending({ kind, photo });
+  }
 
+  async function confirm() {
+    if (!pending || busyId) return;
+
+    const { kind, photo } = pending;
     setBusyId(photo.id);
     setError(null);
 
     try {
-      await adminRequest(`/api/admin/photos/${photo.id}`, {
-        method: "PATCH",
-        body: { published: false },
-      });
+      await adminRequest(
+        `/api/admin/photos/${photo.id}`,
+        kind === "delete"
+          ? { method: "DELETE" }
+          : { method: "PATCH", body: { published: false } },
+      );
+      setPending(null);
       router.refresh();
     } catch (cause) {
       setError({
         id: photo.id,
         message:
-          cause instanceof Error ? cause.message : "Gagal menyembunyikan foto",
+          cause instanceof Error ? cause.message : "Gagal memproses foto",
       });
+      setPending(null);
     } finally {
       setBusyId(null);
     }
   }
 
-  async function remove(photo: StoragePhoto) {
-    const label = photo.eventTitle ?? "tanpa event";
-    const confirmed = window.confirm(
-      `Hapus foto ${label} permanen? Aset Cloudinary dan salinan privat tamu ikut dihapus.`,
-    );
-    if (!confirmed || busyId) return;
-
-    setBusyId(photo.id);
-    setError(null);
-
-    try {
-      await adminRequest(`/api/admin/photos/${photo.id}`, {
-        method: "DELETE",
-      });
-      router.refresh();
-    } catch (cause) {
-      setError({
-        id: photo.id,
-        message: cause instanceof Error ? cause.message : "Gagal menghapus foto",
-      });
-    } finally {
-      setBusyId(null);
-    }
-  }
+  const pendingLabel = pending?.photo.eventTitle ?? "Booth terbuka";
+  const deleting = pending?.kind === "delete";
 
   return (
-    <div className="flex flex-1 flex-col">
-      <main className="flex-1">
-        <div className="shell py-[var(--page)]">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div className="max-w-[var(--measure)]">
-              <h1 className="text-display font-extrabold">Storage</h1>
-              <p className="mt-3 text-lead text-ink-body">
-                Kontrol foto yang tampil di galeri publik. Sembunyikan tanpa
-                menghapus salinan privat tamu, atau hapus permanen beserta aset
-                Cloudinary-nya.
-              </p>
-            </div>
-            <Link
-              href="/gallery"
-              className="pressable inline-flex items-center justify-center rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-5 py-2.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1 hover:bg-butter"
-            >
-              Buka galeri
-            </Link>
+    <main className="flex-1">
+      <div className="shell py-[var(--page)]">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="font-display text-[1.5rem] leading-none font-extrabold text-ink sm:text-[2rem]">
+              Storage
+            </h1>
+            <p className="mt-2 max-w-[60ch] text-small font-semibold text-ink-body">
+              Kontrol foto yang tampil di galeri publik. Sembunyikan tanpa
+              menghapus salinan privat tamu, atau hapus permanen beserta aset
+              Cloudinary-nya.
+            </p>
           </div>
+          <Link
+            href="/gallery"
+            target="_blank"
+            rel="noreferrer"
+            className={BTN.quiet}
+          >
+            <IconExternalLink size={16} stroke={2.5} aria-hidden="true" />
+            Buka galeri
+          </Link>
+        </div>
 
-          <dl className="mt-8 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-[var(--radius-lg)] border-2 border-ink bg-elev p-6 shadow-lift-1">
-              <dt className="font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
-                Foto publik
-              </dt>
-              <dd className="mt-2 font-display text-h2 font-extrabold tabular-nums text-ink">
-                {totals.publicPhotos}
-              </dd>
-            </div>
-            <div className="rounded-[var(--radius-lg)] border-2 border-ink bg-elev p-6 shadow-lift-1">
-              <dt className="font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
-                Sesi privat
-              </dt>
-              <dd className="mt-2 font-display text-h2 font-extrabold tabular-nums text-ink">
-                {totals.privateSessions}
-              </dd>
-            </div>
-            <div className="rounded-[var(--radius-lg)] border-2 border-ink bg-elev p-6 shadow-lift-1">
-              <dt className="font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
-                Total sesi
-              </dt>
-              <dd className="mt-2 font-display text-h2 font-extrabold tabular-nums text-ink">
-                {totals.totalSessions}
-              </dd>
-            </div>
-          </dl>
+        <div className="mt-6">
+          <AdminMetrics
+            items={[
+              {
+                label: "Foto publik",
+                value: totals.publicPhotos,
+                hint: "tampil di galeri",
+              },
+              {
+                label: "Sesi privat",
+                value: totals.privateSessions,
+                hint: "tidak tampil publik",
+              },
+              {
+                label: "Total sesi",
+                value: totals.totalSessions,
+                hint: "termasuk foto publik",
+              },
+              {
+                label: "Di halaman ini",
+                value: photos.length,
+                hint:
+                  totalPages > 1
+                    ? `halaman ${page} dari ${totalPages}`
+                    : "semua foto publik",
+              },
+            ]}
+          />
+        </div>
 
-          <section className="mt-12">
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <h2 className="font-display text-h2 font-extrabold">
-                Foto publik
-              </h2>
-              <p className="text-small font-semibold text-ink-meta">
-                {totals.publicPhotos === 0
-                  ? "Belum ada"
-                  : `Halaman ${page} dari ${totalPages}`}
-              </p>
-            </div>
-
+        <div className="mt-5">
+          <AdminPanel
+            title="Foto publik"
+            description="Urut dari yang paling baru tampil."
+          >
             {photos.length === 0 ? (
-              <div className="mt-6 rounded-[var(--radius)] border-2 border-ink bg-sunken p-6">
-                <p className="font-display text-lead font-extrabold text-ink">
-                  Belum ada foto publik
-                </p>
-                <p className="mt-2 text-ink-body">
-                  Foto muncul di sini setelah ada tamu yang mencentang
-                  &quot;Tampilkan di galeri&quot; di studio.
-                </p>
-              </div>
+              <SectionEmpty
+                title="Belum ada foto publik"
+                hint="Foto muncul di sini setelah tamu mencentang “Tampilkan di galeri” di studio."
+              />
             ) : (
-              <ul className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {photos.map((photo) => {
                   const layout =
                     LAYOUTS[photo.layoutType as LayoutType] ?? LAYOUTS.STRIP_3;
                   const filter = FILTERS[photo.filterKey as FilterKey];
                   const busy = busyId === photo.id;
+                  const label = photo.eventTitle ?? "Booth terbuka";
 
                   return (
                     <li
                       key={photo.id}
-                      className="flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-lg)] border-2 border-ink bg-elev shadow-lift-2"
+                      className="flex min-w-0 flex-col overflow-hidden rounded-[var(--radius)] border-2 border-line-soft bg-bg"
                     >
-                      <div className="grid aspect-[4/5] place-items-center border-b-2 border-ink bg-sunken p-3">
+                      <a
+                        href={photo.cloudinaryUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`Buka foto ${label} di tab baru`}
+                        className="grid h-64 place-items-center border-b-2 border-line-soft bg-sunken p-3"
+                      >
                         <img
                           src={adminThumbnailUrl(photo.cloudinaryUrl, 360)}
-                          alt={`Foto ${layout.label} dari ${photo.eventTitle ?? "booth terbuka"}`}
+                          alt={`Foto ${layout.label} dari ${label}`}
                           width={layout.canvas.w}
                           height={layout.canvas.h}
                           loading="lazy"
                           decoding="async"
-                          className="max-h-full w-auto max-w-full object-contain"
+                          className="max-h-56 w-auto max-w-full object-contain"
                         />
-                      </div>
+                      </a>
 
-                      <div className="flex flex-1 flex-col gap-3 p-4">
+                      <div className="flex flex-1 flex-col gap-3 p-3.5">
                         <div className="min-w-0">
-                          <p className="truncate font-display text-h3 font-extrabold text-ink">
-                            {photo.eventTitle ?? "Booth terbuka"}
+                          <p className="truncate font-display text-[1rem] leading-snug font-extrabold text-ink">
+                            {label}
                           </p>
-                          <p className="mt-1 font-display text-label font-bold tracking-[0.08em] text-ink-meta uppercase">
-                            {layout.label} / {filter?.label ?? photo.filterKey} /{" "}
-                            {formatDate(photo.publishedAt)}
+                          <p className="mt-0.5 text-small font-semibold text-meta">
+                            {layout.label} · {filter?.label ?? photo.filterKey}{" "}
+                            · {formatDate(photo.publishedAt)}
                           </p>
                         </div>
 
                         <div className="mt-auto flex flex-wrap gap-2">
                           <button
                             type="button"
-                            onClick={() => unpublish(photo)}
+                            onClick={() => ask("unpublish", photo)}
                             disabled={busy}
-                            className="pressable inline-flex min-h-10 items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-butter px-3 py-2 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-mint disabled:opacity-45"
+                            className={BTN.quiet}
                           >
-                            <IconEyeOff size={17} stroke={2.5} aria-hidden="true" />
+                            <IconEyeOff
+                              size={16}
+                              stroke={2.5}
+                              aria-hidden="true"
+                            />
                             {busy ? "Memproses..." : "Sembunyikan"}
                           </button>
                           <button
                             type="button"
-                            onClick={() => remove(photo)}
+                            onClick={() => ask("delete", photo)}
                             disabled={busy}
-                            className="pressable inline-flex min-h-10 items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-pink px-3 py-2 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-[var(--mix-coral)] disabled:opacity-45"
+                            className={BTN.danger}
                           >
-                            <IconTrash size={17} stroke={2.5} aria-hidden="true" />
+                            <IconTrash
+                              size={16}
+                              stroke={2.5}
+                              aria-hidden="true"
+                            />
                             Hapus
                           </button>
                         </div>
 
                         {error?.id === photo.id && (
-                          <p
-                            role="alert"
-                            className="rounded-[var(--radius)] border-2 border-ink bg-pink px-3 py-2 text-small font-semibold text-ink"
-                          >
-                            {error.message}
-                          </p>
+                          <AdminNotice tone="error">{error.message}</AdminNotice>
                         )}
                       </div>
                     </li>
@@ -251,40 +247,96 @@ export function AdminStorage({
             {totalPages > 1 && (
               <nav
                 aria-label="Halaman foto publik"
-                className="mt-8 flex flex-wrap items-center gap-2"
+                className="mt-4 flex items-center justify-between gap-3 border-t-2 border-ink pt-4"
               >
                 {page > 1 ? (
                   <Link
                     href={`/admin/storage?page=${page - 1}`}
-                    className="pressable inline-flex items-center rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-5 py-2.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1 hover:bg-butter"
+                    className={BTN.quiet}
                   >
                     Sebelumnya
                   </Link>
                 ) : (
-                  <span className="inline-flex items-center rounded-[var(--radius-pill)] border-2 border-ink bg-sunken px-5 py-2.5 font-display text-label font-bold tracking-[0.1em] text-ink-meta uppercase opacity-60">
+                  <span
+                    aria-disabled="true"
+                    className={`${BTN.quiet} pointer-events-none opacity-45`}
+                  >
                     Sebelumnya
                   </span>
                 )}
-                <span className="px-2 font-display text-label font-bold text-ink-meta">
+                <span className="font-display text-small font-extrabold tabular-nums text-ink">
                   {page} / {totalPages}
                 </span>
                 {page < totalPages ? (
                   <Link
                     href={`/admin/storage?page=${page + 1}`}
-                    className="pressable inline-flex items-center rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-5 py-2.5 font-display text-label font-bold tracking-[0.1em] text-ink uppercase shadow-lift-1 hover:bg-butter"
+                    className={BTN.quiet}
                   >
                     Berikutnya
                   </Link>
                 ) : (
-                  <span className="inline-flex items-center rounded-[var(--radius-pill)] border-2 border-ink bg-sunken px-5 py-2.5 font-display text-label font-bold tracking-[0.1em] text-ink-meta uppercase opacity-60">
+                  <span
+                    aria-disabled="true"
+                    className={`${BTN.quiet} pointer-events-none opacity-45`}
+                  >
                     Berikutnya
                   </span>
                 )}
               </nav>
             )}
-          </section>
+          </AdminPanel>
         </div>
-      </main>
-    </div>
+      </div>
+
+      <ConfirmDialog
+        open={pending !== null}
+        title={deleting ? "Hapus foto permanen?" : "Sembunyikan dari galeri?"}
+        description={
+          deleting ? (
+            <>
+              Foto{" "}
+              <strong className="font-extrabold text-ink">{pendingLabel}</strong>{" "}
+              akan dihapus permanen, termasuk aset Cloudinary dan salinan privat
+              yang bisa dibuka tamu lewat link hasil.
+            </>
+          ) : (
+            <>
+              Foto{" "}
+              <strong className="font-extrabold text-ink">{pendingLabel}</strong>{" "}
+              akan hilang dari galeri publik. Salinan privat tamu tetap bisa
+              dibuka lewat link hasil, dan aset Cloudinary publiknya ikut
+              dibersihkan.
+            </>
+          )
+        }
+        icon={<IconTrash size={20} stroke={2.5} aria-hidden="true" />}
+        onClose={() => {
+          if (!busyId) setPending(null);
+        }}
+        actions={[
+          {
+            label:
+              busyId !== null
+                ? "Memproses..."
+                : deleting
+                  ? "Hapus permanen"
+                  : "Sembunyikan",
+            icon: deleting ? (
+              <IconTrash size={20} stroke={2.5} aria-hidden="true" />
+            ) : (
+              <IconEyeOff size={20} stroke={2.5} aria-hidden="true" />
+            ),
+            tone: deleting ? "danger" : "primary",
+            onClick: confirm,
+          },
+          {
+            label: "Batal",
+            icon: <IconX size={20} stroke={2.5} aria-hidden="true" />,
+            tone: "neutral",
+            onClick: () => setPending(null),
+          },
+        ]}
+      />
+    </main>
   );
 }

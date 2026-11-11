@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, type ReactNode } from "react";
 
 type ConfirmTone = "primary" | "danger" | "neutral";
 
-type ConfirmAction = {
+export type ConfirmAction = {
   label: string;
   description?: string;
   icon: ReactNode;

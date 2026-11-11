@@ -6,6 +6,7 @@ import {
   IconArrowsDiagonal2,
   IconCamera,
   IconCheck,
+  IconDeviceFloppy,
   IconFrame,
   IconLayoutGrid,
   IconPalette,
@@ -33,6 +34,7 @@ import {
   clearBoothRun,
   clearDraft,
   getDraftSnapshot,
+  restoreDraftToBooth,
   subscribeDraft,
 } from "@/lib/draft-store";
 import { deleteRunClips, takeClip } from "@/lib/live-photo";
@@ -84,7 +86,7 @@ import {
   type FramePreset,
 } from "@/lib/frames";
 import { BackLink, backIconFor } from "@/components/back-link";
-import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ConfirmDialog, type ConfirmAction } from "@/components/confirm-dialog";
 import { FrameSwatch } from "@/components/frame-swatch";
 import { StickerSwatch } from "@/components/sticker-swatch";
 import { Logo } from "@/components/logo";
@@ -667,7 +669,13 @@ export function StudioClient() {
         published: boolean;
       };
 
-      if (draft.live?.runId && draft.live.slots.length > 0) {
+      // Only a camera run can be live. Uploaded photos have no recorded clip,
+      // so they stay still on the result page however they are shared.
+      if (
+        draft.source === "camera" &&
+        draft.live?.runId &&
+        draft.live.slots.length > 0
+      ) {
         try { await uploadLiveClips(data.accessKey, draft.live.runId, draft.live.slots); } catch {}
       }
 
@@ -1227,12 +1235,24 @@ export function StudioClient() {
     }
   }
 
+  /**
+   * Keeps an uploaded strip and reopens the upload editor on it. The photos
+   * only exist in the studio draft, but the booth restores from its own run
+   * snapshot, so the draft is handed back before navigating. The draft itself
+   * stays behind as a safety net, exactly like a retake leaves it.
+   */
+  function saveDraftAndBack() {
+    setBackDialogOpen(false);
+    if (draft) restoreDraftToBooth(draft);
+    router.push(boothHref);
+  }
+
   function confirmBackToBooth() {
     setBackDialogOpen(false);
-    // The "save draft & back" option was removed, so this dialog now only
-    // discards the unsaved draft and starts the booth fresh: the previous
-    // draft broke the studio handoff, so dropping it (without keeping a run)
-    // is the only safe traversal back to the booth.
+    // Camera runs have no save option: a run restored to the booth loses its
+    // Live clips, which would quietly turn a live strip into a still one.
+    // Dropping the draft and starting the booth fresh is the only safe
+    // traversal back for them.
     // Event context still matters; upload guests keep their upload editor.
     const discardParams: string[] = [];
     if (draft?.eventId) {
@@ -1499,7 +1519,7 @@ export function StudioClient() {
                 <button
                   type="button"
                   onClick={clearStickers}
-                  className="pressable mt-2.5 inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3 py-1.5 font-display text-label font-bold tracking-[0.08em] text-ink uppercase shadow-lift-1 hover:bg-pink"
+                  className="pressable mt-3 inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-3 py-1.5 font-display text-label font-bold tracking-[0.08em] text-ink uppercase shadow-lift-1 hover:bg-pink"
                 >
                   <IconTrash size={14} stroke={2.5} aria-hidden="true" />
                   Bersihkan semua
@@ -1510,7 +1530,7 @@ export function StudioClient() {
                   role="group"
                   aria-label={`Atur stiker ${selectedLayer.preset.name}`}
                   data-sticker-ui="true"
-                  className="mt-4 grid gap-3 rounded-[var(--radius-lg)] border-2 border-ink bg-sunken p-4 shadow-lift-1"
+                  className="mt-4 grid gap-4 rounded-[var(--radius-lg)] border-2 border-ink bg-sunken p-4 shadow-lift-1"
                 >
                   <div className="flex items-baseline justify-between gap-3">
                     <p className="font-display text-label font-extrabold tracking-[0.1em] text-ink uppercase">
@@ -1578,7 +1598,7 @@ export function StudioClient() {
                           Number(event.target.value),
                         )
                       }
-                      className="mt-1 block w-full accent-[var(--pink)]"
+                      className="mt-2 block w-full accent-[var(--pink)]"
                     />
                   </div>
                   <div>
@@ -1617,14 +1637,14 @@ export function StudioClient() {
                           Number(event.target.value),
                         )
                       }
-                      className="mt-1 block w-full accent-[var(--pink)]"
+                      className="mt-2 block w-full accent-[var(--pink)]"
                     />
                   </div>
-                  <div className="mt-1 flex flex-wrap gap-2">
+                  <div className="grid gap-2 sm:flex sm:flex-wrap">
                     <button
                       type="button"
                       onClick={() => resetSticker(selectedLayer.id)}
-                      className="pressable inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-4 py-2 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-butter"
+                      className="pressable inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-elev px-4 py-2 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-butter sm:w-auto"
                     >
                       <IconRestore size={16} stroke={2.5} aria-hidden="true" />
                       Atur ulang
@@ -1632,7 +1652,7 @@ export function StudioClient() {
                     <button
                       type="button"
                       onClick={() => removeSticker(selectedLayer.id)}
-                      className="pressable inline-flex items-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-pink px-4 py-2 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-[var(--mix-coral)]"
+                      className="pressable inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-pill)] border-2 border-ink bg-pink px-4 py-2 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-[var(--mix-coral)] sm:w-auto"
                     >
                       <IconTrash size={16} stroke={2.5} aria-hidden="true" />
                       {stickers.length > 1 ? "Hapus yang ini" : "Hapus stiker"}
@@ -1964,9 +1984,30 @@ export function StudioClient() {
           } yang belum disimpan ke galeri. Mau diapakan?`}
           onClose={() => setBackDialogOpen(false)}
           actions={[
+            ...(draft.source === "upload"
+              ? ([
+                  {
+                    label: "Simpan draft & atur foto",
+                    description:
+                      "Foto, urutan, dan posisi zoom tetap ada di halaman foto, jadi bisa dirapikan dulu sebelum lanjut lagi.",
+                    icon: (
+                      <IconDeviceFloppy
+                        size={20}
+                        stroke={2.5}
+                        aria-hidden="true"
+                      />
+                    ),
+                    tone: "primary",
+                    onClick: saveDraftAndBack,
+                  },
+                ] satisfies ConfirmAction[])
+              : []),
             {
               label: "Buang foto & kembali",
-              description: "Foto dihapus, booth mulai lagi dengan sesi kosong.",
+              description:
+                draft.source === "upload"
+                  ? "Pilihan foto dan pengaturannya dihapus, halaman foto mulai kosong."
+                  : "Foto dihapus, booth mulai lagi dengan sesi kosong.",
               icon: <IconTrash size={20} stroke={2.5} aria-hidden="true" />,
               tone: "danger",
               onClick: () => confirmBackToBooth(),

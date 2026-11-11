@@ -71,6 +71,10 @@ function parse(raw: string | null): Draft | null {
       : undefined;
 
   const live =
+    // A clip is only ever recorded from the camera while the Live toggle is on,
+    // so an uploaded strip can never carry one. Dropping it here keeps an old
+    // draft from handing the studio clips that have no photos to sit on.
+    source === "camera" &&
     parsed.live &&
     typeof parsed.live === "object" &&
     typeof parsed.live.runId === "string" &&

@@ -503,6 +503,11 @@ export function BoothClient({
   async function handleFiles(files: File[] | null) {
     if (!files || files.length === 0) return;
 
+    // Uploading replaces the camera run. Its clips belong to photos that are
+    // about to be swapped out, and an uploaded strip is never live, so drop the
+    // run before any clip can follow these photos into the studio.
+    cancelRun();
+
     const list = files;
     const replaceAt = replaceIndexRef.current;
     replaceIndexRef.current = null;
@@ -648,9 +653,10 @@ export function BoothClient({
           )
         : undefined;
 
-    const liveMeta = liveRunIdRef.current && liveMetaRef.current.length > 0
-      ? { runId: liveRunIdRef.current, slots: liveMetaRef.current }
-      : undefined;
+    const liveMeta =
+      source === "camera" && liveRunIdRef.current && liveMetaRef.current.length > 0
+        ? { runId: liveRunIdRef.current, slots: liveMetaRef.current }
+        : undefined;
 
     try {
       sessionStorage.removeItem(BOOTH_KEY);

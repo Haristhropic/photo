@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { GalleryLivePhoto } from "@/components/gallery-live-photo";
 import type { GalleryPhoto } from "@/lib/gallery";
 import { galleryThumbnailUrl } from "@/lib/image-url";
-import { LAYOUTS, type LayoutType } from "@/lib/layouts";
+import { LAYOUTS, isFilterKey, type LayoutType } from "@/lib/layouts";
 
 // The gallery only ever shows a handful of strips by default so the page stays
 // a preview instead of a wall of every photo ever published.
@@ -145,16 +146,29 @@ export function GalleryGrid({
                 transform: `rotate(${index % 2 === 0 ? -0.7 : 0.7}deg)`,
               }}
             >
-              <img
-                src={galleryThumbnailUrl(photo.cloudinaryUrl)}
-                alt={`Strip foto ${LAYOUT_LABELS[photo.layoutType] ?? photo.layoutType}`}
-                width={layout.canvas.w}
-                height={layout.canvas.h}
-                loading={index === 0 ? "eager" : "lazy"}
-                fetchPriority={index === 0 ? "high" : "auto"}
-                decoding={index === 0 ? "sync" : "async"}
-                className="h-auto w-full bg-sunken object-cover"
-              />
+              <div className="relative">
+                <img
+                  src={galleryThumbnailUrl(photo.cloudinaryUrl)}
+                  alt={`Strip foto ${LAYOUT_LABELS[photo.layoutType] ?? photo.layoutType}`}
+                  width={layout.canvas.w}
+                  height={layout.canvas.h}
+                  loading={index === 0 ? "eager" : "lazy"}
+                  fetchPriority={index === 0 ? "high" : "auto"}
+                  decoding={index === 0 ? "sync" : "async"}
+                  className="h-auto w-full bg-sunken object-cover"
+                />
+                {photo.live && photo.live.length > 0 && (
+                  <GalleryLivePhoto
+                    id={photo.id}
+                    canvas={layout.canvas}
+                    slots={layout.slots}
+                    clips={photo.live}
+                    filterKey={
+                      isFilterKey(photo.filterKey) ? photo.filterKey : "original"
+                    }
+                  />
+                )}
+              </div>
               <div className="flex flex-col gap-0.5 border-t-2 border-ink bg-bg px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                 <span className="truncate font-display text-label font-bold tracking-[0.08em] text-ink uppercase">
                   {LAYOUT_LABELS[photo.layoutType] ?? photo.layoutType}

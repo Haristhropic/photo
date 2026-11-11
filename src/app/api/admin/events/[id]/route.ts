@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
@@ -54,22 +54,20 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/even
 
   const { title, accessCode, retentionHours } = parsed.data;
 
-  // Keep the slug unique if the title changed.
+  // Keep the slug unique if the title changed. Try the bare slug first: the
+  // current event is excluded so renaming to its own title does not suffix it.
   let slug = existing.slug;
   if (title && title.trim() !== existing.title) {
     const base = slugify(title);
     slug = base;
     for (let attempt = 2; attempt < 100; attempt += 1) {
-      const candidate = `${base}-${attempt}`;
       const [clash] = await db
         .select({ id: events.id })
         .from(events)
-        .where(eq(events.slug, candidate))
+        .where(and(eq(events.slug, slug), ne(events.id, id)))
         .limit(1);
-      if (!clash) {
-        slug = candidate;
-        break;
-      }
+      if (!clash) break;
+      slug = `${base}-${attempt}`;
     }
   }
 

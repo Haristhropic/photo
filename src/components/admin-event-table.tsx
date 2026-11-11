@@ -1,8 +1,26 @@
 "use client";
 
-import { IconCheck, IconPencil, IconTrash, IconX } from "@tabler/icons-react";
-import { useState } from "react";
+import {
+  IconCheck,
+  IconExternalLink,
+  IconPencil,
+  IconSearch,
+  IconTrash,
+  IconX,
+} from "@tabler/icons-react";
+import { useMemo, useState } from "react";
 
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  AdminNotice,
+  BTN,
+  CopyButton,
+  FIELD,
+  LABEL,
+  SectionEmpty,
+  eventLink,
+  formatExpiry,
+} from "@/components/admin-ui";
 import { adminRequest } from "@/lib/admin-api";
 
 export type EventRow = {
@@ -11,8 +29,12 @@ export type EventRow = {
   slug: string;
   accessCode: string | null;
   retentionHours: number;
+  createdAt: string;
   sessionCount: number;
   downloadTotal: number;
+  activeSessions: number;
+  nextExpiry: string | null;
+  frameCount: number;
 };
 
 export function AdminEventTable({
@@ -22,20 +44,147 @@ export function AdminEventTable({
   events: EventRow[];
   onChanged: () => void;
 }) {
-  if (events.length === 0) {
-    return <p className="bg-elev p-6 text-ink-body">Belum ada event.</p>;
+  const [query, setQuery] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<EventRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const needle = query.trim().toLowerCase();
+  const visible = useMemo(() => {
+    if (!needle) return events;
+    return events.filter((event) =>
+      `${event.title} ${event.slug} ${event.accessCode ?? ""}`
+        .toLowerCase()
+        .includes(needle),
+    );
+  }, [events, needle]);
+
+  async function confirmDelete() {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await adminRequest(`/api/admin/events/${pendingDelete.id}`, {
+        method: "DELETE",
+      });
+      setPendingDelete(null);
+      onChanged();
+    } catch (cause) {
+      setDeleteError(
+        cause instanceof Error ? cause.message : "Gagal menghapus event",
+      );
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
-    <div className="grid gap-4">
-      {events.map((event) => (
-        <EventItem key={event.id} event={event} onChanged={onChanged} />
-      ))}
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-small font-semibold text-meta">
+          {needle
+            ? `${visible.length} dari ${events.length} event`
+            : `${events.length} event`}
+        </p>
+        <label className="relative block w-full sm:max-w-72">
+          <span className="sr-only">Cari event</span>
+          <IconSearch
+            size={16}
+            stroke={2.5}
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-meta"
+          />
+          <input
+            value={query}
+            onChange={(changeEvent) => setQuery(changeEvent.target.value)}
+            placeholder="Cari judul, slug, atau kode"
+            className={`${FIELD} mt-0 pl-9`}
+          />
+        </label>
+      </div>
+
+      {deleteError && <AdminNotice tone="error">{deleteError}</AdminNotice>}
+
+      {events.length === 0 ? (
+        <SectionEmpty
+          title="Belum ada event"
+          hint="Buat event pertama di panel Buat event, lalu bagikan linknya ke tamu."
+        />
+      ) : visible.length === 0 ? (
+        <SectionEmpty
+          title="Tidak ada event yang cocok"
+          hint="Coba kata kunci lain, atau kosongkan pencarian."
+          action={
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className={BTN.quiet}
+            >
+              <IconX size={16} stroke={2.5} aria-hidden="true" />
+              Kosongkan pencarian
+            </button>
+          }
+        />
+      ) : (
+        <ul className="flex flex-col gap-3">
+          {visible.map((event) => (
+            <EventItem
+              key={event.id}
+              event={event}
+              onChanged={onChanged}
+              onRequestDelete={() => {
+                setDeleteError(null);
+                setPendingDelete(event);
+              }}
+            />
+          ))}
+        </ul>
+      )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Hapus event?"
+        description={
+          <>
+            <strong className="font-extrabold text-ink">
+              {pendingDelete?.title}
+            </strong>{" "}
+            beserta frame miliknya akan dihapus, termasuk file frame di
+            Cloudinary. Foto tamu tidak ikut terhapus; sesinya hanya dilepas dari
+            event dan tetap bisa dibuka lewat link hasil.
+          </>
+        }
+        icon={<IconTrash size={20} stroke={2.5} aria-hidden="true" />}
+        onClose={() => setPendingDelete(null)}
+        actions={[
+          {
+            label: deleting ? "Menghapus..." : "Hapus event",
+            icon: <IconTrash size={20} stroke={2.5} aria-hidden="true" />,
+            tone: "danger",
+            onClick: confirmDelete,
+          },
+          {
+            label: "Batal",
+            icon: <IconX size={20} stroke={2.5} aria-hidden="true" />,
+            tone: "neutral",
+            onClick: () => setPendingDelete(null),
+          },
+        ]}
+      />
     </div>
   );
 }
 
-function EventItem({ event, onChanged }: { event: EventRow; onChanged: () => void }) {
+function EventItem({
+  event,
+  onChanged,
+  onRequestDelete,
+}: {
+  event: EventRow;
+  onChanged: () => void;
+  onRequestDelete: () => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(event.title);
   const [accessCode, setAccessCode] = useState(event.accessCode ?? "");
@@ -48,6 +197,11 @@ function EventItem({ event, onChanged }: { event: EventRow; onChanged: () => voi
     setAccessCode(event.accessCode ?? "");
     setRetention(String(event.retentionHours));
     setError(null);
+  }
+
+  function cancel() {
+    reset();
+    setEditing(false);
   }
 
   async function save() {
@@ -73,47 +227,135 @@ function EventItem({ event, onChanged }: { event: EventRow; onChanged: () => voi
     }
   }
 
-  async function remove() {
-    const confirmed = window.confirm(
-      `Hapus event "${event.title}"? Frame dan foto sesi ikut dilepas.`,
+  if (editing) {
+    return (
+      <li className="rounded-[var(--radius)] border-2 border-line-strong bg-elev p-4">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label htmlFor={`title-${event.id}`} className={LABEL}>
+              Judul
+            </label>
+            <input
+              id={`title-${event.id}`}
+              value={title}
+              autoFocus
+              onChange={(changeEvent) => setTitle(changeEvent.target.value)}
+              className={FIELD}
+            />
+          </div>
+          <div>
+            <label htmlFor={`code-${event.id}`} className={LABEL}>
+              Kode akses
+            </label>
+            <input
+              id={`code-${event.id}`}
+              value={accessCode}
+              placeholder="Kosongkan untuk terbuka"
+              onChange={(changeEvent) => setAccessCode(changeEvent.target.value)}
+              className={FIELD}
+            />
+          </div>
+          <div>
+            <label htmlFor={`retention-${event.id}`} className={LABEL}>
+              Retensi (jam)
+            </label>
+            <input
+              id={`retention-${event.id}`}
+              type="number"
+              min={1}
+              max={720}
+              value={retention}
+              onChange={(changeEvent) => setRetention(changeEvent.target.value)}
+              className={FIELD}
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-3">
+            <AdminNotice tone="error">{error}</AdminNotice>
+          </div>
+        )}
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={save}
+            disabled={busy || title.trim().length === 0}
+            className={BTN.save}
+          >
+            <IconCheck size={16} stroke={2.5} aria-hidden="true" />
+            {busy ? "Menyimpan..." : "Simpan"}
+          </button>
+          <button type="button" onClick={cancel} className={BTN.quiet}>
+            <IconX size={16} stroke={2.5} aria-hidden="true" />
+            Batal
+          </button>
+        </div>
+      </li>
     );
-    if (!confirmed || busy) return;
-
-    setBusy(true);
-    setError(null);
-
-    try {
-      await adminRequest(`/api/admin/events/${event.id}`, { method: "DELETE" });
-      onChanged();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Gagal menghapus event");
-      setBusy(false);
-    }
   }
 
-  if (!editing) {
-    return (
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-4 rounded-[var(--radius-lg)] border-2 border-ink bg-elev p-6 shadow-lift-1">
-        <div className="min-w-0">
-          <p className="font-display text-h3 font-extrabold">{event.title}</p>
-          <p className="mt-1 font-display text-label font-bold tracking-[0.08em] break-words text-ink-meta">
-            /e/{event.slug} / kode {event.accessCode ?? "terbuka"} / retensi{" "}
-            {event.retentionHours} jam
+  const expiry = formatExpiry(event.nextExpiry);
+
+  return (
+    <li className="rounded-[var(--radius)] border-2 border-line-soft bg-bg">
+      <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:gap-5">
+        <div className="min-w-0 flex-1">
+          <h3 className="font-display text-[1.05rem] leading-snug font-extrabold break-words text-ink">
+            {event.title}
+          </h3>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-small font-semibold text-meta">
+            <span className="break-all">/e/{event.slug}</span>
+            <span aria-hidden="true">·</span>
+            <span>
+              {event.accessCode ? `Kode ${event.accessCode}` : "Tanpa kode"}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>Retensi {event.retentionHours} jam</span>
+          </p>
+          <p className="mt-2 flex items-center gap-1.5 text-small font-semibold">
+            <span
+              aria-hidden="true"
+              className={`size-2 shrink-0 rounded-full border border-ink ${
+                event.activeSessions > 0 ? "bg-mint" : "bg-sunken"
+              }`}
+            />
+            <span className="text-ink-body">
+              {event.activeSessions > 0 && expiry
+                ? `${event.activeSessions} sesi aktif, berikutnya kedaluwarsa ${expiry}`
+                : event.activeSessions > 0
+                  ? `${event.activeSessions} sesi aktif`
+                  : "Tidak ada sesi aktif"}
+            </span>
           </p>
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className="flex gap-6 text-right">
-            <div>
-              <p className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">Sesi</p>
-              <p className="mt-1 text-h3 font-semibold">{event.sessionCount}</p>
-            </div>
-            <div>
-              <p className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">Unduhan</p>
-              <p className="mt-1 text-h3 font-semibold">{event.downloadTotal}</p>
-            </div>
-          </div>
+        <dl className="grid w-full grid-cols-4 gap-3 sm:max-w-xs lg:w-64">
+          <RowStat label="Sesi" value={event.sessionCount} />
+          <RowStat label="Aktif" value={event.activeSessions} />
+          <RowStat label="Unduh" value={event.downloadTotal} />
+          <RowStat label="Frame" value={event.frameCount} />
+        </dl>
 
+        <div className="flex items-center gap-1.5">
+          <CopyButton
+            value={() => eventLink(event.slug)}
+            label={`Salin link ${event.title}`}
+            copiedLabel="Link tersalin"
+            className={BTN.icon}
+            showLabel={false}
+          />
+          <a
+            href={`/e/${event.slug}`}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Buka halaman event ${event.title}`}
+            title="Buka halaman event"
+            className={BTN.icon}
+          >
+            <IconExternalLink size={17} stroke={2.5} aria-hidden="true" />
+          </a>
           <button
             type="button"
             onClick={() => {
@@ -121,94 +363,35 @@ function EventItem({ event, onChanged }: { event: EventRow; onChanged: () => voi
               setEditing(true);
             }}
             aria-label={`Ubah ${event.title}`}
-            className="pressable inline-flex size-11 items-center justify-center rounded-[var(--radius)] border-2 border-ink bg-elev text-ink shadow-lift-1 hover:bg-butter"
+            title="Ubah event"
+            className={BTN.icon}
           >
-            <IconPencil size={18} stroke={2.5} aria-hidden="true" />
+            <IconPencil size={17} stroke={2.5} aria-hidden="true" />
           </button>
           <button
             type="button"
-            onClick={remove}
-            disabled={busy}
+            onClick={onRequestDelete}
             aria-label={`Hapus ${event.title}`}
-            className="pressable inline-flex size-11 items-center justify-center rounded-[var(--radius)] border-2 border-ink bg-elev text-ink shadow-lift-1 hover:bg-pink disabled:opacity-45"
+            title="Hapus event"
+            className={BTN.iconDanger}
           >
-            <IconTrash size={18} stroke={2.5} aria-hidden="true" />
+            <IconTrash size={17} stroke={2.5} aria-hidden="true" />
           </button>
         </div>
-
-        {error && <p className="w-full rounded-[var(--radius)] border-2 border-ink bg-pink px-3 py-2 text-small font-semibold text-ink">{error}</p>}
       </div>
-    );
-  }
+    </li>
+  );
+}
 
+function RowStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="min-w-0 bg-elev p-6">
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div>
-          <label htmlFor={`title-${event.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
-            Judul
-          </label>
-          <input
-            id={`title-${event.id}`}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 text-small font-semibold text-ink outline-none focus:bg-butter"
-          />
-        </div>
-
-        <div>
-          <label htmlFor={`code-${event.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
-            Kode akses
-          </label>
-          <input
-            id={`code-${event.id}`}
-            value={accessCode}
-            onChange={(e) => setAccessCode(e.target.value)}
-            placeholder="kosongkan untuk terbuka"
-            className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 text-small font-semibold text-ink outline-none focus:bg-butter"
-          />
-        </div>
-
-        <div>
-          <label htmlFor={`retention-${event.id}`} className="font-display text-label font-extrabold tracking-[0.1em] text-ink-meta uppercase">
-            Retensi (jam)
-          </label>
-          <input
-            id={`retention-${event.id}`}
-            type="number"
-            min={1}
-            max={720}
-            value={retention}
-            onChange={(e) => setRetention(e.target.value)}
-            className="mt-2 w-full rounded-[var(--radius)] border-2 border-ink bg-elev px-3 py-2 text-small font-semibold text-ink outline-none focus:bg-butter"
-          />
-        </div>
-      </div>
-
-      {error && <p className="mt-3 rounded-[var(--radius)] border-2 border-ink bg-pink px-3 py-2 text-small font-semibold text-ink">{error}</p>}
-
-      <div className="mt-4 flex gap-2">
-        <button
-          type="button"
-          onClick={save}
-          disabled={busy || title.trim().length === 0}
-          className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-mint px-5 py-2.5 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-butter disabled:opacity-45"
-        >
-          <IconCheck size={18} stroke={2.5} aria-hidden="true" />
-          Simpan
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            reset();
-            setEditing(false);
-          }}
-          className="pressable inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-5 py-2.5 font-display text-small font-bold text-ink shadow-lift-1 hover:bg-sunken"
-        >
-          <IconX size={18} stroke={2.5} aria-hidden="true" />
-          Batal
-        </button>
-      </div>
+    <div>
+      <dt className="font-display text-[0.72rem] font-bold text-meta">
+        {label}
+      </dt>
+      <dd className="mt-0.5 font-display text-[1.05rem] leading-none font-extrabold tabular-nums text-ink">
+        {value}
+      </dd>
     </div>
   );
 }

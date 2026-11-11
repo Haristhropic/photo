@@ -25,27 +25,29 @@ export function Faq({ items }: { items: FAQItem[] }) {
               aria-labelledby={`faq-question-${index}`}
               className="absolute inset-0 z-10 h-full w-full cursor-pointer"
             />
-            <div className="p-5 sm:p-6">
+            <div className="flex items-start gap-3 p-5 sm:p-6">
               <span
-                className={`reg-cross mb-3 block size-5 text-ink/40 transition-transform ${
+                className={`reg-cross mt-[0.3em] size-5 shrink-0 text-ink/40 transition-transform ${
                   isOpen ? "rotate-45" : ""
                 }`}
                 aria-hidden="true"
               />
-              <h3
-                id={`faq-question-${index}`}
-                className="font-display text-h3 font-extrabold"
-              >
-                {item.q}
-              </h3>
-              {isOpen && (
-                <p
-                  id={`faq-answer-${index}`}
-                  className="mt-2 max-w-[var(--measure)] text-ink-body"
+              <div className="min-w-0 flex-1">
+                <h3
+                  id={`faq-question-${index}`}
+                  className="font-display text-h3 font-extrabold"
                 >
-                  {item.a}
-                </p>
-              )}
+                  {item.q}
+                </h3>
+                {isOpen && (
+                  <p
+                    id={`faq-answer-${index}`}
+                    className="mt-2 max-w-[var(--measure)] text-ink-body"
+                  >
+                    {item.a}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         );

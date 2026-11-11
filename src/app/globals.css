@@ -40,6 +40,7 @@
   --ink-meta: #6b566f;
 
   --line: #e6d2b4;
+  --line-soft: #f0e4d1;
   --line-strong: #c9ac85;
 
   /* The five spot colours. */
@@ -89,6 +90,7 @@
   --color-ink-body: var(--ink-body);
   --color-meta: var(--ink-meta);
   --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
   --color-line-strong: var(--line-strong);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);

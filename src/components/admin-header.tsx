@@ -8,7 +8,6 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { BackLink } from "@/components/back-link";
 import { Logo } from "@/components/logo";
 
 type AdminSection = "dashboard" | "storage";
@@ -32,42 +31,59 @@ export function AdminHeader({ active }: { active: AdminSection }) {
   }
 
   return (
-    <header className="border-b-2 border-ink">
-      <div className="shell flex h-18 items-center justify-between gap-2 py-2">
-        <Link
-          href="/"
-          aria-label="StripSnap, kembali ke beranda"
-          className="shrink-0 font-display text-h3 font-extrabold"
-        >
-          <Logo className="h-12 w-auto" />
-        </Link>
+    <header className="sticky top-0 z-30 border-b-2 border-ink bg-bg">
+      <div className="shell flex min-h-16 items-center justify-between gap-3 py-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link
+            href="/"
+            aria-label="StripSnap, kembali ke beranda"
+            className="shrink-0"
+          >
+            <Logo className="h-10 w-auto" />
+          </Link>
+          <span
+            aria-hidden="true"
+            className="hidden h-6 border-l-2 border-line-strong sm:block"
+          />
+          <span className="hidden font-display text-small font-bold text-meta sm:inline">
+            Admin
+          </span>
+        </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <BackLink href="/" label="Beranda" />
-          <nav className="flex items-center gap-1.5" aria-label="Admin">
-            {NAV.map(({ href, label, section, Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                aria-label={label}
-                aria-current={active === section ? "page" : undefined}
-                title={label}
-                className={`pressable inline-flex size-10 items-center justify-center rounded-[var(--radius)] border-2 border-ink text-ink shadow-lift-1 ${
-                  active === section ? "bg-butter" : "bg-elev hover:bg-butter"
-                }`}
-              >
-                <Icon size={18} stroke={2.25} aria-hidden="true" />
-              </Link>
-            ))}
+        <div className="flex items-center gap-2">
+          <nav
+            aria-label="Admin"
+            className="flex items-center gap-1 rounded-[var(--radius)] border-2 border-ink bg-elev p-1 shadow-lift-1"
+          >
+            {NAV.map(({ href, label, section, Icon }) => {
+              const current = active === section;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-label={label}
+                  aria-current={current ? "page" : undefined}
+                  className={`pressable inline-flex min-h-9 items-center gap-2 rounded-[8px] px-2.5 font-display text-small font-extrabold text-ink sm:px-3 ${
+                    current ? "bg-butter" : "hover:bg-sunken"
+                  }`}
+                >
+                  <Icon size={18} stroke={2.4} aria-hidden="true" />
+                  <span className={current ? "inline" : "hidden sm:inline"}>
+                    {label}
+                  </span>
+                </Link>
+              );
+            })}
           </nav>
+
           <button
             type="button"
             onClick={logout}
-            aria-label="Keluar dari admin"
-            title="Keluar"
-            className="pressable inline-flex size-10 items-center justify-center rounded-[var(--radius-pill)] border-2 border-ink bg-elev text-ink shadow-lift-1 hover:bg-pink"
+            className="pressable inline-flex min-h-9 items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-elev px-2.5 font-display text-small font-extrabold text-ink shadow-lift-1 hover:bg-pink sm:px-3"
           >
-            <IconLogout size={18} stroke={2.25} aria-hidden="true" />
+            <IconLogout size={18} stroke={2.4} aria-hidden="true" />
+            <span className="hidden sm:inline">Keluar</span>
+            <span className="sr-only sm:hidden">Keluar dari admin</span>
           </button>
         </div>
       </div>
