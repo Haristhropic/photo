@@ -756,9 +756,11 @@ export function StudioClient() {
   }
 
   const layout = LAYOUTS[draft.layoutType];
+  // The booth would otherwise open on its default frame after a back step, so
+  // every return trip carries the frame the guest actually chose.
   const boothHref = `/booth?from=studio${
     draft.eventId ? `&event=${encodeURIComponent(draft.eventId)}` : ""
-  }${draft.source === "upload" ? "&mode=upload" : ""}`;
+  }${draft.source === "upload" ? "&mode=upload" : ""}&layout=${draft.layoutType}`;
 
   // Every layer and the saved PNG share this one calculation, so dragging can
   // never drift from what `addStickerToStrip` paints.
@@ -1260,6 +1262,11 @@ export function StudioClient() {
     }
     if (draft?.source === "upload") {
       discardParams.push("mode=upload");
+    }
+    // Keep the frame even when the photos are dropped, so the booth reopens on
+    // the layout the guest picked instead of its widest default.
+    if (draft?.layoutType) {
+      discardParams.push(`layout=${draft.layoutType}`);
     }
     // Show a neutral state while the draft clears, so the empty-studio
     // "Belum ada foto" card does not flash before the booth takes over.

@@ -140,10 +140,12 @@ export function BoothClient({
   eventId,
   from,
   initialMode = "camera",
+  initialLayout,
 }: {
   eventId?: string;
   from?: string;
   initialMode?: BoothSource;
+  initialLayout?: LayoutType;
 }) {
   const router = useRouter();
   const back = resolveBackTarget(from);
@@ -166,7 +168,7 @@ export function BoothClient({
   );
   const [source, setSource] = useState<BoothSource>(initialMode);
   const [layoutType, setLayoutType] = useState<LayoutType>(
-    initialMode === "upload" ? "STRIP_4" : "STRIP_3",
+    initialLayout ?? (initialMode === "upload" ? "STRIP_4" : "STRIP_3"),
   );
   const [countdown, setCountdown] = useState<number | null>(null);
   const [shotIndex, setShotIndex] = useState<number | null>(null);

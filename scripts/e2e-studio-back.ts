@@ -96,35 +96,29 @@ async function main() {
     await dialog.waitFor({ state: "hidden", timeout: 10000 });
     log("escape", "dialog dismissed");
 
-    // Saving keeps the draft and hands it back to the booth, so the same
-    // photos and three-shot layout are waiting there.
+    // A camera run cannot be saved: handing it back to the booth would drop its
+    // Live clips, so the dialog only offers discard and cancel.
     dialog = await openDialog(page);
-    await dialog.getByRole("button", { name: /Simpan ke draft/i }).click();
-    await page.waitForURL("**/booth**", { timeout: 20000 });
-    const review = page.getByTestId("review");
-    await review.waitFor({ state: "visible", timeout: 20000 });
-    const restoredShots = await page.locator('img[alt^="Bidikan"]').count();
-    if (restoredShots !== 3) {
-      throw new Error(
-        `booth restored ${restoredShots} shots, want the saved 3`,
-      );
+    if ((await dialog.getByRole("button", { name: /Simpan/i }).count()) !== 0) {
+      throw new Error("camera draft offered a save action");
     }
-    const proceed = page.getByRole("button", { name: /Lanjut ke studio/i });
-    if (await proceed.isDisabled()) {
-      throw new Error("restored 3 shots do not fit the restored layout");
-    }
-    log("save", "booth restored 3 shots and the Strip 3 layout");
+    log("camera", "no save action, as intended");
 
-    await proceed.click();
-    await page.waitForURL("**/studio", { timeout: 20000 });
-    await studioReady(page);
-    log("save", "draft still renders");
-
-    // Discarding clears the draft; the studio falls back to its empty state.
-    dialog = await openDialog(page);
+    // Discarding clears the draft and reopens the booth on the chosen frame.
     await dialog.getByRole("button", { name: /Buang foto/i }).click();
     await page.waitForURL("**/booth**", { timeout: 20000 });
-    log("discard", "back at booth");
+    await page
+      .getByRole("heading", { name: "Pilih layout" })
+      .waitFor({ state: "visible", timeout: 20000 });
+    const strip3Pressed = await page
+      .getByRole("button", { name: /^Strip 3/ })
+      .first()
+      .getAttribute("aria-pressed");
+    if (strip3Pressed !== "true") {
+      throw new Error(`camera discard opened on the wrong frame: ${page.url()}`);
+    }
+    log("discard", "booth reopened on the Strip 3 layout");
+
     await page.goto(`${BASE}/studio`, { waitUntil: "domcontentloaded" });
     await page
       .getByRole("heading", { name: /Belum ada foto/i })
@@ -144,7 +138,7 @@ async function main() {
     log("upload seeded", "1-photo SINGLE draft opened");
 
     dialog = await openDialog(page);
-    await dialog.getByRole("button", { name: /Simpan ke draft/i }).click();
+    await dialog.getByRole("button", { name: /Simpan draft/i }).click();
     await page.waitForURL("**/booth**", { timeout: 20000 });
     if (!page.url().includes("mode=upload")) {
       throw new Error(`upload booth lost its mode: ${page.url()}`);
@@ -159,6 +153,32 @@ async function main() {
       throw new Error("restored 1 photo does not fit the restored SINGLE layout");
     }
     log("upload save", "booth restored 1 photo as SINGLE");
+
+    // Discarding an upload must keep the frame as well: the booth used to
+    // reopen its default four-slot upload editor and silently replace the
+    // guest's choice.
+    await page.goto(`${BASE}/studio`, { waitUntil: "domcontentloaded" });
+    await seedDraft(page, {
+      layoutType: "STRIP_2",
+      count: 2,
+      source: "upload",
+    });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await studioReady(page);
+    dialog = await openDialog(page);
+    await dialog.getByRole("button", { name: /Buang foto/i }).click();
+    await page.waitForURL("**/booth**", { timeout: 20000 });
+    if (!page.url().includes("layout=STRIP_2")) {
+      throw new Error(`discard dropped the chosen layout: ${page.url()}`);
+    }
+    await page
+      .getByText(/0 \/ 2 foto · Strip 2/i)
+      .waitFor({ state: "visible", timeout: 20000 });
+    const discardSlots = await page.getByTestId(/^upload-slot-/).count();
+    if (discardSlots !== 2) {
+      throw new Error(`discarded booth shows ${discardSlots} slots, want 2`);
+    }
+    log("upload discard", "booth reopened on the chosen Strip 2 layout");
 
     console.log("STUDIO_BACK_OK");
   } finally {
