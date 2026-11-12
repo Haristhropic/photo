@@ -34,7 +34,13 @@ import {
   stopStream,
   waitForVideoLive,
 } from "@/lib/capture";
-import { BOOTH_KEY, clearBoothRun, writeDraft } from "@/lib/draft-store";
+import {
+  BOOTH_KEY,
+  clearBoothRun,
+  sanitizeDraftDesign,
+  writeDraft,
+} from "@/lib/draft-store";
+import type { DraftDesign } from "@/lib/render";
 import { LAYOUTS, LAYOUT_ORDER, type LayoutType } from "@/lib/layouts";
 import {
   deleteRunClips,
@@ -68,6 +74,8 @@ type BoothRun = {
   shots: string[];
   source?: BoothSource;
   transforms?: ShotTransform[];
+  /** The studio's saved stickers/frame/filter, carried across the round trip. */
+  design?: DraftDesign;
 };
 
 /** Event slugs and access keys are `[a-z0-9-]`; anything else cannot be a real
@@ -174,6 +182,9 @@ export function BoothClient({
   const [shotIndex, setShotIndex] = useState<number | null>(null);
   const [shots, setShots] = useState<string[]>([]);
   const [transforms, setTransforms] = useState<ShotTransform[]>([]);
+  // Held untouched while the guest reworks their photos; only a fresh run
+  // (camera, retake, back to start) drops it.
+  const [design, setDesign] = useState<DraftDesign | undefined>(undefined);
   const replaceIndexRef = useRef<number | null>(null);
   const [cropIndex, setCropIndex] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
@@ -235,6 +246,7 @@ export function BoothClient({
                   )
                 : [],
             );
+            setDesign(sanitizeDraftDesign(parsed.design));
             setStatus(restoredSource === "upload" ? "upload" : "review");
           } else {
             sessionStorage.removeItem(BOOTH_KEY);
@@ -253,12 +265,18 @@ export function BoothClient({
       }
       sessionStorage.setItem(
         BOOTH_KEY,
-        JSON.stringify({ layoutType, shots, source, transforms }),
+        JSON.stringify({
+          layoutType,
+          shots,
+          source,
+          transforms,
+          ...(design ? { design } : {}),
+        }),
       );
     } catch {
       // Storage can be full or blocked; the run still works in memory.
     }
-  }, [layoutType, shots, source, transforms]);
+  }, [layoutType, shots, source, transforms, design]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const preset = LAYOUTS[layoutType];
@@ -301,6 +319,7 @@ export function BoothClient({
     setStatus("requesting");
     setShots([]);
     setTransforms([]);
+    setDesign(undefined);
     setImporting(false);
     setImportError(null);
     setImportNotice(null);
@@ -468,6 +487,7 @@ export function BoothClient({
     cancelRun();
     setShots([]);
     setTransforms([]);
+    setDesign(undefined);
     startCamera();
   }
 
@@ -476,6 +496,7 @@ export function BoothClient({
     importRunRef.current += 1;
     setShots([]);
     setTransforms([]);
+    setDesign(undefined);
     setSource("camera");
     setStatus("intro");
     setImporting(false);
@@ -672,6 +693,8 @@ export function BoothClient({
       source,
       ...(finalTransforms ? { transforms: finalTransforms } : {}),
       ...(liveMeta ? { live: liveMeta } : {}),
+      // A design only exists on the upload path; a camera run has no save step.
+      ...(design && source === "upload" ? { design } : {}),
     });
     router.push("/studio");
   }

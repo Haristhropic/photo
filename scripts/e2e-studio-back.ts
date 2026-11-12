@@ -180,6 +180,139 @@ async function main() {
     }
     log("upload discard", "booth reopened on the chosen Strip 2 layout");
 
+    // Saving a draft must carry the whole design back to the booth, not only
+    // the photos: stickers (with their placements), frame and filter have to
+    // survive a booth reload and the trip back into the studio.
+    await page.goto(`${BASE}/studio`, { waitUntil: "domcontentloaded" });
+    await seedDraft(page, {
+      layoutType: "STRIP_3",
+      count: 3,
+      source: "upload",
+    });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await studioReady(page);
+
+    for (const name of ["Bestie", "Party"]) {
+      await page.locator(`fieldset button[title^="${name}"]`).first().click();
+    }
+    await page.getByRole("button", { name: "Retro", exact: true }).click();
+    await page.locator('button[title^="Pita"]').first().click();
+    await page.waitForTimeout(600);
+
+    const stickerLayout = () =>
+      page.$$eval("[data-sticker-id]", (nodes) =>
+        nodes.map((node) => ({
+          id: node.getAttribute("data-sticker-id"),
+          left: node.style.left,
+          top: node.style.top,
+          transform: node.style.transform,
+        })),
+      );
+    const savedLayers = await stickerLayout();
+    if (savedLayers.length !== 3) {
+      throw new Error(`studio shows ${savedLayers.length} sticker layers, want 3`);
+    }
+
+    dialog = await openDialog(page);
+    await dialog.getByRole("button", { name: /Simpan draft/i }).click();
+    await page.waitForURL("**/booth**", { timeout: 20000 });
+
+    const run = await page.evaluate(() => {
+      const raw = sessionStorage.getItem("snapvibe.boothrun");
+      return raw ? JSON.parse(raw) : null;
+    });
+    const design = run?.design;
+    if (design?.filterKey !== "retro" || design?.frameKey !== "pita") {
+      throw new Error(`booth run lost the design: ${JSON.stringify(design)}`);
+    }
+    if (design?.stickers?.length !== 3 || !design?.stickers?.[1]?.spot) {
+      throw new Error(`booth run lost a sticker: ${JSON.stringify(design?.stickers)}`);
+    }
+
+    // A reload proves the design is in storage, not a one-shot memory handoff.
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page
+      .getByText(/3 \/ 3 foto · Strip 3/i)
+      .waitFor({ state: "visible", timeout: 20000 });
+    await page.getByRole("button", { name: /Lanjut ke studio/i }).click();
+    await page.waitForURL("**/studio", { timeout: 20000 });
+    await studioReady(page);
+    await page.waitForTimeout(600);
+
+    const filterPressed = await page
+      .getByRole("button", { name: "Retro", exact: true })
+      .getAttribute("aria-pressed");
+    const framePressed = await page
+      .locator('button[title^="Pita"]')
+      .first()
+      .getAttribute("aria-pressed");
+    const chipCount = await page
+      .getByRole("group", { name: "Pilih stiker", exact: true })
+      .getByRole("button")
+      .count();
+    const restoredLayers = await stickerLayout();
+    if (filterPressed !== "true") throw new Error("saved filter did not return");
+    if (framePressed !== "true") throw new Error("saved frame did not return");
+    if (chipCount !== 3) {
+      throw new Error(`restored studio shows ${chipCount} sticker chips, want 3`);
+    }
+    if (JSON.stringify(restoredLayers) !== JSON.stringify(savedLayers)) {
+      throw new Error(
+        `sticker placements changed:\nwant ${JSON.stringify(savedLayers)}\ngot  ${JSON.stringify(restoredLayers)}`,
+      );
+    }
+    log("design save", "filter, frame and stickers survived the round trip");
+
+    // The custom frame editor is part of the design too: its style, colours
+    // and caption must come back after a save, not reset to defaults.
+    await page.locator('button[title^="Custom"]').first().click();
+    const custom = page.getByTestId("custom-frame-controls");
+    await custom.waitFor({ state: "visible", timeout: 10000 });
+    await custom.getByRole("button", { name: "Garis", exact: true }).click();
+    await custom.getByRole("button", { name: "Warna kertas Mint" }).click();
+    await custom.getByRole("button", { name: "Warna aksen Biru" }).click();
+    await page.locator("#custom-caption").fill("Squad 2026");
+    await page.waitForTimeout(400);
+
+    dialog = await openDialog(page);
+    await dialog.getByRole("button", { name: /Simpan draft/i }).click();
+    await page.waitForURL("**/booth**", { timeout: 20000 });
+    await page.getByRole("button", { name: /Lanjut ke studio/i }).click();
+    await page.waitForURL("**/studio", { timeout: 20000 });
+    await studioReady(page);
+    await page.waitForTimeout(600);
+
+    const restoredCustom = page.getByTestId("custom-frame-controls");
+    await restoredCustom.waitFor({ state: "visible", timeout: 10000 });
+    const customState = {
+      frame: await page
+        .locator('button[title^="Custom"]')
+        .first()
+        .getAttribute("aria-pressed"),
+      style: await restoredCustom
+        .getByRole("button", { name: "Garis", exact: true })
+        .getAttribute("aria-pressed"),
+      paper: await restoredCustom
+        .getByRole("button", { name: "Warna kertas Mint" })
+        .getAttribute("aria-pressed"),
+      accent: await restoredCustom
+        .getByRole("button", { name: "Warna aksen Biru" })
+        .getAttribute("aria-pressed"),
+      caption: await page.locator("#custom-caption").inputValue(),
+    };
+    if (
+      customState.frame !== "true" ||
+      customState.style !== "true" ||
+      customState.paper !== "true" ||
+      customState.accent !== "true" ||
+      customState.caption !== "Squad 2026"
+    ) {
+      throw new Error(
+        `custom frame did not return: ${JSON.stringify(customState)}`,
+      );
+    }
+    log("design save", "custom frame options survived the round trip");
+
     console.log("STUDIO_BACK_OK");
   } finally {
     await browser.close();

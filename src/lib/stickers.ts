@@ -47,6 +47,35 @@ export type StickerSpot = {
   scale: number;
 };
 
+/**
+ * Accept a spot from storage or a draft. Every field has to be a finite
+ * number: one NaN would collapse the canvas transform and hide the sticker for
+ * good. The ranges are wider than the studio can produce, so a hand-edited
+ * draft still lands inside the print once `stickerGeometry` clamps it.
+ */
+export function normalizeStickerSpot(value: unknown): StickerSpot | null {
+  if (!value || typeof value !== "object") return null;
+  const { x, y, rotation, scale } = value as Partial<StickerSpot>;
+  if (
+    typeof x !== "number" ||
+    !Number.isFinite(x) ||
+    typeof y !== "number" ||
+    !Number.isFinite(y) ||
+    typeof rotation !== "number" ||
+    !Number.isFinite(rotation) ||
+    typeof scale !== "number" ||
+    !Number.isFinite(scale)
+  ) {
+    return null;
+  }
+  return {
+    x: Math.min(Math.max(x, -1), 2),
+    y: Math.min(Math.max(y, -1), 2),
+    rotation: Math.min(Math.max(rotation, -360), 360),
+    scale: Math.min(Math.max(scale, STICKER_SCALE_MIN), STICKER_SCALE_MAX),
+  };
+}
+
 type PathFn = (ctx: CanvasRenderingContext2D) => void;
 
 /* -------------------------------------------------------------------------- */

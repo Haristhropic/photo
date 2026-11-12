@@ -16,18 +16,99 @@
 // held in memory for the client-side handoff as well, and a failed write drops
 // the old entry so a reload can never resurrect a previous guest's strip.
 
-import { LAYOUTS, type LayoutType } from "./layouts";
+import {
+  CUSTOM_FRAME_DEFAULTS,
+  CUSTOM_FRAME_STYLES,
+  MAX_CUSTOM_CAPTION,
+  type CustomFrameOptions,
+} from "./custom-frame";
+import type { FrameKey } from "./frames";
+import { LAYOUTS, isFilterKey, type LayoutType } from "./layouts";
 import { normalizeShotTransform, type ShotTransform } from "./photo-transform";
-import type { Draft } from "./render";
+import { STICKERS, normalizeStickerSpot, type StickerKey } from "./stickers";
+import type { Draft, DraftDesign, DraftSticker } from "./render";
 
 const DRAFT_KEY = "snapvibe.draft";
 export const BOOTH_KEY = "snapvibe.boothrun";
+
+/** Enough for a busy print; a runaway draft must not fill sessionStorage. */
+const MAX_DRAFT_STICKERS = 24;
 
 let cachedRaw: string | null | undefined;
 let cachedDraft: Draft | null = null;
 let memoryDraft: Draft | null = null;
 
 const listeners = new Set<() => void>();
+
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+function sanitizeCustomFrame(value: unknown): CustomFrameOptions {
+  const input =
+    value && typeof value === "object"
+      ? (value as Partial<CustomFrameOptions>)
+      : {};
+  const color = (candidate: unknown, fallback: string): string =>
+    typeof candidate === "string" && HEX_COLOR.test(candidate)
+      ? candidate
+      : fallback;
+
+  return {
+    style: (CUSTOM_FRAME_STYLES as readonly string[]).includes(
+      input.style as string,
+    )
+      ? (input.style as CustomFrameOptions["style"])
+      : CUSTOM_FRAME_DEFAULTS.style,
+    paper: color(input.paper, CUSTOM_FRAME_DEFAULTS.paper),
+    accent: color(input.accent, CUSTOM_FRAME_DEFAULTS.accent),
+    caption:
+      typeof input.caption === "string"
+        ? input.caption.slice(0, MAX_CUSTOM_CAPTION)
+        : CUSTOM_FRAME_DEFAULTS.caption,
+    showDate: input.showDate === true,
+  };
+}
+
+function sanitizeStickers(value: unknown): DraftSticker[] {
+  if (!Array.isArray(value)) return [];
+
+  const stickers: DraftSticker[] = [];
+  for (const entry of value.slice(0, MAX_DRAFT_STICKERS)) {
+    if (!entry || typeof entry !== "object") continue;
+    const { key, spot } = entry as { key?: unknown; spot?: unknown };
+    if (
+      typeof key !== "string" ||
+      !Object.prototype.hasOwnProperty.call(STICKERS, key)
+    ) {
+      continue;
+    }
+    stickers.push({
+      key: key as StickerKey,
+      spot: normalizeStickerSpot(spot),
+    });
+  }
+  return stickers;
+}
+
+/**
+ * A draft's design block is guest-authored state from sessionStorage, and it
+ * is replayed straight into the studio's controls. Normalise every field here
+ * so an old, truncated or hand-edited draft can only produce a design the
+ * studio already knows how to render.
+ */
+export function sanitizeDraftDesign(value: unknown): DraftDesign | undefined {
+  if (!value || typeof value !== "object") return undefined;
+
+  const input = value as Partial<DraftDesign>;
+  return {
+    filterKey: isFilterKey(input.filterKey) ? input.filterKey : "original",
+    frameKey:
+      typeof input.frameKey === "string" && input.frameKey.length <= 80
+        ? (input.frameKey as FrameKey)
+        : null,
+    customFrame: sanitizeCustomFrame(input.customFrame),
+    stickers: sanitizeStickers(input.stickers),
+  };
+}
 
 /**
  * A draft is only usable when it carries every shot its layout needs. A short
@@ -90,6 +171,10 @@ function parse(raw: string | null): Draft | null {
         }
       : undefined;
 
+  // The studio's design belongs to the photos; an old draft simply has none
+  // and keeps the studio's preset look.
+  const design = sanitizeDraftDesign(parsed.design);
+
   return {
     shots: parsed.shots,
     layoutType: preset.type,
@@ -97,6 +182,7 @@ function parse(raw: string | null): Draft | null {
     source,
     ...(transforms ? { transforms } : {}),
     ...(live && live.slots.length > 0 ? { live } : {}),
+    ...(design ? { design } : {}),
   };
 }
 
@@ -179,12 +265,43 @@ function clearStoredDraft(): void {
 }
 
 /**
+ * Keep the draft current for the next screen without notifying the studio we
+ * are navigating away from. A save-draft adds the design the guest just made,
+ * and that design has to survive a reload of the booth or the studio as well as
+ * the in-tab handoff.
+ */
+function rememberDraftSilently(draft: Draft): void {
+  memoryDraft = draft;
+
+  let raw: string;
+  try {
+    raw = JSON.stringify(draft);
+  } catch {
+    return;
+  }
+
+  try {
+    sessionStorage.removeItem(DRAFT_KEY);
+    sessionStorage.setItem(DRAFT_KEY, raw);
+    cachedRaw = raw;
+    cachedDraft = draft;
+  } catch {
+    // The in-memory copy still carries the design for this tab.
+  }
+}
+
+/**
  * Hand the current draft back to the booth as its own run snapshot. The booth
  * keeps its in-progress run in sessionStorage under a separate key; without
  * this, leaving the studio drops the photos and the booth falls back to its
  * default layout, even when the guest asked to keep the draft.
+ *
+ * The design rides along too, so reopening the studio from the booth restores
+ * the stickers, frame and filter the guest placed rather than the preset look.
  */
 export function restoreDraftToBooth(draft: Draft): boolean {
+  rememberDraftSilently(draft);
+
   try {
     sessionStorage.setItem(
       BOOTH_KEY,
@@ -193,6 +310,7 @@ export function restoreDraftToBooth(draft: Draft): boolean {
         shots: draft.shots,
         source: draft.source,
         ...(draft.transforms ? { transforms: draft.transforms } : {}),
+        ...(draft.design ? { design: draft.design } : {}),
       }),
     );
     return true;

@@ -452,12 +452,41 @@ export function StudioClient() {
   const [publishNotice, setPublishNotice] = useState<string | null>(null);
   const [backDialogOpen, setBackDialogOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  // The design is seeded once per studio visit. A later save-draft writes a
+  // newer draft object and must not re-run this over the guest's edits.
+  const designSeededRef = useRef(false);
 
   const builtIn = useMemo(() => builtInFrames(), []);
   const eventId = draft?.eventId ?? null;
   // Derived rather than synchronously set in the effect; the previous frames
   // stay visible while the next event's catalogue loads.
   const framesLoading = loadedEventId !== eventId;
+
+  /* eslint-disable react-hooks/set-state-in-effect -- the draft arrives after
+     hydration, so a saved design can only be replayed from an effect. */
+  useEffect(() => {
+    if (!draft || designSeededRef.current) return;
+    designSeededRef.current = true;
+
+    const saved = draft.design;
+    if (!saved) return;
+
+    setFilterKey(saved.filterKey);
+    setFrameKey(saved.frameKey);
+    setCustomOptions(saved.customFrame ?? CUSTOM_FRAME_DEFAULTS);
+
+    const restored = saved.stickers.map((sticker, index) => ({
+      id: index + 1,
+      key: sticker.key,
+      spot: sticker.spot,
+      origin: null,
+    }));
+    setStickers(restored);
+    nextStickerIdRef.current = restored.length + 1;
+    setSelectedStickerId(restored[0]?.id ?? null);
+    setStickerSelected(false);
+  }, [draft]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Admin-managed frames live in Neon and their artwork in Cloudinary, so the
   // catalogue is fetched for the event the draft belongs to. Global frames
@@ -1245,7 +1274,20 @@ export function StudioClient() {
    */
   function saveDraftAndBack() {
     setBackDialogOpen(false);
-    if (draft) restoreDraftToBooth(draft);
+    if (draft) {
+      // A draft is the guest's whole print, not just the photos. Hand the
+      // studio state back with the run so reopening the studio restores the
+      // stickers, frame and filter instead of the preset look.
+      restoreDraftToBooth({
+        ...draft,
+        design: {
+          filterKey,
+          frameKey,
+          customFrame: customOptions,
+          stickers: stickers.map(({ key, spot }) => ({ key, spot })),
+        },
+      });
+    }
     router.push(boothHref);
   }
 
@@ -1999,7 +2041,7 @@ export function StudioClient() {
                   {
                     label: "Simpan draft & atur foto",
                     description:
-                      "Foto, urutan, dan posisi zoom tetap ada di halaman foto, jadi bisa dirapikan dulu sebelum lanjut lagi.",
+                      "Foto, urutan, zoom, stiker, dan frame tetap ada di halaman foto, jadi bisa dirapikan dulu sebelum lanjut lagi.",
                     icon: (
                       <IconDeviceFloppy
                         size={20}

@@ -9,11 +9,13 @@ import {
   type LayoutType,
   type Rect,
 } from "./layouts";
+import type { CustomFrameOptions } from "./custom-frame";
 import {
   framePhotoSlots,
   frameSupportsLayout,
   preloadFrameImage,
   roundedRectPath,
+  type FrameKey,
   type FramePreset,
 } from "./frames";
 import {
@@ -28,6 +30,24 @@ import {
   type StickerSpot,
 } from "./stickers";
 
+/** One sticker as the guest left it: which artwork and where it sits. */
+export type DraftSticker = {
+  key: StickerKey;
+  /** Null means the preset's default corner; set once the guest moves it. */
+  spot: StickerSpot | null;
+};
+
+/**
+ * Everything the studio designed around the photos. The draft owns this so a
+ * guest who saves and comes back gets their print back, not the preset look.
+ */
+export type DraftDesign = {
+  filterKey: FilterKey;
+  frameKey: FrameKey | null;
+  customFrame: CustomFrameOptions;
+  stickers: DraftSticker[];
+};
+
 export type Draft = {
   shots: string[];
   layoutType: LayoutType;
@@ -38,6 +58,8 @@ export type Draft = {
   transforms?: ShotTransform[];
   /** Live Photo metadata. Clip blobs stay in IndexedDB until save. */
   live?: { runId: string; slots: { slot: number; mime: string; durationMs: number }[] };
+  /** Stickers, frame and filter the guest applied in the studio. */
+  design?: DraftDesign;
 };
 
 /** One sticker as the renderer needs it: which artwork and where it sits. */
