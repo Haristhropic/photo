@@ -1551,7 +1551,7 @@ export function StudioClient() {
                     <div
                       role="group"
                       aria-label="Pilih stiker"
-                      className="flex flex-wrap gap-1.5"
+                      className="grid grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))] gap-2"
                     >
                       {stickerLayers.map((layer, index) => {
                         const active = layer.id === selectedLayer.id;
@@ -1565,16 +1565,19 @@ export function StudioClient() {
                               setSelectedStickerId(layer.id);
                               setStickerSelected(true);
                             }}
-                            className={`pressable inline-flex items-baseline gap-1.5 rounded-[var(--radius-pill)] border-2 border-ink px-2.5 py-1 font-display text-label font-bold tracking-[0.04em] shadow-lift-1 ${
+                            className={`pressable inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-[var(--radius-pill)] border-2 border-ink px-2.5 font-display text-label font-bold tracking-[0.04em] shadow-lift-1 ${
                               active
-                                ? "bg-ink text-bg"
-                                : "bg-elev text-ink-body hover:bg-butter hover:text-ink"
+                                ? "bg-butter text-ink"
+                                : "bg-elev text-ink hover:bg-butter/50"
                             }`}
                           >
-                            <span aria-hidden="true" className="tabular-nums opacity-60">
+                            <span
+                              aria-hidden="true"
+                              className="text-[11px] tabular-nums text-ink-meta"
+                            >
                               {index + 1}
                             </span>
-                            {layer.preset.name}
+                            <span className="truncate">{layer.preset.name}</span>
                           </button>
                         );
                       })}
