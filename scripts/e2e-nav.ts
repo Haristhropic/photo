@@ -242,17 +242,18 @@ async function main() {
     log("admin login", String(login.status()));
     if (!login.ok()) bad.push(`admin login failed (${login.status()})`);
     await page.goto(`${BASE}/admin`, { waitUntil: "domcontentloaded" });
-    const siteLinks = await page
-      .getByRole("link", { name: "Kembali ke beranda", exact: true })
-      .count();
+    // The redesigned admin header links home through its brand mark, the same
+    // accessible-name pattern as the public header.
+    const homeLink = page.locator('header a[href="/"]').first();
+    const siteLinks = await homeLink.count();
     log("admin -> public site link", `${siteLinks} found`);
-    if (siteLinks === 0) bad.push("/admin offers no link back to the public site");
-    await page
-      .getByRole("link", { name: "Kembali ke beranda", exact: true })
-      .first()
-      .click();
-    await page.waitForURL(`${BASE}/`, { timeout: 10000 });
-    log("admin -> home", page.url());
+    if (siteLinks === 0) {
+      bad.push("/admin offers no link back to the public site");
+    } else {
+      await homeLink.click();
+      await page.waitForURL(`${BASE}/`, { timeout: 10000 });
+      log("admin -> home", page.url());
+    }
   } else {
     log("admin nav", "skipped, ADMIN_EMAIL/ADMIN_PASSWORD not set");
   }

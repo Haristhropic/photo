@@ -162,7 +162,9 @@ async function darkPixelsInTopMargin(page: Page) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return -1;
     ctx.drawImage(image, 0, 0);
-    const data = ctx.getImageData(60, 22, image.naturalWidth - 120, 26).data;
+    // The caption sits on the paper plate inside the 24px top margin; the old
+    // frame band was taller, so scan the margin itself.
+    const data = ctx.getImageData(60, 4, image.naturalWidth - 120, 20).data;
     let dark = 0;
     for (let i = 0; i < data.length; i += 4) {
       if (data[i] < 90 && data[i + 1] < 90 && data[i + 2] < 90) dark += 1;
@@ -391,9 +393,15 @@ async function main() {
       .locator('[data-testid="upload-slot-2"]')
       .getByRole("button", { name: /Hapus foto 3/i })
       .click();
+    // Removing a shot recommends the tighter layout instead of switching under
+    // the guest's hands; the status still reports the chosen frame.
+    await page
+      .getByText(/3 \/ 4 foto · Strip 4/i)
+      .waitFor({ state: "visible", timeout: 10000 });
+    await page.getByRole("button", { name: /Pakai Strip 3/i }).click();
     await page
       .getByText(/3 \/ 3 foto · Strip 3/i)
-      .waitFor({ state: "visible", timeout: 5000 });
+      .waitFor({ state: "visible", timeout: 10000 });
     await page.getByRole("button", { name: /Tambah foto/i }).click();
     await input.setInputFiles([
       { name: "blue-2.jpg", mimeType: "image/jpeg", buffer: blue },
@@ -470,7 +478,9 @@ async function main() {
       .getByRole("button", { name: /Warna kertas Blush/i })
       .click();
     await waitForPreviewChange(page, beforePaper);
-    const paperPixel = await previewPixel(page, 20, 46);
+    // The "Bintik" style paints the band in the accent and the paper colour in
+    // the dots, so sample a dot centre rather than bare band.
+    const paperPixel = await previewPixel(page, 12, 42);
     assert(
       near(paperPixel, [255, 227, 239], 12),
       `custom paper is ${paperPixel}, expected blush`,
@@ -612,8 +622,8 @@ async function main() {
     log("four photos auto-upgraded Strip 3 -> Strip 4");
     await upgrade.close();
 
-    // Two photos must move from the default four-slot layout to Strip 2, then
-    // offer only the two-photo frame set in the studio.
+    // Two photos in the default four-slot editor recommend Strip 2; accepting
+    // the suggestion must leave only the two-photo frame set in the studio.
     const two = await context.newPage();
     // No two-window frame is seeded yet, so inject a tiny synthetic one into
     // this page's catalogue. It must appear on Strip 2 and put the second photo
@@ -658,6 +668,10 @@ async function main() {
       { name: "red.jpg", mimeType: "image/jpeg", buffer: red },
       { name: "green.jpg", mimeType: "image/jpeg", buffer: green },
     ]);
+    await two
+      .getByText(/2 \/ 4 foto · Strip 4/i)
+      .waitFor({ state: "visible", timeout: 30000 });
+    await two.getByRole("button", { name: /Pakai Strip 2/i }).click();
     await two
       .getByText(/2 \/ 2 foto · Strip 2/i)
       .waitFor({ state: "visible", timeout: 30000 });
@@ -749,7 +763,7 @@ async function main() {
     await two.close();
     log("two-photo session saved as Strip 2");
 
-    // Three photos must likewise leave the four-slot default and expose the
+    // Three photos likewise recommend Strip 3; accepting it must expose the
     // Strip 3 event frames.
     const three = await context.newPage();
     await three.goto(`${BASE}/booth?mode=upload`, {
@@ -765,6 +779,10 @@ async function main() {
       { name: "green.jpg", mimeType: "image/jpeg", buffer: green },
       { name: "blue.jpg", mimeType: "image/jpeg", buffer: blue },
     ]);
+    await three
+      .getByText(/3 \/ 4 foto · Strip 4/i)
+      .waitFor({ state: "visible", timeout: 30000 });
+    await three.getByRole("button", { name: /Pakai Strip 3/i }).click();
     await three
       .getByText(/3 \/ 3 foto · Strip 3/i)
       .waitFor({ state: "visible", timeout: 30000 });

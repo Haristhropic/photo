@@ -25,9 +25,10 @@ function log(step: string, detail = "") {
 
 /**
  * The landing page shows a static proof of Strip 3. It must never ask for the
- * camera, never mount a video element, and never advertise a live capture
- * countdown. The marketing page has no business holding a feed of whoever
- * scrolled past it.
+ * camera, never autoplay a video, and never advertise a live capture countdown.
+ * The marketing page has no business holding a feed of whoever scrolled past
+ * it. It may still mount the gallery's Live Photo players: those are recorded
+ * clips with `preload="none"` that only start from a guest's tap.
  */
 async function main() {
   const browser = await chromium.launch();
@@ -36,6 +37,10 @@ async function main() {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     await context.addInitScript(INSTRUMENT_CAMERA);
     const page = await context.newPage();
+    const liveRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/gallery/live/")) liveRequests.push(request.url());
+    });
 
     await page.goto(BASE, { waitUntil: "networkidle" });
     await page.waitForTimeout(800);
@@ -44,9 +49,39 @@ async function main() {
     log("getUserMedia calls", `${calls}`);
     if (calls !== 0) throw new Error(`the landing page asked for the camera ${calls} time(s)`);
 
-    const videos = await page.locator("video").count();
-    log("<video> elements", `${videos}`);
-    if (videos !== 0) throw new Error(`expected no <video> on the landing page, found ${videos}`);
+    const media = await page.evaluate(() => {
+      const hero = document.querySelector('[data-hero-strip="strip-3"]');
+      const videos = [...document.querySelectorAll("video")];
+      return videos.map((video) => ({
+        inHero: Boolean(hero && hero.contains(video)),
+        autoplay: video.hasAttribute("autoplay") || video.autoplay,
+        preload: video.getAttribute("preload"),
+        paused: video.paused,
+        readyState: video.readyState,
+      }));
+    });
+    log("<video> elements", `${media.length} (hero=${media.filter((v) => v.inHero).length})`);
+    const badVideo = media.find(
+      (video) =>
+        video.inHero ||
+        video.autoplay ||
+        video.preload !== "none" ||
+        !video.paused ||
+        video.readyState !== 0,
+    );
+    if (badVideo) {
+      throw new Error(
+        `the landing page autoplays or preloads a video: ${JSON.stringify(badVideo)}`,
+      );
+    }
+    // `currentSrc` is always populated once <video src> resolves, so the real
+    // proof that nothing streams before a tap is the absence of a request.
+    log("live clip requests", `${liveRequests.length}`);
+    if (liveRequests.length > 0) {
+      throw new Error(
+        `the landing page downloaded ${liveRequests.length} live clip(s) before any tap`,
+      );
+    }
 
     await page.waitForSelector(HERO, { timeout: 10000 });
 

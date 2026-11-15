@@ -776,7 +776,7 @@ export function BoothClient({
         ? "mx-auto w-full max-w-3xl grid-cols-1 sm:grid-cols-2"
         : preset.shotCount === 3
           ? "grid-cols-1 sm:grid-cols-3"
-          : "grid-cols-2 sm:grid-cols-4";
+          : "grid-cols-1 min-[320px]:grid-cols-2 sm:grid-cols-4";
   const cropShot = cropIndex !== null ? shots[cropIndex] : undefined;
 
   return (
@@ -1252,7 +1252,7 @@ export function BoothClient({
                           />
                         </span>
                       </button>
-                      <p className="flex items-center gap-1 text-[10px] font-semibold text-ink-meta">
+                      <p className="flex items-center gap-1 text-[0.72rem] font-semibold text-ink-meta">
                         <IconVideo size={11} stroke={2.5} aria-hidden="true" />
                         Rekam video per foto
                       </p>

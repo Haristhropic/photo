@@ -205,9 +205,19 @@ async function main() {
       const rect = node.getBoundingClientRect();
       return { width: rect.width, height: rect.height };
     });
-    const pageHeightBefore = await page.evaluate(
-      () => document.documentElement.scrollHeight,
-    );
+    // Adding a second sticker reveals the panel's "Pilih stiker" selector row,
+    // so the panel (and the document) may grow below the preview. What must not
+    // move is the preview itself: a real reflow would drag it down the page.
+    const anchorBefore = await page.evaluate(() => {
+      const img = document.querySelector(
+        'img[alt^="Pratinjau strip foto"]',
+      ) as HTMLImageElement | null;
+      return {
+        top: img ? Math.round(img.getBoundingClientRect().top + window.scrollY) : null,
+        scrollY: Math.round(window.scrollY),
+        height: document.documentElement.scrollHeight,
+      };
+    });
     await preview.evaluate((node) => {
       (node as HTMLImageElement).dataset.sentinel = "keep";
     });
@@ -217,7 +227,7 @@ async function main() {
     await page.waitForFunction(
       `(() => {
         const img = document.querySelector('img[alt^="Pratinjau strip foto"]');
-        return !!img && img.alt.includes("Cakep");
+        return !!img && img.alt.includes("2 stiker");
       })()`,
       { timeout: 30000 },
     );
@@ -230,12 +240,22 @@ async function main() {
         height: rect.height,
       };
     });
-    const pageHeightAfter = await page.evaluate(
-      () => document.documentElement.scrollHeight,
-    );
+    const anchorAfter = await page.evaluate(() => {
+      const img = document.querySelector(
+        'img[alt^="Pratinjau strip foto"]',
+      ) as HTMLImageElement | null;
+      return {
+        top: img ? Math.round(img.getBoundingClientRect().top + window.scrollY) : null,
+        scrollY: Math.round(window.scrollY),
+        height: document.documentElement.scrollHeight,
+      };
+    });
     log(
       "sticker preview",
-      `${stable.width}x${stable.height} mounted=${stable.sentinel === "keep"} page=${pageHeightBefore}->${pageHeightAfter}`,
+      `${stable.width}x${stable.height} mounted=${stable.sentinel === "keep"} ` +
+        `top=${anchorBefore.top}->${anchorAfter.top} ` +
+        `scroll=${anchorBefore.scrollY}->${anchorAfter.scrollY} ` +
+        `page=${anchorBefore.height}->${anchorAfter.height}`,
     );
     if (stable.sentinel !== "keep") {
       throw new Error("sticker change remounted the preview image");
@@ -248,9 +268,9 @@ async function main() {
         `sticker change resized the preview: ${sizeBefore.width}x${sizeBefore.height} -> ${stable.width}x${stable.height}`,
       );
     }
-    if (Math.abs(pageHeightAfter - pageHeightBefore) > 1) {
+    if (Math.abs((anchorAfter.top ?? 0) - (anchorBefore.top ?? 0)) > 1) {
       throw new Error(
-        `sticker change moved the page: ${pageHeightBefore} -> ${pageHeightAfter}`,
+        `sticker change moved the preview: top ${anchorBefore.top} -> ${anchorAfter.top}`,
       );
     }
     log("sticker change kept the preview mounted and stable");

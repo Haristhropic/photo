@@ -244,15 +244,15 @@ export function UploadFramePanel({
           <span id="upload-frame-file-label" className={LABEL}>
             File PNG
           </span>
-          <div className="mt-1.5 flex items-center gap-2 rounded-[var(--radius-sm)] border-2 border-ink bg-elev p-1.5 focus-within:bg-butter focus-within:outline-3 focus-within:outline-offset-3 focus-within:outline-sky">
+          <div className="mt-1.5 flex flex-col gap-2 rounded-[var(--radius-sm)] border-2 border-ink bg-elev p-1.5 focus-within:bg-butter focus-within:outline-3 focus-within:outline-offset-3 focus-within:outline-sky min-[400px]:flex-row min-[400px]:items-center">
             <label
               htmlFor="upload-frame-file"
-              className="pressable inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-[6px] border-2 border-ink bg-butter px-3 font-display text-small font-extrabold text-ink"
+              className="pressable inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 self-start rounded-[6px] border-2 border-ink bg-butter px-3 font-display text-small font-extrabold text-ink"
             >
               <IconUpload size={16} stroke={2.5} aria-hidden="true" />
               Pilih PNG
             </label>
-            <span className="min-w-0 truncate text-small font-semibold text-ink-body">
+            <span className="min-w-0 truncate text-small font-semibold text-ink-body min-[400px]:flex-1">
               {file ? file.name : "Belum ada file"}
             </span>
           </div>

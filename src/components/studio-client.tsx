@@ -28,6 +28,7 @@ import {
   useState,
   useSyncExternalStore,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 
 import {
@@ -359,6 +360,27 @@ type StickerPlacement = {
   spot: StickerSpot | null;
   origin: StickerSpot | null;
 };
+
+/**
+ * Shared chrome for every state before the studio grid exists: hydrating,
+ * leaving, and no-draft. It deliberately mirrors the real studio's box model -
+ * full-width <main> with a .shell inside - because the old placeholder used a
+ * shell-width <main> and swapping to the real layout reflowed the whole page
+ * (CLS ~0.9 on desktop). The viewport-height floor also keeps the footer below
+ * the fold so it cannot jump when the real content lands.
+ */
+function StudioStatus({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-1 flex-col">
+      <StudioHeader back={{ href: "/", label: "Beranda" }} />
+      <main className="flex min-h-[calc(100svh-4.5rem)] flex-1 flex-col justify-center">
+        <h1 className="sr-only">Studio foto</h1>
+        <div className="shell py-[var(--page)]">{children}</div>
+      </main>
+      <SiteFooter />
+    </div>
+  );
+}
 
 export function StudioClient() {
   const router = useRouter();
@@ -732,55 +754,41 @@ export function StudioClient() {
 
   if (!hydrated) {
     return (
-      <div className="flex flex-1 flex-col">
-        <StudioHeader back={{ href: "/", label: "Beranda" }} />
-        <main className="shell flex flex-1 flex-col justify-center py-[var(--page)]">
-          <h1 className="sr-only">Studio foto</h1>
-          <p className="text-lead text-ink-body">Menyiapkan studio...</p>
-        </main>
-        <SiteFooter />
-      </div>
+      <StudioStatus>
+        <p className="text-lead text-ink-body">Menyiapkan studio...</p>
+      </StudioStatus>
     );
   }
 
   if (!draft) {
     if (leaving) {
       return (
-        <div className="flex flex-1 flex-col">
-          <StudioHeader back={{ href: "/", label: "Beranda" }} />
-          <main className="shell flex flex-1 flex-col justify-center py-[var(--page)]">
-            <h1 className="sr-only">Studio foto</h1>
-            <p className="text-lead text-ink-body">Kembali ke booth...</p>
-          </main>
-          <SiteFooter />
-        </div>
+        <StudioStatus>
+          <p className="text-lead text-ink-body">Kembali ke booth...</p>
+        </StudioStatus>
       );
     }
 
     return (
-      <div className="flex flex-1 flex-col">
-        <StudioHeader back={{ href: "/", label: "Beranda" }} />
-        <main className="shell flex flex-1 flex-col justify-center py-[var(--page)]">
-          <div className="max-w-[var(--measure)] rounded-[var(--radius-xl)] border-2 border-ink bg-elev p-8 shadow-lift-2">
-            <h1 className="font-display text-h2 font-extrabold text-ink">
-              Belum ada foto
-            </h1>
-            <p className="mt-3 text-lead text-ink-body">
-              Studio hanya bisa dibuka setelah kamu mengambil atau mengunggah
-              foto di booth.
-            </p>
-            <button
-              type="button"
-              onClick={() => router.push("/booth")}
-              className="pressable mt-8 inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-mint px-7 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-sky"
-            >
-              <IconArrowLeft size={22} stroke={2.5} aria-hidden="true" />
-              Buka booth
-            </button>
-          </div>
-        </main>
-        <SiteFooter />
-      </div>
+      <StudioStatus>
+        <div className="max-w-[var(--measure)] rounded-[var(--radius-xl)] border-2 border-ink bg-elev p-8 shadow-lift-2">
+          <h1 className="font-display text-h2 font-extrabold text-ink">
+            Belum ada foto
+          </h1>
+          <p className="mt-3 text-lead text-ink-body">
+            Studio hanya bisa dibuka setelah kamu mengambil atau mengunggah
+            foto di booth.
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push("/booth")}
+            className="pressable mt-8 inline-flex items-center gap-2 rounded-[var(--radius)] border-2 border-ink bg-mint px-7 py-4 font-display text-lead font-extrabold text-ink shadow-lift-2 hover:bg-sky"
+          >
+            <IconArrowLeft size={22} stroke={2.5} aria-hidden="true" />
+            Buka booth
+          </button>
+        </div>
+      </StudioStatus>
     );
   }
 
