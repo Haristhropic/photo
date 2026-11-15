@@ -1348,7 +1348,7 @@ export function StudioClient() {
   );
   const frameGridClass =
     (2 + visibleFrames.length) % 3 === 1
-      ? "max-sm:[&>button:last-child]:col-start-2"
+      ? "max-lg:[&>button:last-child]:col-start-2"
       : "";
 
   // The card's corner is the exported print's corner plus the card's 8px inset
@@ -1371,9 +1371,17 @@ export function StudioClient() {
 
       <main className="flex-1">
         <h1 className="sr-only">Studio foto</h1>
-        <div className="shell grid gap-10 py-[var(--page)] lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start">
+        <div className="shell grid gap-10 py-[var(--page)] md:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] md:items-start md:gap-8 lg:gap-10">
+          {/*
+            On tablet and desktop the preview column sticks to the viewport
+            while the guest scrolls the controls, so every filter, sticker and
+            frame choice is made with the strip still visible. The column's own
+            height stays content-sized via md:items-start, which is what lets
+            the sticky box travel inside the taller controls column. On phones
+            it stays in normal flow above the controls.
+          */}
           <div
-            className="w-full min-w-0 justify-self-center"
+            className="w-full min-w-0 justify-self-center md:sticky md:top-4 lg:top-6"
             style={{
               containerType: "inline-size",
               maxWidth: `calc(${(PREVIEW_HEIGHT_VH * layout.canvas.w) / layout.canvas.h}vh + 1rem)`,
@@ -1757,7 +1765,7 @@ export function StudioClient() {
                 })}
               </div>
               <div
-                className={`mt-3 grid grid-cols-3 gap-2.5 sm:grid-cols-4 ${frameGridClass}`}
+                className={`mt-3 grid grid-cols-3 gap-2.5 lg:grid-cols-4 ${frameGridClass}`}
               >
                 <FrameOption
                   frame={null}
