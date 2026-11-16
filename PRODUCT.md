@@ -8,10 +8,10 @@ web
 
 ## Users
 
-**Event organizer (primary).** Signs in, creates an event, optionally sets an access
-code and uploads themed frames, then shares one link. Non-technical: weddings,
-birthdays, and office events. Today they reach the product through a
-documentation-driven setup path; a self-serve signup does not exist yet.
+**Organizer (primary).** Signs in to the admin dashboard, uploads themed frame
+PNGs, then shares one link. Non-technical: weddings, birthdays, and office
+events. Today they reach the product through a documentation-driven setup path;
+a self-serve signup does not exist yet.
 
 **Event guest (primary, anonymous).** Opens a shared link on the phone already in
 their hand, takes a photo strip, and gets it back instantly. They never install
@@ -24,9 +24,9 @@ anything, never queue for a shared kiosk, and never create an account.
 Let an event organizer run a photo booth with a single shared link, and let each
 guest take their own photo strip on their own phone, leaving with it in seconds.
 
-Success means the organizer creates an event and shares one link; the guest's
-whole journey is camera permission, a countdown, and a download. No hardware, no
-attendant, no waiting line.
+Success means the organizer shares one link; the guest's whole journey is camera
+permission, a countdown, and a download. No hardware, no attendant, no waiting
+line.
 
 ## Positioning
 
@@ -41,8 +41,8 @@ what makes the zero-setup privacy stance honest rather than decorative.
 
 ## Operating Context
 
-- An organizer creates an event, optionally sets an access code and retention
-  window, optionally uploads themed frame PNGs, and shares `/e/<slug>`.
+- An organizer optionally uploads themed frame PNGs in `/admin`, then shares the
+  booth URL.
 - A guest opens that link, grants camera permission, picks a layout, and is
   captured one photo at a time on a per-shot countdown.
 - The guest adjusts filter and stickers in a studio, saves, and lands on a result
@@ -64,11 +64,9 @@ Confirmed and working:
 - Live camera capture composited to canvas with filter and sticker overlays.
 - Unguessable 20-character access key per session; the key is the only thing
   protecting a photo.
-- Auto-deletion of photos and their files after an event-specific retention
-  window.
-- Admin CRUD for events (title, access code, retention) and themed frames,
-  gated by an email/password session cookie.
-- Event entry pages that are open or access-code protected.
+- Auto-deletion of photos and their files 24 hours after the session is created.
+- Admin CRUD for themed frames, gated by an email/password session cookie.
+- A public gallery of photos a guest explicitly chose to publish.
 - Indonesian and English are the intended product languages (see Brand
   Commitments).
 
@@ -124,8 +122,8 @@ Constraints and confirmed gaps:
    up, or wait for a turn.
 2. **One link is the whole organizer experience.** If running an event needs
    more than a single URL, the product has failed.
-3. **Photos are temporary.** Deletion is the default promise, and the retention
-   window belongs to the organizer, not to a support ticket.
+3. **Photos are temporary.** Deletion is the default promise, and the window is a
+   fixed 24 hours rather than a configurable setting to be negotiated.
 4. **Collect nothing you don't need.** Guests are anonymous by design; this is a
    privacy property to protect, not a limitation to work around.
 5. **Indonesian and English ship together.** A locale is supported or it does

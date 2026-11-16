@@ -1,4 +1,3 @@
-import { relations } from "drizzle-orm";
 import {
   index,
   integer,
@@ -48,22 +47,6 @@ export const users = pgTable(
   (table) => [index("users_role_idx").on(table.role)],
 );
 
-export const events = pgTable(
-  "events",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    title: varchar("title", { length: 160 }).notNull(),
-    slug: varchar("slug", { length: 160 }).notNull().unique(),
-    accessCode: varchar("access_code", { length: 64 }),
-    retentionHours: integer("retention_hours").notNull().default(24),
-    creatorId: uuid("creator_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    createdAt: createdAt(),
-  },
-  (table) => [index("events_creator_idx").on(table.creatorId)],
-);
-
 export const frames = pgTable(
   "frames",
   {
@@ -80,17 +63,14 @@ export const frames = pgTable(
     windows: jsonb("windows").$type<FrameWindow[]>().notNull().default([]),
     category: varchar("category", { length: 24 }).notNull().default("cool"),
     layoutType: layoutEnum("layout_type").notNull(),
-    eventId: uuid("event_id").references(() => events.id, { onDelete: "cascade" }),
     createdAt: createdAt(),
   },
-  (table) => [index("frames_event_idx").on(table.eventId)],
 );
 
 export const photoSessions = pgTable(
   "photo_sessions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
     finalPhotoUrl: text("final_photo_url").notNull(),
     accessKey: varchar("access_key", { length: 32 }).notNull().unique(),
     layoutType: layoutEnum("layout_type").notNull(),
@@ -108,43 +88,13 @@ export const photoSessions = pgTable(
     createdAt: createdAt(),
   },
   (table) => [
-    index("sessions_event_idx").on(table.eventId),
     index("sessions_expires_idx").on(table.expiresAt),
     index("sessions_published_idx").on(table.publishedAt),
   ],
 );
 
-export const usersRelations = relations(users, ({ many }) => ({
-  events: many(events),
-}));
-
-export const eventsRelations = relations(events, ({ one, many }) => ({
-  creator: one(users, {
-    fields: [events.creatorId],
-    references: [users.id],
-  }),
-  frames: many(frames),
-  photoSessions: many(photoSessions),
-}));
-
-export const framesRelations = relations(frames, ({ one }) => ({
-  event: one(events, {
-    fields: [frames.eventId],
-    references: [events.id],
-  }),
-}));
-
-export const photoSessionsRelations = relations(photoSessions, ({ one }) => ({
-  event: one(events, {
-    fields: [photoSessions.eventId],
-    references: [events.id],
-  }),
-}));
-
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
-export type Event = typeof events.$inferSelect;
-export type NewEvent = typeof events.$inferInsert;
 export type Frame = typeof frames.$inferSelect;
 export type NewFrame = typeof frames.$inferInsert;
 export type PhotoSession = typeof photoSessions.$inferSelect;

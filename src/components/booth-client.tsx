@@ -78,8 +78,8 @@ type BoothRun = {
   design?: DraftDesign;
 };
 
-/** Event slugs and access keys are `[a-z0-9-]`; anything else cannot be a real
- *  segment, so a crafted `from` cannot smuggle `//host` or `..` into the href. */
+/** Access keys are `[a-z0-9-]`; anything else cannot be a real segment, so a
+ *  crafted `from` cannot smuggle `//host` or `..` into the href. */
 const SAFE_SEGMENT = /^[a-z0-9][a-z0-9-]*$/;
 
 const MAX_SHOT_COUNT = Math.max(
@@ -119,9 +119,6 @@ function layoutForUploadCount(
 function resolveBackTarget(from: string | undefined): { href: string; label: string } {
   if (from) {
     const [kind, value] = from.split("/");
-    if (kind === "e" && value && SAFE_SEGMENT.test(value)) {
-      return { href: `/e/${value}`, label: "Event" };
-    }
     if (kind === "p" && value && SAFE_SEGMENT.test(value)) {
       return { href: `/p/${value}`, label: "Foto" };
     }
@@ -145,12 +142,10 @@ type Status =
 type BoothDialog = "foto" | "studio" | "layout" | null;
 
 export function BoothClient({
-  eventId,
   from,
   initialMode = "camera",
   initialLayout,
 }: {
-  eventId?: string;
   from?: string;
   initialMode?: BoothSource;
   initialLayout?: LayoutType;
@@ -689,7 +684,6 @@ export function BoothClient({
     writeDraft({
       shots: finalShots,
       layoutType,
-      eventId: eventId ?? null,
       source,
       ...(finalTransforms ? { transforms: finalTransforms } : {}),
       ...(liveMeta ? { live: liveMeta } : {}),
@@ -715,7 +709,7 @@ export function BoothClient({
     source === "upload" && shots.length < MAX_SHOT_COUNT;
 
   /** The header back link only needs a gate when it leaves the booth for the
-   *  result or the studio; Beranda and Event stay one-tap. */
+   *  result or the studio; Beranda stays one-tap. */
   function requestLeave(event: React.MouseEvent<HTMLAnchorElement>) {
     if (back.label !== "Foto" && back.label !== "Studio") return;
     // Keep modifier/middle clicks as ordinary "open elsewhere" actions; only a

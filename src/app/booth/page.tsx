@@ -10,8 +10,6 @@ export const metadata: Metadata = {
 
 export default async function BoothPage(props: PageProps<"/booth">) {
   const searchParams = await props.searchParams;
-  const eventId =
-    typeof searchParams.event === "string" ? searchParams.event : undefined;
   const from =
     typeof searchParams.from === "string" ? searchParams.from : undefined;
   const initialMode =
@@ -27,7 +25,6 @@ export default async function BoothPage(props: PageProps<"/booth">) {
 
   return (
     <BoothClient
-      eventId={eventId}
       from={from}
       initialMode={initialMode}
       initialLayout={initialLayout}

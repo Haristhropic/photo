@@ -1,8 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { events, frames } from "@/db/schema";
+import { frames } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { removeFrameAsset } from "@/lib/frame-assets";
 import { isFrameCategory } from "@/lib/frames";
@@ -14,14 +14,13 @@ const patchSchema = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
     layoutType: z.string().optional(),
-    eventId: z.string().uuid().nullish(),
     category: z.string().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Tidak ada field yang diubah",
   });
 
-async function loadOwnedFrame(id: string, adminId: string) {
+async function loadFrame(id: string) {
   const [row] = await db
     .select({
       id: frames.id,
@@ -29,18 +28,12 @@ async function loadOwnedFrame(id: string, adminId: string) {
       imageUrl: frames.imageUrl,
       imagePublicId: frames.imagePublicId,
       layoutType: frames.layoutType,
-      eventId: frames.eventId,
-      ownerId: events.creatorId,
     })
     .from(frames)
-    .leftJoin(events, eq(frames.eventId, events.id))
     .where(eq(frames.id, id))
     .limit(1);
 
-  if (!row) return null;
-  // Unassigned frames are shared; assigned frames belong to their creator.
-  if (row.eventId !== null && row.ownerId !== adminId) return null;
-  return row;
+  return row ?? null;
 }
 
 export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/frames/[id]">) {
@@ -50,7 +43,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/fram
   }
 
   const { id } = await ctx.params;
-  const existing = await loadOwnedFrame(id, admin.id);
+  const existing = await loadFrame(id);
   if (!existing) {
     return Response.json({ error: "Frame tidak ditemukan" }, { status: 404 });
   }
@@ -67,7 +60,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/fram
     return Response.json({ error: "Data frame tidak valid" }, { status: 400 });
   }
 
-  const { name, layoutType, eventId, category } = parsed.data;
+  const { name, layoutType, category } = parsed.data;
 
   if (layoutType !== undefined && !isLayoutType(layoutType)) {
     return Response.json({ error: "Layout tidak dikenal" }, { status: 400 });
@@ -76,24 +69,12 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/fram
     return Response.json({ error: "Kategori frame tidak dikenal" }, { status: 400 });
   }
 
-  if (eventId) {
-    const [target] = await db
-      .select({ id: events.id, ownerId: events.creatorId })
-      .from(events)
-      .where(and(eq(events.id, eventId), eq(events.creatorId, admin.id)))
-      .limit(1);
-    if (!target) {
-      return Response.json({ error: "Event tidak ditemukan" }, { status: 404 });
-    }
-  }
-
   const [updated] = await db
     .update(frames)
     .set({
       ...(name ? { name: name.trim() } : {}),
       ...(layoutType ? { layoutType } : {}),
       ...(category ? { category } : {}),
-      ...(eventId !== undefined ? { eventId: eventId ?? null } : {}),
     })
     .where(eq(frames.id, id))
     .returning();
@@ -108,7 +89,6 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/fram
     imageUrl: updated.imageUrl,
     layoutType: updated.layoutType,
     category: updated.category,
-    eventId: updated.eventId,
   });
 }
 
@@ -122,7 +102,7 @@ export async function DELETE(
   }
 
   const { id } = await ctx.params;
-  const existing = await loadOwnedFrame(id, admin.id);
+  const existing = await loadFrame(id);
   if (!existing) {
     return Response.json({ error: "Frame tidak ditemukan" }, { status: 404 });
   }

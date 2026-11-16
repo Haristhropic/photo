@@ -37,19 +37,13 @@ export type FrameRow = {
   windows: Array<{ x: number; y: number; w: number; h: number }>;
   category: string;
   layoutType: string;
-  eventId: string | null;
-  eventTitle: string | null;
 };
-
-export type EventOption = { id: string; title: string };
 
 export function AdminFrameTable({
   frames,
-  eventOptions,
   onChanged,
 }: {
   frames: FrameRow[];
-  eventOptions: EventOption[];
   onChanged: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -63,7 +57,6 @@ export function AdminFrameTable({
     return frames.filter((frame) =>
       [
         frame.name,
-        frame.eventTitle ?? "",
         LAYOUTS[frame.layoutType as LayoutType]?.label ?? frame.layoutType,
         FRAME_CATEGORY_LABEL[frame.category as FrameCategory] ?? frame.category,
       ]
@@ -112,7 +105,7 @@ export function AdminFrameTable({
           <input
             value={query}
             onChange={(changeEvent) => setQuery(changeEvent.target.value)}
-            placeholder="Cari nama, layout, atau event"
+            placeholder="Cari nama, layout, atau kategori"
             className={`${FIELD} mt-0 pl-9`}
           />
         </label>
@@ -146,7 +139,6 @@ export function AdminFrameTable({
             <FrameItem
               key={frame.id}
               frame={frame}
-              eventOptions={eventOptions}
               onChanged={onChanged}
               onRequestDelete={() => {
                 setDeleteError(null);
@@ -166,8 +158,8 @@ export function AdminFrameTable({
             <strong className="font-extrabold text-ink">
               {pendingDelete?.name}
             </strong>{" "}
-            akan dilepas dari semua event, dan file aslinya dihapus permanen
-            dari Cloudinary atau penyimpanan lokal. Foto tamu tidak terpengaruh.
+            akan dihapus permanen beserta file aslinya dari Cloudinary atau
+            penyimpanan lokal. Foto tamu tidak terpengaruh.
           </>
         }
         icon={<IconTrash size={20} stroke={2.5} aria-hidden="true" />}
@@ -193,12 +185,10 @@ export function AdminFrameTable({
 
 function FrameItem({
   frame,
-  eventOptions,
   onChanged,
   onRequestDelete,
 }: {
   frame: FrameRow;
-  eventOptions: EventOption[];
   onChanged: () => void;
   onRequestDelete: () => void;
 }) {
@@ -210,7 +200,6 @@ function FrameItem({
   const [category, setCategory] = useState<FrameCategory>(
     (frame.category as FrameCategory) ?? "cool",
   );
-  const [eventId, setEventId] = useState(frame.eventId ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -218,7 +207,6 @@ function FrameItem({
     setName(frame.name);
     setLayoutType((frame.layoutType as LayoutType) ?? "STRIP_3");
     setCategory((frame.category as FrameCategory) ?? "cool");
-    setEventId(frame.eventId ?? "");
     setError(null);
   }
 
@@ -230,7 +218,7 @@ function FrameItem({
     try {
       await adminRequest(`/api/admin/frames/${frame.id}`, {
         method: "PATCH",
-        body: { name, layoutType, category, eventId: eventId || null },
+        body: { name, layoutType, category },
       });
       setEditing(false);
       onChanged();
@@ -272,9 +260,6 @@ function FrameItem({
           </h3>
           <p className="mt-1 text-small font-semibold text-meta">
             {layoutLabel} · {categoryLabel}
-          </p>
-          <p className="mt-0.5 truncate text-small font-semibold text-ink-body">
-            {frame.eventTitle ?? "Tanpa event"}
           </p>
         </div>
       </div>
@@ -333,24 +318,6 @@ function FrameItem({
                   ))}
                 </select>
               </div>
-            </div>
-            <div>
-              <label htmlFor={`frame-event-${frame.id}`} className={LABEL}>
-                Event
-              </label>
-              <select
-                id={`frame-event-${frame.id}`}
-                value={eventId}
-                onChange={(changeEvent) => setEventId(changeEvent.target.value)}
-                className={FIELD}
-              >
-                <option value="">Tanpa event (global)</option>
-                {eventOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.title}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
 

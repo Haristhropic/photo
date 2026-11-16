@@ -59,7 +59,7 @@ async function main() {
   const context = await browser.newContext({ permissions: ["camera"], viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
 
-  const routes = ["/", "/booth", "/studio", "/privacy", "/gallery", "/admin", "/e/launch-party", "/p/nope-does-not-exist"];
+  const routes = ["/", "/booth", "/studio", "/privacy", "/gallery", "/admin", "/p/nope-does-not-exist"];
   const bad: string[] = [];
 
   for (const route of routes) {
@@ -78,7 +78,6 @@ async function main() {
     ["/privacy", "/", "Kembali ke beranda"],
     ["/gallery", "/", "Kembali ke beranda"],
     ["/admin", "/", "Kembali ke beranda"],
-    ["/e/launch-party", "/", "Kembali ke beranda"],
     ["/p/nope-does-not-exist", "/", "Kembali ke beranda"],
   ];
   for (const [url, wantHref, wantLabel] of routeBackCases) {
@@ -103,7 +102,7 @@ async function main() {
     }
   }
 
-  for (const route of ["/", "/booth", "/privacy", "/gallery", "/admin", "/e/launch-party"]) {
+  for (const route of ["/", "/booth", "/privacy", "/gallery", "/admin"]) {
     const links = await internalLinks(page, route);
     for (const href of links) {
       if (/^(https?:|mailto:|tel:|#)/.test(href)) continue;
@@ -174,7 +173,7 @@ async function main() {
   const backCases: Array<[string, string, string]> = [
     ["/booth", "/", "Kembali ke beranda"],
     ["/booth?from=studio", "/studio", "Kembali ke studio"],
-    ["/booth?from=e/acara", "/e/acara", "Kembali ke event"],
+    ["/booth?from=e/acara", "/", "Kembali ke beranda"],
     ["/booth?from=p/abc123", "/p/abc123", "Kembali ke foto"],
     ["/booth?from=https://evil.example", "/", "Kembali ke beranda"],
     ["/booth?from=//evil.example", "/", "Kembali ke beranda"],

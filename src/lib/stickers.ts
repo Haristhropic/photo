@@ -11,8 +11,8 @@ import type { LayoutPreset } from "./layouts";
  * Placement: the pack lands on the bottom-left corner by default, partly over
  * the last photo and partly over the paper margin, always clear of the faces.
  * A guest can drag it anywhere on the print (the studio stores a `StickerSpot`),
- * and bitmap event frames can pass a lower edge so the default spot stays above
- * their branded footer instead of covering the event art.
+ * and bitmap frames can pass a lower edge so the default spot stays above
+ * their branded footer instead of covering the frame art.
  */
 
 const INK = "#241428";
@@ -621,7 +621,7 @@ export function stickerGeometry(
   const cx = spot
     ? clampTo(spot.x * w, extentX * scale, w - extentX * scale)
     : 44 + extentX * scale;
-  // Bitmap event frames can pass a lower edge above the canvas bottom so the
+  // Bitmap frames can pass a lower edge above the canvas bottom so the
   // sticker lands on the last photo instead of over the frame's footer.
   const cy = spot
     ? clampTo(spot.y * h, extentY * scale, h - extentY * scale)

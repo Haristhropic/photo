@@ -122,7 +122,6 @@ function studioSeedContent() {
         )}`,
     ),
     layoutType: "STRIP_3",
-    eventId: null,
     source: "upload",
     transforms: palette.map(() => ({ focusX: 0.5, focusY: 0.5, zoom: 1 })),
     design: {

@@ -51,7 +51,6 @@ export type DraftDesign = {
 export type Draft = {
   shots: string[];
   layoutType: LayoutType;
-  eventId: string | null;
   /** Where the shots came from. Older drafts are treated as camera runs. */
   source?: "camera" | "upload";
   /** Optional per-shot focus/zoom; camera shots keep the centre cover crop. */
@@ -167,8 +166,8 @@ function photoSlotPath(
 
 /**
  * How a sticker is sized and how low it may hang for a given frame. Bitmap
- * event frames have a large branded footer, so the default spot sits on the
- * last photo instead of covering the event art.
+ * frames have a large branded footer, so the default spot sits on the last
+ * photo instead of covering the frame art.
  */
 export function stickerAnchors(
   frame: FramePreset | null,
@@ -189,12 +188,11 @@ export async function renderStrip(options: {
   /** Stickers are optional here; the studio draws them as DOM layers. */
   stickers?: StickerStamp[];
   frame: FramePreset | null;
-  eventLabel: string | null;
   transforms?: ShotTransform[];
   /** Which flow produced the shots. Camera shots get the safe fit crop. */
   source?: "camera" | "upload";
 }): Promise<string> {
-  const { shots, layoutType, filterKey, eventLabel, transforms } = options;
+  const { shots, layoutType, filterKey, transforms } = options;
   const layout = LAYOUTS[layoutType];
   const { w: width, h: height } = layout.canvas;
 
@@ -265,8 +263,8 @@ export async function renderStrip(options: {
   });
   ctx.filter = "none";
 
-  // The frame paints over the photo edges and the paper margin, the sticker is
-  // slapped on the corner last, and the event label sits above both.
+  // The frame paints over the photo edges and the paper margin, and the
+  // sticker is slapped on the corner last.
   if (frame) {
     frame.draw(ctx, layout);
   }
@@ -279,23 +277,6 @@ export async function renderStrip(options: {
         spot: stamp.spot,
       });
     }
-  }
-
-  if (eventLabel) {
-    const size = Math.max(18, Math.round(width / 34));
-    ctx.font = `600 ${size}px "IBM Plex Mono", monospace`;
-    ctx.textBaseline = "alphabetic";
-    ctx.lineJoin = "round";
-    // The label straddles the last photo and the paper margin, so it prints as
-    // ink with a paper halo instead of white text that vanishes on the margin.
-    ctx.lineWidth = Math.max(4, Math.round(size * 0.2));
-    ctx.strokeStyle = "#ffffff";
-    ctx.textAlign = "right";
-    const x = width - size * 1.4;
-    const baseline = height - size * 1.4;
-    ctx.strokeText(eventLabel, x, baseline);
-    ctx.fillStyle = "#241428";
-    ctx.fillText(eventLabel, x, baseline);
   }
 
   ctx.restore();

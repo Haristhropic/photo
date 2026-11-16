@@ -30,7 +30,7 @@ async function main() {
     for (const [route, label] of [
       ["/", "landing"],
       ["/booth", "booth"],
-      ["/e/launch-party", "event"],
+      ["/studio", "studio"],
       ["/privacy", "privacy"],
       ["/admin", "admin-login"],
     ] as const) {

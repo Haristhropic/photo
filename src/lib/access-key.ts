@@ -14,10 +14,6 @@ export function createAccessKey(length = 20): string {
   return out;
 }
 
-export function createEventCode(length = 6): string {
-  return createAccessKey(length).toUpperCase();
-}
-
 export function slugify(input: string): string {
   const base = input
     .toLowerCase()
@@ -27,5 +23,5 @@ export function slugify(input: string): string {
     .replace(/[\s_]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
-  return base || "event";
+  return base || "strip";
 }

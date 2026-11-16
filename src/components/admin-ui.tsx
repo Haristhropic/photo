@@ -221,11 +221,6 @@ async function writeClipboard(text: string): Promise<boolean> {
   }
 }
 
-/** Share link for an event, resolved against the current origin on click. */
-export function eventLink(slug: string): string {
-  return `${window.location.origin}/e/${slug}`;
-}
-
 export function formatDate(value: string | null): string {
   if (!value) return "—";
   const date = new Date(value);

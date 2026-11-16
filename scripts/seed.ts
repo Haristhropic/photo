@@ -6,8 +6,8 @@ import path from "node:path";
 import { eq } from "drizzle-orm";
 
 import { db } from "../src/db";
-import { events, frames, users } from "../src/db/schema";
-import { createEventCode, slugify } from "../src/lib/access-key";
+import { frames, users } from "../src/db/schema";
+import { slugify } from "../src/lib/access-key";
 import { analyzeFramePng } from "../src/lib/frame-image";
 import { storeFramePng } from "../src/lib/frame-assets";
 import { hashPassword } from "../src/lib/password";
@@ -27,36 +27,6 @@ async function upsertUser(email: string, password: string, role: "ADMIN" | "USER
   const id = randomUUID();
   await db.insert(users).values({ id, email, passwordHash, role });
   return { id, created: true };
-}
-
-async function upsertEvent(title: string, creatorId: string, accessCode: string | null, retentionHours: number) {
-  const slug = slugify(title);
-  const existing = await db
-    .select({ id: events.id })
-    .from(events)
-    .where(eq(events.slug, slug))
-    .limit(1);
-
-  if (existing[0]) {
-    await db
-      .update(events)
-      .set({ title, accessCode, retentionHours })
-      .where(eq(events.id, existing[0].id));
-    return { id: existing[0].id, slug, created: false };
-  }
-
-  const id = randomUUID();
-  await db.insert(events).values({ id, title, slug, accessCode, retentionHours, creatorId });
-  return { id, slug, created: true };
-}
-
-async function existingAccessCode(title: string): Promise<string | null> {
-  const [row] = await db
-    .select({ accessCode: events.accessCode })
-    .from(events)
-    .where(eq(events.slug, slugify(title)))
-    .limit(1);
-  return row?.accessCode ?? null;
 }
 
 type SeedFrame = {
@@ -111,7 +81,6 @@ async function upsertFrame(frame: SeedFrame) {
   };
 
   if (existing[0]) {
-    // Keep the admin's event assignment across reseeds.
     await db.update(frames).set(values).where(eq(frames.id, existing[0].id));
     console.log(
       `frame  ${frame.name} updated (${stored.storage}, ${analysis.windows.length} jendela)`,
@@ -122,7 +91,6 @@ async function upsertFrame(frame: SeedFrame) {
   await db.insert(frames).values({
     id: randomUUID(),
     ...values,
-    eventId: null,
   });
   console.log(
     `frame  ${frame.name} created (${stored.storage}, ${analysis.windows.length} jendela)`,
@@ -135,19 +103,6 @@ async function main() {
 
   const admin = await upsertUser(adminEmail, adminPassword, "ADMIN");
   console.log(`admin  ${adminEmail} (${admin.created ? "created" : "updated"})`);
-
-  // Re-seeding must not rotate the code guests already have. Use the configured
-  // code when present, otherwise keep the existing one, and only generate a new
-  // code for a fresh database.
-  const demoCode =
-    process.env.DEMO_EVENT_CODE?.trim() ||
-    (await existingAccessCode("Launch Party")) ||
-    createEventCode(6);
-  const demo = await upsertEvent("Launch Party", admin.id, demoCode, 168);
-  console.log(`event  /e/${demo.slug} (${demo.created ? "created" : "updated"}) code=${demoCode}`);
-
-  const openEvent = await upsertEvent("Open Booth", admin.id, null, 24);
-  console.log(`event  /e/${openEvent.slug} (no access code)`);
 
   // The two supplied RTS frames used to be hard-coded WebP overlays. They now
   // demonstrate the dynamic path: PNG -> Cloudinary -> Neon -> studio.

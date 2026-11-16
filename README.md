@@ -19,7 +19,7 @@ neon link --project-id <project-id> --branch production -y
 # 2. Buat tabel di Neon
 npm run db:migrate
 
-# 3. Isi admin + event contoh
+# 3. Isi admin dan frame contoh
 npm run db:seed
 
 # 4. Jalankan
@@ -59,12 +59,12 @@ Kalau auth atau object storage diaktifkan nanti, perintahnya lewat
 | `npm run lint` | ESLint |
 | `npm run db:push` | Terapkan schema langsung ke Neon (dev cepat, tanpa riwayat) |
 | `npm run db:migrate` | Terapkan file migrasi di `drizzle/` (pakai ini di produksi) |
-| `npm run db:seed` | Isi admin dan event contoh |
+| `npm run db:seed` | Isi admin dan frame contoh |
 | `npm run e2e` | Uji perjalanan booth sampai unduhan dengan kamera palsu |
 | `npm run e2e:hero` | Uji hero statis Strip 3 dan pastikan halaman depan tidak pernah meminta kamera |
 | `npm run e2e:retake` | Uji bahwa studio selalu memakai draft terakhir, bukan foto run sebelumnya |
 | `npm run e2e:draft` | Uji draft di penyimpanan penuh tetap memakai foto baru, bukan foto run lama atau "belum ada foto" |
-| `npm run e2e:frame` | Uji frame event Kultur/Fiksi mengisi ketiga jendela Strip 3 dan hanya muncul di layout itu |
+| `npm run e2e:frame` | Uji frame Kultur/Fiksi mengisi ketiga jendela Strip 3 dan hanya muncul di layout itu |
 | `npm run e2e:upload` | Uji unggah 2/3/4 foto, layout otomatis, filter frame, crop/zoom, simpan, dan unduh |
 | `npm run e2e:download` | Uji tally "kali diunduh" bertambah sendiri tanpa reload |
 | `npm run e2e:capture` | Uji bidikan yang tersimpan benar-benar bingkai kamera, bukan frame kosong atau duplikat |
@@ -191,7 +191,7 @@ grid. Kalau kamu ingin batasannya permanen, hapus blok tombol itu dan biarkan
 `slice(0, PREVIEW_COUNT)` berjalan.
 
 **Kontrol foto publik ada di `/admin/storage`.** Halaman ini menampilkan 24 foto
-publik per halaman beserta event, layout, filter, dan tanggalnya. Tombol
+publik per halaman beserta layout, filter, dan tanggalnya. Tombol
 **Sembunyikan** menghapus foto dari galeri dan menghapus salinan Cloudinary tanpa
 menghapus akses privat tamu; tombol **Hapus** menghapus aset Cloudinary, file
 lokal, dan baris sesi secara permanen. Semua aksi memakai cookie admin yang sama
@@ -255,14 +255,13 @@ sebelumnya. `npm run e2e:upload` menguji unggah dua, tiga, dan empat foto,
 pergantian otomatis ke Strip 2/Strip 3/Strip 4, filter frame per layout, ganti,
 hapus, urutan ulang, crop/zoom, frame custom, simpan, unduh, dan lebar 320-1440px.
 
-Admin membuat event di `/admin`, opsional dengan kode akses, dan mengunggah
-frame PNG. Event terkunci hanya bisa dibuka lewat `/e/[slug]` dengan kode yang
-benar.
+Admin mengunggah frame PNG dari `/admin`, lalu frame itu langsung muncul di
+studio semua tamu.
 
 **Frame** ada di studio, bukan di booth: tujuh desain canvas (Pita, Kucing, Mata,
 Spidol, Hantu, Neon, Balap) digambar dengan primitif di `src/lib/frames.ts`, jadi
 swatch pemilih, pratinjau, dan PNG hasil simpan memakai kode yang sama persis.
-Dua frame event RTS, **Kultur** dan **Fiksi**, sekarang dikelola admin seperti
+Dua frame RTS, **Kultur** dan **Fiksi**, sekarang dikelola admin seperti
 frame lain: PNG diunggah ke Cloudinary, metadata dan jendela fotonya disimpan di
 Neon, lalu studio mengambil katalog dari `GET /api/frames`. Keduanya khusus
 **Strip 3** dan tidak ditampilkan di layout lain. Frame dua jendela bisa
@@ -277,10 +276,10 @@ foto memakai slot layout biasa dan artwork menjadi overlay. Swatch memakai
 potongan atas artwork; file penuh baru dimuat saat frame dipilih.
 
 Frame dilukis setelah foto dan sebelum stiker; tepi bawah 70px dan tepi samping
-34px sengaja dibiarkan longgar supaya label event tetap terbaca. Untuk frame
-bitmap, stiker ditempel di foto terakhir agar footer bermerek pada frame tidak
-tertutup. Global frame (`event_id` null) muncul di semua sesi; frame yang
-dipasang ke event hanya muncul untuk draft dari event itu.
+34px sengaja dibiarkan longgar supaya stiker di pojok kiri bawah tidak menabrak
+artwork. Untuk frame bitmap, stiker ditempel di foto terakhir agar footer
+bermerek pada frame tidak tertutup. Semua frame yang tersimpan bersifat global
+dan muncul di setiap sesi studio.
 
 **Frame custom** adalah frame buatan tamu yang hanya hidup di sesi studio.
 Kartunya selalu muncul di pemilih frame (tidak ikut filter kategori) dan
@@ -290,7 +289,7 @@ disimpan di state React, bukan di database, dan dirender lewat
 `customFramePreset` di `src/lib/custom-frame.ts` sebagai `FramePreset` biasa
 dengan `key: "custom"`. Warna kertas dibawa di `FramePreset.paperColor` supaya
 `renderStrip` dan swatch memakai latar yang sama. Caption sengaja diletakkan di
-margin atas, jauh dari stiker kiri-bawah dan label event kanan-bawah; garis
+margin atas, jauh dari stiker kiri-bawah dan tanggal kanan-bawah; garis
 bingkai custom dibuat cukup tipis agar tidak menabrak caption.
 
 **Stiker tempel** juga ada di studio: enam desain die-cut (Senyum, Cakep, Squad,
@@ -315,11 +314,6 @@ lalu melakukan upsert baris **Kultur** dan **Fiksi** ke Neon. Kalau Cloudinary
 belum diatur, seed memakai penyimpanan lokal sebagai fallback supaya alur admin
 tetap bisa dicoba.
 
-Kode akses event demo memakai `DEMO_EVENT_CODE` kalau diisi. Kalau variabel itu
-kosong, seed mempertahankan kode yang sudah ada; kode acak hanya dibuat untuk
-database baru. Dengan begitu menjalankan ulang seed tidak memutus link yang
-sudah dibagikan.
-
 Seed akun bersifat upsert **berdasarkan email**, jadi:
 
 - Ganti `ADMIN_PASSWORD` lalu jalankan `npm run db:seed` untuk memperbarui
@@ -337,17 +331,13 @@ Tanpa cookie selalu dibalas `401`.
 
 | Metode | Endpoint | Fungsi |
 | --- | --- | --- |
-| `GET` | `/api/admin/events` | Daftar event milik admin |
-| `POST` | `/api/admin/events` | Buat event |
-| `PATCH` | `/api/admin/events/[id]` | Ubah judul, kode akses, retensi |
-| `DELETE` | `/api/admin/events/[id]` | Hapus event, frame ikut terhapus |
 | `GET` | `/api/admin/frames` | Daftar frame, termasuk status Cloudinary |
 | `POST` | `/api/admin/frames` | Unggah PNG, deteksi jendela, simpan ke Cloudinary + Neon |
-| `PATCH` | `/api/admin/frames/[id]` | Ubah nama, layout, kategori, event |
+| `PATCH` | `/api/admin/frames/[id]` | Ubah nama, layout, dan kategori |
 | `DELETE` | `/api/admin/frames/[id]` | Hapus baris dan aset Cloudinary |
 | `PATCH` | `/api/admin/photos/[id]` | Sembunyikan foto publik dan hapus salinan Cloudinary |
 | `DELETE` | `/api/admin/photos/[id]` | Hapus permanen aset Cloudinary, file lokal, dan sesi |
-| `GET` | `/api/frames?eventId=...` | Katalog publik untuk studio |
+| `GET` | `/api/frames` | Katalog publik untuk studio |
 | `POST` | `/api/cron/cleanup` | Jalankan retensi kedaluwarsa (butuh `Authorization: Bearer <CRON_SECRET>`) |
 
 Semua endpoint admin dan cron di atas butuh kredensial. Endpoint admin memakai
@@ -355,9 +345,8 @@ cookie sesi dari `POST /api/admin/login`; cron memakai header
 `Authorization: Bearer <CRON_SECRET>`. Di produksi, cron membalas `503` kalau
 `CRON_SECRET` belum diset, jadi job retensi tidak pernah terbuka tanpa sengaja.
 
-Mengubah judul event juga memperbarui slug-nya dan tetap unik. Menghapus event
-atau frame ikut menghapus aset Cloudinary (atau file lokal fallback), bukan hanya
-baris di Postgres. Frame upload memakai folder `CLOUDINARY_FRAME_FOLDER`
+Menghapus frame ikut menghapus aset Cloudinary (atau file lokal fallback), bukan
+hanya baris di Postgres. Frame upload memakai folder `CLOUDINARY_FRAME_FOLDER`
 (default `snapvibe/frames`); strip galeri tetap memakai `CLOUDINARY_FOLDER`.
 Sembunyikan/hapus foto publik tersedia di halaman admin **Storage**, bukan di
 API publik.

@@ -713,7 +713,7 @@ async function main() {
       { timeout: 30000 },
     );
     const twoNotice = two.getByText(
-      /Frame event hanya muncul di layout yang sesuai/i,
+      /Frame ini hanya muncul di layout yang sesuai/i,
     );
     await twoNotice.waitFor({ state: "visible", timeout: 15000 });
     assert(
@@ -764,7 +764,7 @@ async function main() {
     log("two-photo session saved as Strip 2");
 
     // Three photos likewise recommend Strip 3; accepting it must expose the
-    // Strip 3 event frames.
+    // Strip 3 frames.
     const three = await context.newPage();
     await three.goto(`${BASE}/booth?mode=upload`, {
       waitUntil: "domcontentloaded",
@@ -808,7 +808,7 @@ async function main() {
       .getByRole("button", { name: /Kultur/i })
       .waitFor({ state: "visible", timeout: 15000 });
     assert(
-      (await three.getByText(/Frame event hanya muncul di layout yang sesuai/i).count()) ===
+      (await three.getByText(/Frame ini hanya muncul di layout yang sesuai/i).count()) ===
         0,
       "Strip 3 reported its own frames as hidden",
     );

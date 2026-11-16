@@ -178,7 +178,6 @@ function parse(raw: string | null): Draft | null {
   return {
     shots: parsed.shots,
     layoutType: preset.type,
-    eventId: typeof parsed.eventId === "string" ? parsed.eventId : null,
     source,
     ...(transforms ? { transforms } : {}),
     ...(live && live.slots.length > 0 ? { live } : {}),

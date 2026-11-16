@@ -2,10 +2,10 @@ import {
   IconBolt,
   IconCamera,
   IconDownload,
-  IconLock,
   IconQrcode,
   IconRepeat,
   IconShieldCheck,
+  IconSparkles,
   IconTrash,
   type Icon as TablerIcon,
 } from "@tabler/icons-react";
@@ -101,16 +101,16 @@ const FEATURES: {
     ink: "var(--butter)",
   },
   {
-    icon: IconLock,
-    title: "Event bisa dikunci",
-    body: "Pakai access code supaya cuma tamu yang punya kode yang bisa masuk booth.",
+    icon: IconSparkles,
+    title: "Stiker bebas tempel",
+    body: "Geser, putar, dan besarkan stiker di atas strip. Semua ikut terpanggang ke PNG saat kamu simpan.",
     ink: "var(--mix-plum)",
     onDark: true,
   },
   {
     icon: IconTrash,
     title: "Foto hilang sendiri",
-    body: "Dihapus otomatis sesuai masa simpan event, default 24 jam. Kamu nggak perlu inget.",
+    body: "Dihapus otomatis setelah 24 jam. Kamu nggak perlu inget.",
     ink: "var(--orange)",
   },
 ];
@@ -122,11 +122,11 @@ const FAQ = [
   },
   {
     q: "Berapa lama foto tersimpan?",
-    a: "Default 24 jam sejak sesi dibuat. Organizer event bisa mengubahnya, dari 1 jam sampai 30 hari.",
+    a: "24 jam sejak sesi dibuat. Setelah itu link mati dan filenya dihapus otomatis.",
   },
   {
     q: "Bisa dipakai untuk event perusahaan?",
-    a: "Bisa. Buat event dengan kode akses, unggah frame sendiri, lalu bagikan linknya ke tamu.",
+    a: "Bisa. Bagikan satu link booth ke tamu, mereka jepret sendiri di HP masing-masing, lalu simpan atau bagikan hasilnya.",
   },
   {
     q: "Bisa unggah foto dari galeri?",
@@ -351,9 +351,10 @@ export default function Home() {
                   aria-hidden="true"
                 />
                 <p className="font-display text-label leading-[1.55] font-bold tracking-[0.12em] text-meta uppercase">
-                  Default 24 jam
+                  Disimpan 24 jam
                   <br />
-                  <span className="whitespace-nowrap">1–30 hari</span> per event
+                  <span className="whitespace-nowrap">lalu dihapus</span>{" "}
+                  otomatis
                 </p>
               </div>
             </div>

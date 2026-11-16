@@ -90,7 +90,6 @@ async function seedStorage(page: Page, withOldDraft: boolean): Promise<SeedResul
     const oldDraft = {
       shots: [make("#ff0000"), make("#00ff00"), make("#0000ff")],
       layoutType: "STRIP_3",
-      eventId: null,
     };
     if (${withOldDraft}) {
       sessionStorage.setItem("snapvibe.draft", JSON.stringify(oldDraft));

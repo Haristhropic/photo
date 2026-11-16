@@ -44,7 +44,6 @@ async function seedDraft(
     const draft = {
       shots,
       layoutType: options.layoutType,
-      eventId: null,
       source: options.source,
       ...(options.transforms ? { transforms: options.transforms } : {}),
     };

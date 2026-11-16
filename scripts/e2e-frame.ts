@@ -1,7 +1,7 @@
 import { chromium, type Locator, type Page } from "playwright";
 
 /**
- * Regression for the two supplied RTS event frames.
+ * Regression for the two supplied RTS frames.
  *
  * The frames are bitmap overlays with their own transparent photo windows, so
  * they cannot use the layout's regular slot grid. This test seeds a Strip 3
@@ -56,7 +56,6 @@ async function seedDraft(page: Page, layoutType: string, count: number) {
     sessionStorage.setItem("snapvibe.draft", JSON.stringify({
       shots,
       layoutType: "${layoutType}",
-      eventId: null,
     }));
   })()`);
 }
@@ -256,12 +255,12 @@ async function main() {
     log("sticker change kept the preview mounted and stable");
 
     if (
-      (await page.getByText(/Frame event hanya muncul di layout yang sesuai/i).count()) > 0
+      (await page.getByText(/Frame ini hanya muncul di layout yang sesuai/i).count()) > 0
     ) {
       throw new Error("Strip 3 should not show the hidden-frame notice");
     }
 
-    // A different layout must not offer the Strip 3 event frames.
+    // A different layout must not offer the Strip 3 frames.
     await seedDraft(page, "GRID_4", 4);
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForFunction(
@@ -276,10 +275,10 @@ async function main() {
     const fiksiCount = await page.getByRole("button", { name: /Fiksi/i }).count();
     log("Grid 2x2 picker", `Kultur=${kulturCount} Fiksi=${fiksiCount}`);
     if (kulturCount !== 0 || fiksiCount !== 0) {
-      throw new Error("Strip 3 event frames leaked into the Grid 2x2 picker");
+      throw new Error("Strip 3 frames leaked into the Grid 2x2 picker");
     }
     const notice = page.getByText(
-      /Frame event hanya muncul di layout yang sesuai/i,
+      /Frame ini hanya muncul di layout yang sesuai/i,
     );
     await notice.waitFor({ state: "visible", timeout: 10000 });
     if ((await notice.count()) === 0) {

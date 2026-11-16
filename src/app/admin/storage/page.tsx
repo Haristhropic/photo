@@ -1,11 +1,11 @@
-import { and, count, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, count, desc, isNotNull, isNull } from "drizzle-orm";
 import type { Metadata } from "next";
 
 import { AdminHeader } from "@/components/admin-header";
 import { AdminLogin } from "@/components/admin-login";
 import { AdminStorage, type StoragePhoto } from "@/components/admin-storage";
 import { db } from "@/db";
-import { events, photoSessions } from "@/db/schema";
+import { photoSessions } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 
 export const metadata: Metadata = {
@@ -58,10 +58,8 @@ export default async function AdminStoragePage(props: {
       layoutType: photoSessions.layoutType,
       filterKey: photoSessions.filterKey,
       publishedAt: photoSessions.publishedAt,
-      eventTitle: events.title,
     })
     .from(photoSessions)
-    .leftJoin(events, eq(photoSessions.eventId, events.id))
     .where(publicPhotoWhere)
     .orderBy(desc(photoSessions.publishedAt))
     .limit(PAGE_SIZE)
@@ -76,7 +74,6 @@ export default async function AdminStoragePage(props: {
             layoutType: row.layoutType,
             filterKey: row.filterKey,
             publishedAt: row.publishedAt?.toISOString() ?? "",
-            eventTitle: row.eventTitle,
           },
         ]
       : [],

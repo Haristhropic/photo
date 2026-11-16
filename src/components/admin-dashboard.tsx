@@ -1,28 +1,20 @@
 "use client";
 
-import { IconExternalLink, IconPlus } from "@tabler/icons-react";
+import { IconExternalLink } from "@tabler/icons-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { AdminEventTable, type EventRow } from "@/components/admin-event-table";
-import {
-  CreateEventPanel,
-  MaintenancePanel,
-  UploadFramePanel,
-} from "@/components/admin-forms";
+import { MaintenancePanel, UploadFramePanel } from "@/components/admin-forms";
 import { AdminFrameTable, type FrameRow } from "@/components/admin-frame-table";
 import { AdminHeader } from "@/components/admin-header";
 import { AdminMetrics, AdminPanel, BTN } from "@/components/admin-ui";
 
 export function AdminDashboard({
-  events,
   frames,
   totals,
 }: {
-  events: EventRow[];
   frames: FrameRow[];
   totals: {
-    events: number;
     frames: number;
     sessions: number;
     activeSessions: number;
@@ -31,10 +23,6 @@ export function AdminDashboard({
 }) {
   const router = useRouter();
   const refresh = () => router.refresh();
-  const eventOptions = events.map((event) => ({
-    id: event.id,
-    title: event.title,
-  }));
 
   return (
     <div className="flex flex-1 flex-col">
@@ -47,14 +35,10 @@ export function AdminDashboard({
                 Dashboard
               </h1>
               <p className="mt-2 max-w-[54ch] text-small font-semibold text-ink-body">
-                Kelola event, frame, dan retensi foto dari satu tempat.
+                Kelola frame, sesi, dan retensi foto dari satu tempat.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <a href="#buat-event" className={`${BTN.primary} lg:hidden`}>
-                <IconPlus size={18} stroke={2.5} aria-hidden="true" />
-                Buat event
-              </a>
               <Link
                 href="/gallery"
                 target="_blank"
@@ -71,9 +55,9 @@ export function AdminDashboard({
             <AdminMetrics
               items={[
                 {
-                  label: "Event",
-                  value: totals.events,
-                  hint: `${totals.frames} frame terdaftar`,
+                  label: "Frame",
+                  value: totals.frames,
+                  hint: "siap dipakai di studio",
                 },
                 {
                   label: "Sesi aktif",
@@ -94,52 +78,29 @@ export function AdminDashboard({
             />
           </div>
 
-          <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="flex min-w-0 flex-col gap-5">
-              <AdminPanel
-                title="Event"
-                description="Cari, salin link, atau ubah event."
-              >
-                <AdminEventTable events={events} onChanged={refresh} />
-              </AdminPanel>
-
-              <AdminPanel
-                title="Frame"
-                description="Frame global dan frame yang terikat ke satu event."
-              >
-                <AdminFrameTable
-                  frames={frames}
-                  eventOptions={eventOptions}
-                  onChanged={refresh}
-                />
-              </AdminPanel>
-            </div>
+          <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+            <AdminPanel
+              title="Frame"
+              description="Semua frame yang tampil di studio."
+            >
+              <AdminFrameTable frames={frames} onChanged={refresh} />
+            </AdminPanel>
 
             <div className="flex flex-col gap-5">
-              <AdminPanel
-                id="buat-event"
-                title="Buat event"
-                description="Satu link untuk semua tamu."
-              >
-                <CreateEventPanel onChanged={refresh} />
-              </AdminPanel>
-
               <AdminPanel
                 title="Unggah frame"
                 description="PNG transparan, jendela foto otomatis."
               >
-                <UploadFramePanel events={eventOptions} onChanged={refresh} />
+                <UploadFramePanel onChanged={refresh} />
+              </AdminPanel>
+
+              <AdminPanel
+                title="Maintenance"
+                description="Bersihkan foto yang sudah kedaluwarsa."
+              >
+                <MaintenancePanel onChanged={refresh} />
               </AdminPanel>
             </div>
-          </div>
-
-          <div className="mt-5">
-            <AdminPanel
-              title="Maintenance"
-              description="Bersihkan foto yang sudah kedaluwarsa."
-            >
-              <MaintenancePanel onChanged={refresh} />
-            </AdminPanel>
           </div>
         </div>
       </main>

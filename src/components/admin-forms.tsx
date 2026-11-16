@@ -1,20 +1,9 @@
 "use client";
 
-import {
-  IconPlus,
-  IconTrash,
-  IconUpload,
-} from "@tabler/icons-react";
+import { IconTrash, IconUpload } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  AdminNotice,
-  BTN,
-  CopyButton,
-  FIELD,
-  LABEL,
-  eventLink,
-} from "@/components/admin-ui";
+import { AdminNotice, BTN, FIELD, LABEL } from "@/components/admin-ui";
 import { adminRequest } from "@/lib/admin-api";
 import {
   FRAME_CATEGORIES,
@@ -23,154 +12,16 @@ import {
 } from "@/lib/frames";
 import { LAYOUTS, LAYOUT_ORDER, type LayoutType } from "@/lib/layouts";
 
-type CreatedEvent = {
-  id: string;
-  title: string;
-  slug: string;
-  accessCode: string | null;
-  retentionHours: number;
-};
-
 /**
- * The three recurring jobs on the dashboard. Each panel owns its own result
- * message so a failure in one does not make the others look broken.
+ * The two recurring jobs on the dashboard. Each panel owns its own result
+ * message so a failure in one does not make the other look broken.
  */
 
-export function CreateEventPanel({ onChanged }: { onChanged: () => void }) {
-  const [title, setTitle] = useState("");
-  const [accessCode, setAccessCode] = useState("");
-  const [retention, setRetention] = useState("24");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<CreatedEvent | null>(null);
-
-  async function submit(submitEvent: React.FormEvent<HTMLFormElement>) {
-    submitEvent.preventDefault();
-    if (busy) return;
-
-    setBusy(true);
-    setError(null);
-    setCreated(null);
-
-    try {
-      const data = await adminRequest<CreatedEvent>("/api/admin/events", {
-        method: "POST",
-        body: {
-          title,
-          accessCode: accessCode.trim() || null,
-          retentionHours: Number(retention),
-        },
-      });
-
-      setCreated(data);
-      setTitle("");
-      setAccessCode("");
-      onChanged();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Gagal membuat event");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      {error && <AdminNotice tone="error">{error}</AdminNotice>}
-
-      {created && (
-        <AdminNotice tone="success">
-          <span className="block">
-            Event <strong className="font-extrabold">{created.title}</strong>{" "}
-            dibuat.
-          </span>
-          <span className="mt-2 flex flex-wrap items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded-[6px] border-2 border-ink bg-elev px-2 py-1 font-mono text-[0.78rem] font-bold text-ink">
-              /e/{created.slug}
-            </code>
-            <CopyButton
-              value={() => eventLink(created.slug)}
-              label="Salin link"
-              copiedLabel="Tersalin"
-              className={BTN.quiet}
-            />
-          </span>
-        </AdminNotice>
-      )}
-
-      <form onSubmit={submit} className="flex flex-col gap-3">
-        <div>
-          <label htmlFor="create-event-title" className={LABEL}>
-            Judul event
-          </label>
-          <input
-            id="create-event-title"
-            required
-            maxLength={160}
-            value={title}
-            onChange={(changeEvent) => setTitle(changeEvent.target.value)}
-            placeholder="Pernikahan Rani &amp; Dito"
-            className={FIELD}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor="create-event-code" className={LABEL}>
-              Kode akses
-            </label>
-            <input
-              id="create-event-code"
-              maxLength={64}
-              value={accessCode}
-              onChange={(changeEvent) => setAccessCode(changeEvent.target.value)}
-              placeholder="Opsional"
-              className={FIELD}
-            />
-          </div>
-          <div>
-            <label htmlFor="create-event-retention" className={LABEL}>
-              Retensi (jam)
-            </label>
-            <input
-              id="create-event-retention"
-              type="number"
-              min={1}
-              max={720}
-              required
-              value={retention}
-              onChange={(changeEvent) => setRetention(changeEvent.target.value)}
-              className={FIELD}
-            />
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          disabled={busy || title.trim().length === 0}
-          className={BTN.primary}
-        >
-          <IconPlus size={18} stroke={2.5} aria-hidden="true" />
-          {busy ? "Membuat..." : "Buat event"}
-        </button>
-      </form>
-    </div>
-  );
-}
-
-type EventOption = { id: string; title: string };
-
-export function UploadFramePanel({
-  events,
-  onChanged,
-}: {
-  events: EventOption[];
-  onChanged: () => void;
-}) {
+export function UploadFramePanel({ onChanged }: { onChanged: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [layoutType, setLayoutType] = useState<LayoutType>("STRIP_3");
   const [category, setCategory] = useState<FrameCategory>("cool");
-  const [eventId, setEventId] = useState("");
   const [inputKey, setInputKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -210,7 +61,6 @@ export function UploadFramePanel({
       form.append("name", name.trim() || file.name.replace(/\.png$/i, ""));
       form.append("layoutType", layoutType);
       form.append("category", category);
-      if (eventId) form.append("eventId", eventId);
 
       const data = await adminRequest<{ name: string }>("/api/admin/frames", {
         method: "POST",
@@ -334,25 +184,6 @@ export function UploadFramePanel({
               ))}
             </select>
           </div>
-        </div>
-
-        <div>
-          <label htmlFor="upload-frame-event" className={LABEL}>
-            Event
-          </label>
-          <select
-            id="upload-frame-event"
-            value={eventId}
-            onChange={(changeEvent) => setEventId(changeEvent.target.value)}
-            className={FIELD}
-          >
-            <option value="">Tanpa event (global)</option>
-            {events.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.title}
-              </option>
-            ))}
-          </select>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

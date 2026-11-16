@@ -451,9 +451,7 @@ export function StudioClient() {
     CUSTOM_FRAME_DEFAULTS,
   );
   const [dynamicFrames, setDynamicFrames] = useState<FramePreset[]>([]);
-  const [loadedEventId, setLoadedEventId] = useState<
-    string | null | undefined
-  >(undefined);
+  const [framesLoaded, setFramesLoaded] = useState(false);
   const [framesError, setFramesError] = useState<string | null>(null);
   // The rendered strip is stored together with the exact inputs it came from.
   // Validity is derived rather than cleared on every change, so a preview for a
@@ -479,10 +477,7 @@ export function StudioClient() {
   const designSeededRef = useRef(false);
 
   const builtIn = useMemo(() => builtInFrames(), []);
-  const eventId = draft?.eventId ?? null;
-  // Derived rather than synchronously set in the effect; the previous frames
-  // stay visible while the next event's catalogue loads.
-  const framesLoading = loadedEventId !== eventId;
+  const framesLoading = !framesLoaded;
 
   /* eslint-disable react-hooks/set-state-in-effect -- the draft arrives after
      hydration, so a saved design can only be replayed from an effect. */
@@ -511,13 +506,11 @@ export function StudioClient() {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Admin-managed frames live in Neon and their artwork in Cloudinary, so the
-  // catalogue is fetched for the event the draft belongs to. Global frames
-  // (eventId null) are always included by the API.
+  // catalogue is fetched once on mount. Every stored frame is global.
   useEffect(() => {
     const controller = new AbortController();
 
-    const query = eventId ? `?eventId=${encodeURIComponent(eventId)}` : "";
-    fetch(`/api/frames${query}`, {
+    fetch("/api/frames", {
       cache: "no-store",
       signal: controller.signal,
     })
@@ -526,7 +519,7 @@ export function StudioClient() {
           | { frames?: DynamicFrameRecord[]; error?: string }
           | null;
         if (!response.ok) {
-          throw new Error(data?.error ?? "Frame event gagal dimuat");
+          throw new Error(data?.error ?? "Frame gagal dimuat");
         }
         return data?.frames ?? [];
       })
@@ -534,18 +527,18 @@ export function StudioClient() {
         if (controller.signal.aborted) return;
         setDynamicFrames(rows.map(dynamicFramePreset));
         setFramesError(null);
-        setLoadedEventId(eventId);
+        setFramesLoaded(true);
       })
       .catch((cause) => {
         if (controller.signal.aborted) return;
         setFramesError(
-          cause instanceof Error ? cause.message : "Frame event gagal dimuat",
+          cause instanceof Error ? cause.message : "Frame gagal dimuat",
         );
-        setLoadedEventId(eventId);
+        setFramesLoaded(true);
       });
 
     return () => controller.abort();
-  }, [eventId]);
+  }, []);
 
   const allFrames = useMemo(
     () => [...builtIn, ...dynamicFrames],
@@ -564,7 +557,7 @@ export function StudioClient() {
   );
   const requestedFrame = frameKey ? frameMap.get(frameKey) ?? null : null;
 
-  // Bitmap event frames are designed for one layout. Derive the usable frame so
+  // Bitmap frames are designed for one layout. Derive the usable frame so
   // the preview, label and picker all ignore an invalid choice when a different
   // draft layout arrives, without a state-resetting effect.
   const activeFrame =
@@ -604,7 +597,6 @@ export function StudioClient() {
       layoutType: draft.layoutType,
       filterKey,
       frame: activeFrame,
-      eventLabel: null,
       transforms: draft.transforms,
       source: draft.source,
     })
@@ -700,7 +692,6 @@ export function StudioClient() {
           "X-Layout-Type": draft.layoutType,
           "X-Filter-Key": filterKey,
           "X-Publish": publish ? "true" : "false",
-          ...(draft.eventId ? { "X-Event-Id": draft.eventId } : {}),
         },
         body: imageBlob,
       });
@@ -796,8 +787,8 @@ export function StudioClient() {
   // The booth would otherwise open on its default frame after a back step, so
   // every return trip carries the frame the guest actually chose.
   const boothHref = `/booth?from=studio${
-    draft.eventId ? `&event=${encodeURIComponent(draft.eventId)}` : ""
-  }${draft.source === "upload" ? "&mode=upload" : ""}&layout=${draft.layoutType}`;
+    draft.source === "upload" ? "&mode=upload" : ""
+  }&layout=${draft.layoutType}`;
 
   // Every layer and the saved PNG share this one calculation, so dragging can
   // never drift from what `addStickerToStrip` paints.
@@ -1305,11 +1296,8 @@ export function StudioClient() {
     // Live clips, which would quietly turn a live strip into a still one.
     // Dropping the draft and starting the booth fresh is the only safe
     // traversal back for them.
-    // Event context still matters; upload guests keep their upload editor.
+    // Upload guests keep their upload editor.
     const discardParams: string[] = [];
-    if (draft?.eventId) {
-      discardParams.push(`event=${encodeURIComponent(draft.eventId)}`);
-    }
     if (draft?.source === "upload") {
       discardParams.push("mode=upload");
     }
@@ -1946,7 +1934,7 @@ export function StudioClient() {
               )}
               {framesLoading && (
                 <p role="status" className="mt-2.5 text-small font-semibold text-ink-meta">
-                  Memuat frame event...
+                  Memuat frame...
                 </p>
               )}
               {framesError && (
@@ -1956,7 +1944,7 @@ export function StudioClient() {
               )}
               {hasHiddenDynamicFrames && (
                 <p className="mt-2.5 text-small font-semibold text-ink-meta">
-                  Frame event hanya muncul di layout yang sesuai.
+                  Frame ini hanya muncul di layout yang sesuai.
                 </p>
               )}
             </fieldset>

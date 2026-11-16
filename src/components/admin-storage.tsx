@@ -34,7 +34,6 @@ export type StoragePhoto = {
   layoutType: string;
   filterKey: string;
   publishedAt: string;
-  eventTitle: string | null;
 };
 
 type PendingAction = { kind: "unpublish" | "delete"; photo: StoragePhoto };
@@ -94,7 +93,7 @@ export function AdminStorage({
     }
   }
 
-  const pendingLabel = pending?.photo.eventTitle ?? "Booth terbuka";
+  const pendingLabel = "Booth terbuka";
   const deleting = pending?.kind === "delete";
 
   return (
@@ -169,7 +168,7 @@ export function AdminStorage({
                     LAYOUTS[photo.layoutType as LayoutType] ?? LAYOUTS.STRIP_3;
                   const filter = FILTERS[photo.filterKey as FilterKey];
                   const busy = busyId === photo.id;
-                  const label = photo.eventTitle ?? "Booth terbuka";
+                  const label = "Booth terbuka";
 
                   return (
                     <li

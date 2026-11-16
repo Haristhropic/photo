@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 
-import { and, desc, eq } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { events, frames } from "@/db/schema";
+import { frames } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { isFrameCategory } from "@/lib/frames";
 import { analyzeFramePng } from "@/lib/frame-image";
@@ -19,7 +19,6 @@ const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const fields = z.object({
   name: z.string().trim().min(1).max(120),
   layoutType: z.string(),
-  eventId: z.string().uuid().nullish(),
   category: z.string().optional(),
 });
 
@@ -52,7 +51,6 @@ export async function POST(request: Request) {
   const parsed = fields.safeParse({
     name: form.get("name"),
     layoutType: form.get("layoutType"),
-    eventId: form.get("eventId") || null,
     category: form.get("category") || undefined,
   });
   if (!parsed.success) {
@@ -64,18 +62,6 @@ export async function POST(request: Request) {
   const category = parsed.data.category ?? "cool";
   if (!isFrameCategory(category)) {
     return Response.json({ error: "Kategori frame tidak dikenal" }, { status: 400 });
-  }
-
-  const eventId = parsed.data.eventId ?? null;
-  if (eventId) {
-    const [target] = await db
-      .select({ id: events.id })
-      .from(events)
-      .where(and(eq(events.id, eventId), eq(events.creatorId, admin.id)))
-      .limit(1);
-    if (!target) {
-      return Response.json({ error: "Event tidak ditemukan" }, { status: 404 });
-    }
   }
 
   let analysis;
@@ -113,7 +99,6 @@ export async function POST(request: Request) {
     windows: analysis.windows,
     category,
     layoutType: parsed.data.layoutType,
-    eventId,
   });
 
   return Response.json(
@@ -136,14 +121,6 @@ export async function GET() {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Restrict to frames on events this admin owns, plus unassigned frames.
-  const owned = await db
-    .select({ id: events.id })
-    .from(events)
-    .where(eq(events.creatorId, admin.id));
-
-  const ownedIds = owned.map((row) => row.id);
-
   const rows = await db
     .select({
       id: frames.id,
@@ -155,21 +132,13 @@ export async function GET() {
       windows: frames.windows,
       category: frames.category,
       layoutType: frames.layoutType,
-      eventId: frames.eventId,
-      eventTitle: events.title,
       createdAt: frames.createdAt,
     })
     .from(frames)
-    .leftJoin(events, eq(frames.eventId, events.id))
     .orderBy(desc(frames.createdAt));
 
-  const visible =
-    ownedIds.length === 0
-      ? rows.filter((row) => row.eventId === null)
-      : rows.filter((row) => row.eventId === null || ownedIds.includes(row.eventId));
-
   return Response.json({
-    frames: visible.map((row) => ({
+    frames: rows.map((row) => ({
       ...row,
       storage: row.imagePublicId ? "cloudinary" : "local",
       windowCount: row.windows.length,

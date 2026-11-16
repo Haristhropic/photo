@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { events, photoSessions } from "@/db/schema";
+import { photoSessions } from "@/db/schema";
 import { createAccessKey } from "@/lib/access-key";
 import {
   destroyAsset,
@@ -32,14 +32,12 @@ const bodySchema = z.object({
   image: z.string().min(1),
   layoutType: z.string(),
   filterKey: z.string(),
-  eventId: z.string().uuid().nullish(),
   publish: z.boolean().optional().default(false),
 });
 
 const uploadHeaderSchema = z.object({
   layoutType: z.string(),
   filterKey: z.string(),
-  eventId: z.string().uuid().nullish(),
   publish: z.boolean(),
 });
 
@@ -47,7 +45,6 @@ type SessionInput = {
   bytes: Buffer;
   layoutType: string;
   filterKey: string;
-  eventId: string | null;
   publish: boolean;
 };
 
@@ -100,11 +97,9 @@ async function parseSessionInput(
       return tooLarge();
     }
 
-    const eventId = request.headers.get("x-event-id")?.trim() || null;
     const headers = uploadHeaderSchema.safeParse({
       layoutType: request.headers.get("x-layout-type") ?? "",
       filterKey: request.headers.get("x-filter-key") ?? "",
-      eventId,
       publish: request.headers.get("x-publish") === "true",
     });
     if (!headers.success) {
@@ -115,7 +110,6 @@ async function parseSessionInput(
       bytes,
       layoutType: headers.data.layoutType,
       filterKey: headers.data.filterKey,
-      eventId: headers.data.eventId ?? null,
       publish: headers.data.publish,
     };
   }
@@ -142,7 +136,6 @@ async function parseSessionInput(
     bytes,
     layoutType: parsed.data.layoutType,
     filterKey: parsed.data.filterKey,
-    eventId: parsed.data.eventId ?? null,
     publish: parsed.data.publish,
   };
 }
@@ -151,23 +144,12 @@ export async function POST(request: Request) {
   const input = await parseSessionInput(request);
   if (input instanceof Response) return input;
 
-  const { bytes, layoutType, filterKey, eventId, publish } = input;
+  const { bytes, layoutType, filterKey, publish } = input;
   if (!isLayoutType(layoutType) || !isFilterKey(filterKey)) {
     return Response.json({ error: "Layout atau filter tidak dikenal" }, { status: 400 });
   }
 
-  let retentionHours = DEFAULT_RETENTION_HOURS;
-  if (eventId) {
-    const [event] = await db
-      .select({ retentionHours: events.retentionHours })
-      .from(events)
-      .where(eq(events.id, eventId))
-      .limit(1);
-    if (!event) {
-      return Response.json({ error: "Event tidak ditemukan" }, { status: 404 });
-    }
-    retentionHours = event.retentionHours;
-  }
+  const retentionHours = DEFAULT_RETENTION_HOURS;
 
   const accessKey = createAccessKey(20);
   const filename = `${accessKey}.png`;
@@ -212,7 +194,6 @@ export async function POST(request: Request) {
   try {
     await db.insert(photoSessions).values({
       id,
-      eventId: eventId ?? null,
       finalPhotoUrl: url,
       accessKey,
       layoutType,

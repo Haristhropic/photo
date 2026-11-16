@@ -12,17 +12,16 @@ import {
  *
  * Most frames are painted with canvas primitives so the picker swatch, the live
  * preview and the exported PNG all run the same code at any layout size. The
- * two RTS event frames are admin-managed bitmap overlays: their photo windows
+ * two RTS frames are admin-managed bitmap overlays: their photo windows
  * are transparent holes in a Cloudinary PNG, so the renderer paints the photos
  * into those windows before it lays the art on top. Literal colours are
  * required: a canvas context cannot read the CSS custom properties the rest of
  * the app paints with.
  *
  * Layout rule: keep the bottom 70px and the outer 34px of each side free of
- * key artwork. renderStrip prints the event label there, and the optional
- * sticker is stuck on top at the bottom-left corner. Frame borders reach the
- * photo edge exactly (see `frameBand`), so anything drawn in the paper margin
- * has to share it with the border.
+ * key artwork. The optional sticker is stuck on the bottom-left corner and
+ * frame borders reach the photo edge exactly (see `frameBand`), so anything
+ * drawn in the paper margin has to share it with the border.
  */
 
 const INK = "#241428";

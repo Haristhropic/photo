@@ -65,8 +65,7 @@ export function AdminLogin() {
             Masuk dashboard
           </h1>
           <p className="mt-4 text-lead text-ink-body">
-            Dashboard untuk membuat event, mengunggah frame, dan memantau jumlah
-            foto.
+            Dashboard untuk mengunggah frame dan memantau jumlah foto.
           </p>
 
           <form onSubmit={submit} className="mt-10 flex flex-col gap-5">

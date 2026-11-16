@@ -1,6 +1,5 @@
 import { eq, sql } from "drizzle-orm";
 import {
-  IconCalendarEvent,
   IconCamera,
   IconClockHour4,
   IconHome,
@@ -19,7 +18,7 @@ import { DownloadButton } from "@/components/download-button";
 import { LivePhotoOverlay } from "@/components/live-photo-player";
 import { SiteFooter } from "@/components/site-footer";
 import { db } from "@/db";
-import { events, photoSessions } from "@/db/schema";
+import { photoSessions } from "@/db/schema";
 import { LAYOUTS, PRINT_RADIUS, isFilterKey } from "@/lib/layouts";
 import { absoluteUrl } from "@/lib/site";
 import { Logo } from "@/components/logo";
@@ -45,11 +44,9 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
       layoutType: photoSessions.layoutType,
       liveClips: photoSessions.liveClips,
       filterKey: photoSessions.filterKey,
-      eventTitle: events.title,
       isExpired: sql<number>`${photoSessions.expiresAt} < (now() at time zone 'utc')`,
     })
     .from(photoSessions)
-    .leftJoin(events, eq(photoSessions.eventId, events.id))
     .where(eq(photoSessions.accessKey, accessKey))
     .limit(1);
 
@@ -214,15 +211,6 @@ export default async function ResultPage(props: PageProps<"/p/[accessKey]">) {
               </dt>
               <dd className="mt-1 font-semibold text-ink">{layout.label}</dd>
             </div>
-            {session.eventTitle && (
-              <div className="rounded-[var(--radius)] border-2 border-ink bg-elev p-4 shadow-lift-1">
-                <dt className="flex items-center gap-2 font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
-                  <IconCalendarEvent size={15} stroke={2.5} aria-hidden="true" />
-                  Event
-                </dt>
-                <dd className="mt-1 font-semibold text-ink">{session.eventTitle}</dd>
-              </div>
-            )}
             <div className="rounded-[var(--radius)] border-2 border-ink bg-elev p-4 shadow-lift-1">
               <dt className="flex items-center gap-2 font-display text-label font-extrabold tracking-[0.12em] text-ink-meta uppercase">
                 <IconClockHour4 size={15} stroke={2.5} aria-hidden="true" />

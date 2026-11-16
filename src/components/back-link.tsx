@@ -1,5 +1,4 @@
 import {
-  IconCalendarEvent,
   IconCamera,
   IconHome,
   IconPalette,
@@ -16,7 +15,6 @@ const BACK_ICONS: Record<string, ReactNode> = {
   Booth: <IconCamera size={18} stroke={2.5} aria-hidden="true" />,
   Foto: <IconPhoto size={18} stroke={2.5} aria-hidden="true" />,
   Studio: <IconPalette size={18} stroke={2.5} aria-hidden="true" />,
-  Event: <IconCalendarEvent size={18} stroke={2.5} aria-hidden="true" />,
 };
 
 /** The destination icon for a back label; shared with the studio's
@@ -27,7 +25,7 @@ export function backIconFor(label: string): ReactNode {
 
 type BackLinkProps = {
   href: string;
-  /** Short, visible destination name: Booth, Event, Foto, Beranda. */
+  /** Short, visible destination name: Booth, Foto, Beranda. */
   label: string;
   /** Full accessible name. Defaults to "Kembali ke <label>". */
   ariaLabel?: string;

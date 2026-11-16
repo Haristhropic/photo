@@ -295,7 +295,6 @@ function seedStudioDraft() {
   const draft = {
     shots: palette.map(make),
     layoutType: "STRIP_3",
-    eventId: null,
     source: "upload",
     transforms: palette.map(() => ({ focusX: 0.5, focusY: 0.5, zoom: 1 })),
     design: {
@@ -405,7 +404,6 @@ function buildRoutes(accessKey) {
     { name: "privacy", path: "/privacy", ready: "main" },
     { name: "admin", path: "/admin", ready: "main" },
     { name: "admin-storage", path: "/admin/storage", ready: "main" },
-    { name: "event", path: "/e/launch-party", ready: "main" },
     { name: "result-missing", path: "/p/invalid", ready: "main" },
   );
 }

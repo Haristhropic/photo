@@ -12,7 +12,7 @@ import { displayFamily } from "./stickers";
  * It deliberately only paints the margins: the photo slots still come from the
  * layout, so a custom frame can never cover a face or change the strip's
  * geometry. The caption lives in the top margin, clear of the sticker in the
- * bottom-left and the event label in the bottom-right.
+ * bottom-left and the date stamp in the bottom-right.
  */
 
 export const CUSTOM_FRAME_STYLES = ["ring", "dots", "double"] as const;

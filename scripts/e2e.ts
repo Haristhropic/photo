@@ -197,9 +197,18 @@ async function main() {
     await page.getByRole("button", { name: "Party", exact: true }).click();
     log("filter + sticker applied");
 
-    const preview = page.locator(
-      'img[alt="Pratinjau strip foto dengan stiker Party"]',
-    );
+    // The studio seeds one corner sticker, so tapping Party leaves two layers
+    // on the print. The baked preview's alt text only reports the count.
+    const stickerLayers = page.locator("[data-sticker-id]");
+    await stickerLayers.first().waitFor({ state: "visible", timeout: 20000 });
+    const stickerCount = await stickerLayers.count();
+    if (stickerCount !== 2) {
+      throw new Error(
+        `Party should stack a second sticker, found ${stickerCount} layer(s)`,
+      );
+    }
+
+    const preview = page.locator('img[alt*="stiker"]');
     await preview.waitFor({ state: "visible", timeout: 20000 });
     const previewSrc = await preview.getAttribute("src");
     if (!previewSrc?.startsWith("data:image/png;base64,")) {
@@ -244,14 +253,15 @@ async function main() {
 
     await page.getByText("Fotomu sudah jadi").waitFor({ state: "visible", timeout: 15000 });
 
-    // The download screen's back control returns to the booth for a retake,
-    // not to the empty studio that was replaced when the session was saved.
+    // The download screen's back control starts a fresh booth for a retake. It
+    // deliberately drops the `from=p/<key>` context, which would otherwise make
+    // the new booth's back pill point at the photo the guest just left.
     const resultBack = page.locator('header a[aria-label="Kembali ke booth"]');
     await resultBack.waitFor({ state: "visible", timeout: 10000 });
     const resultBackHref = await resultBack.getAttribute("href");
-    if (resultBackHref !== `/booth?from=p/${accessKey}`) {
+    if (resultBackHref !== "/booth") {
       throw new Error(
-        `result back control points at ${resultBackHref}, want /booth?from=p/${accessKey}`,
+        `result back control points at ${resultBackHref}, want /booth`,
       );
     }
     log("result back control", resultBackHref);
