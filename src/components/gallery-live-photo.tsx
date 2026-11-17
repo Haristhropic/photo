@@ -6,7 +6,11 @@ import {
 } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 
-import { liveFrameArtStyle, liveSlotFrame } from "@/lib/live-frame";
+import {
+  liveFrameArtStyle,
+  liveSlotFrame,
+  waitForCanPlay,
+} from "@/lib/live-frame";
 import { isRect, type FilterKey, type Rect } from "@/lib/layouts";
 
 type GalleryLiveClip = { slot: number; rect?: Rect; frameSrc?: string };
@@ -24,10 +28,10 @@ type GalleryLivePhotoProps = {
  * The public-gallery counterpart of the result page's Live Photo overlay.
  *
  * A gallery card is too small to carry one play button per photo, so a single
- * control plays the strip's clips in shot order: the first slot comes alive,
- * then the next, and the strip settles back to its still when the last one
- * ends. Only strips recorded with the camera's Live toggle on have clips, so a
- * photo uploaded from a phone never gets a fake moving version here.
+ * control plays all of the strip's clips together, and each settles back to
+ * its still when it ends (or all stop immediately when tapped again). Only
+ * strips recorded with the camera's Live toggle on have clips, so a photo
+ * uploaded from a phone never gets a fake moving version here.
  */
 export function GalleryLivePhoto({
   id,
@@ -36,69 +40,97 @@ export function GalleryLivePhoto({
   clips,
   filterKey = "original",
 }: GalleryLivePhotoProps) {
-  const [playing, setPlaying] = useState<number | null>(null);
+  const [playingSlots, setPlayingSlots] = useState<number[]>([]);
+  const [loading, setLoading] = useState(false);
   const [sizes, setSizes] = useState<Record<number, { w: number; h: number }>>(
     {},
   );
   const [failed, setFailed] = useState<number[]>([]);
   const videoRefs = useRef<Record<number, HTMLVideoElement | null>>({});
+  const loadAbortRef = useRef<AbortController | null>(null);
 
   const ordered = [...clips].sort((a, b) => a.slot - b.slot);
   // A clip this device cannot decode is skipped rather than stalling the strip.
-  const sequence = ordered.filter((clip) => !failed.includes(clip.slot));
+  const playable = ordered.filter(
+    (clip) => !failed.includes(clip.slot) && Boolean(isRect(clip.rect) ? clip.rect : slots[clip.slot]),
+  );
 
   useEffect(() => {
     const refs = videoRefs.current;
     return () => {
+      loadAbortRef.current?.abort();
       for (const video of Object.values(refs)) video?.pause();
     };
   }, []);
 
+  function fail(slot: number) {
+    setFailed((list) => (list.includes(slot) ? list : [...list, slot]));
+    setPlayingSlots((current) => current.filter((s) => s !== slot));
+  }
+
   function stop() {
+    loadAbortRef.current?.abort();
+    loadAbortRef.current = null;
+    setLoading(false);
     for (const video of Object.values(videoRefs.current)) {
       if (!video) continue;
       video.pause();
       video.currentTime = 0;
     }
-    setPlaying(null);
+    setPlayingSlots([]);
   }
 
-  function step(from: number) {
-    const index = sequence.findIndex((clip) => clip.slot === from);
-    const next = sequence[index + 1];
-    if (!next) {
-      setPlaying(null);
-      return;
-    }
-    play(next.slot);
-  }
-
-  function play(slot: number) {
-    const video = videoRefs.current[slot];
-    if (!video) {
-      step(slot);
-      return;
-    }
-    video.currentTime = 0;
-    setPlaying(slot);
-    // Muted video may start from a tap. A rejected play means this device has
-    // no decoder for the clip, so the slot is dropped and the rest continue.
-    void video.play().catch(() => {
-      setFailed((list) => (list.includes(slot) ? list : [...list, slot]));
-      step(slot);
-    });
-  }
-
-  function toggle() {
-    if (playing !== null) {
+  async function toggle() {
+    if (playingSlots.length > 0 || loading) {
       stop();
       return;
     }
-    const first = sequence[0];
-    if (first) play(first.slot);
+
+    if (playable.length === 0) return;
+
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
+    setLoading(true);
+
+    const results = await Promise.all(
+      playable.map(async (clip) => {
+        const video = videoRefs.current[clip.slot];
+        if (!video) return { slot: clip.slot, ready: false };
+        const ready = await waitForCanPlay(video, controller.signal);
+        return { slot: clip.slot, ready };
+      }),
+    );
+
+    if (controller.signal.aborted) return;
+    loadAbortRef.current = null;
+    setLoading(false);
+
+    const readySlots: number[] = [];
+    for (const { slot, ready } of results) {
+      if (!ready) {
+        fail(slot);
+        continue;
+      }
+      const video = videoRefs.current[slot];
+      if (!video) continue;
+      video.currentTime = 0;
+      readySlots.push(slot);
+    }
+    if (readySlots.length === 0) return;
+
+    setPlayingSlots(readySlots);
+    for (const slot of readySlots) {
+      const video = videoRefs.current[slot];
+      if (!video) continue;
+      // Muted video may start from a tap. A rejected play means this device has
+      // no decoder for the clip, so that slot is dropped while the rest play.
+      void video.play().catch(() => fail(slot));
+    }
   }
 
-  if (sequence.length === 0) return null;
+  if (playable.length === 0) return null;
+
+  const isAnyPlaying = playingSlots.length > 0;
 
   return (
     <>
@@ -112,7 +144,7 @@ export function GalleryLivePhoto({
           size: sizes[clip.slot],
           filterKey,
         });
-        const isPlaying = playing === clip.slot;
+        const isSlotPlaying = playingSlots.includes(clip.slot);
         const artStyle = clip.frameSrc
           ? liveFrameArtStyle(slot, canvas, clip.frameSrc)
           : null;
@@ -143,19 +175,19 @@ export function GalleryLivePhoto({
                   [clip.slot]: { w: video.videoWidth, h: video.videoHeight },
                 }));
               }}
-              onEnded={() => step(clip.slot)}
-              onError={() => {
-                setFailed((list) =>
-                  list.includes(clip.slot) ? list : [...list, clip.slot],
+              onEnded={(event) => {
+                event.currentTarget.currentTime = 0;
+                setPlayingSlots((current) =>
+                  current.filter((s) => s !== clip.slot),
                 );
-                step(clip.slot);
               }}
+              onError={() => fail(clip.slot)}
               className={`pointer-events-none absolute inset-0 size-full transition-opacity duration-200 ${
-                isPlaying ? "opacity-100" : "opacity-0"
+                isSlotPlaying ? "opacity-100" : "opacity-0"
               }`}
               style={videoStyle}
             />
-            {isPlaying && clip.frameSrc && artStyle && (
+            {isSlotPlaying && clip.frameSrc && artStyle && (
               <div
                 aria-hidden="true"
                 className="pointer-events-none absolute"
@@ -169,18 +201,29 @@ export function GalleryLivePhoto({
       <button
         type="button"
         onClick={toggle}
-        aria-pressed={playing !== null}
+        aria-pressed={isAnyPlaying}
+        aria-busy={loading}
         aria-label={
-          playing !== null ? "Hentikan Live Photo" : "Putar Live Photo"
+          isAnyPlaying
+            ? "Hentikan Live Photo"
+            : loading
+              ? "Memuat Live Photo"
+              : "Putar Live Photo"
         }
-        title={playing !== null ? "Hentikan Live Photo" : "Putar Live Photo"}
+        title={
+          isAnyPlaying
+            ? "Hentikan Live Photo"
+            : loading
+              ? "Memuat Live Photo"
+              : "Putar Live Photo"
+        }
         className={`absolute right-2 top-2 z-10 inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-pill)] border-2 border-ink px-3 font-display text-label font-extrabold tracking-[0.1em] uppercase shadow-lift-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 ${
-          playing !== null
+          isAnyPlaying
             ? "bg-ink text-board-ink"
             : "bg-elev text-ink hover:bg-butter"
         }`}
       >
-        {playing !== null ? (
+        {isAnyPlaying ? (
           <IconPlayerStopFilled size={11} aria-hidden="true" />
         ) : (
           <IconPlayerPlayFilled
@@ -189,7 +232,7 @@ export function GalleryLivePhoto({
             className="translate-x-px"
           />
         )}
-        Live
+        {loading ? "..." : "Live"}
       </button>
     </>
   );

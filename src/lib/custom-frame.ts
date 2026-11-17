@@ -203,7 +203,7 @@ export function customFramePreset(options: CustomFrameOptions): FramePreset {
         // Two rules, both tracing the photo's window: a square pair would cut
         // across the photo's rounded corners.
         windowRule(ctx, w, h, 8 * u, 4 * u, options.accent);
-        windowRule(ctx, w, h, PAPER_MARGIN, 2.5 * u, INK);
+        windowRule(ctx, w, h, PAPER_MARGIN, 2.5 * u, options.accent);
       } else {
         frameBand(ctx, w, h, Math.max(14 * u, PAPER_MARGIN), options.accent);
       }

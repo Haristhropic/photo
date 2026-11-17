@@ -509,8 +509,6 @@ function drawPita(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
     }
   }
 
-  innerRule(ctx, w, h, band, 3.5 * u, INK);
-
   drawBow(ctx, 122 * u, 118 * u, 56 * u);
 
   heart(ctx, w - 84 * u, 92 * u, 30 * u, PINK, INK, 4 * u);
@@ -579,8 +577,6 @@ function drawKucing(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
   paw(ctx, 15 * u, 0.78 * h, 11 * u, PAPER, -0.3, INK, 1.8 * u);
   paw(ctx, w - 15 * u, 0.44 * h, 11 * u, PAPER, 0.5, INK, 1.8 * u);
   paw(ctx, w - 15 * u, 0.68 * h, 11 * u, PAPER, -0.4, INK, 1.8 * u);
-
-  innerRule(ctx, w, h, band, 3 * u, INK);
 
   drawCat(ctx, w - 108 * u, 118 * u, 54 * u);
 }
@@ -662,24 +658,7 @@ function drawMata(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
   const u = w / 900;
   const band = Math.max(20 * u, PAPER_MARGIN);
 
-  // A paper band, then two ink rules: the frame looks hand-ruled rather than
-  // printed, which is what makes the stuck-on eyes feel at home.
   frameBand(ctx, w, h, band, CREAM);
-  // The outer rule follows the print's cut, so it curves at the corner instead
-  // of being chopped off by it.
-  const edge = 2.5 * u;
-  roundedRectPath(
-    ctx,
-    edge,
-    edge,
-    w - edge * 2,
-    h - edge * 2,
-    Math.max(0, PRINT_RADIUS - edge),
-  );
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 5 * u;
-  ctx.stroke();
-  innerRule(ctx, w, h, band, 2.5 * u, INK);
 
   const eyes: Array<{ x: number; y: number; r: number; look: [number, number] }> = [
     { x: 0.12 * w, y: 27 * u, r: 26 * u, look: [-0.35, 0.25] },
@@ -719,18 +698,6 @@ function drawSpidol(ctx: CanvasRenderingContext2D, layout: LayoutPreset): void {
   // instead of around a square and the scribble meets the rounded corners.
   const inset = PAPER_MARGIN;
   const inner = PAPER_MARGIN + 14 * u;
-  markerLoop(
-    ctx,
-    inset,
-    inset,
-    w - inset * 2,
-    h - inset * 2,
-    inset,
-    4 * u,
-    INK,
-    2.2 * u,
-    0.4,
-  );
   markerLoop(
     ctx,
     inner,

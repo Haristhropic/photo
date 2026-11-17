@@ -6,7 +6,11 @@ import {
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { liveFrameArtStyle, liveSlotFrame } from "@/lib/live-frame";
+import {
+  liveFrameArtStyle,
+  liveSlotFrame,
+  waitForCanPlay,
+} from "@/lib/live-frame";
 import { isRect, type FilterKey, type Rect } from "@/lib/layouts";
 
 type LiveClip = {
@@ -31,13 +35,12 @@ type LivePhotoOverlayProps = {
 /**
  * Turns the printed photos into playable clips.
  *
- * Each photo slot becomes one control: the whole slot is the tap target, and a
- * small play button in its corner is the visible affordance. A clip plays on
- * tap, returns to the printed still when it ends (or when tapped again), and
- * only one plays at a time. The video is framed and cornered exactly like the
+ * Tapping any photo slot starts all playable clips in the strip together,
+ * returning each to its printed still when it ends (or stopping all of them
+ * when tapped again). Each video is framed and cornered exactly like the
  * photo it covers - including the layout's fit rule, its outer corner radii and
- * the print's filter - so the transition reads as the photo coming alive
- * instead of a video box appearing on top of it.
+ * the print's filter - so the transition reads as the photos coming alive
+ * instead of video boxes appearing on top of them.
  *
  * A clip the browser cannot decode hides its control rather than offering a
  * button that does nothing.
@@ -48,48 +51,89 @@ export function LivePhotoOverlay({
   clips,
   filterKey = "original",
 }: LivePhotoOverlayProps) {
-  const [playing, setPlaying] = useState<number | null>(null);
+  const [playingSlots, setPlayingSlots] = useState<number[]>([]);
+  const [loading, setLoading] = useState(false);
   const [sizes, setSizes] = useState<Record<number, { w: number; h: number }>>({});
   const [failed, setFailed] = useState<number[]>([]);
   const videoRefs = useRef<Record<number, HTMLVideoElement | null>>({});
+  const loadAbortRef = useRef<AbortController | null>(null);
 
-  const reset = useCallback((slot: number) => {
-    const video = videoRefs.current[slot];
-    if (!video) return;
-    video.pause();
-    video.currentTime = 0;
+  const ordered = [...clips].sort((a, b) => a.slot - b.slot);
+
+  const stopAll = useCallback(() => {
+    loadAbortRef.current?.abort();
+    loadAbortRef.current = null;
+    setLoading(false);
+    for (const video of Object.values(videoRefs.current)) {
+      if (!video) continue;
+      video.pause();
+      video.currentTime = 0;
+    }
+    setPlayingSlots([]);
   }, []);
 
   const fail = useCallback((slot: number) => {
     setFailed((list) => (list.includes(slot) ? list : [...list, slot]));
-    setPlaying((current) => (current === slot ? null : current));
+    setPlayingSlots((current) => current.filter((s) => s !== slot));
   }, []);
 
-  const toggle = useCallback(
-    (slot: number) => {
-      const video = videoRefs.current[slot];
-      if (!video) return;
+  const toggle = useCallback(async () => {
+    if (playingSlots.length > 0 || loading) {
+      stopAll();
+      return;
+    }
 
-      if (playing === slot) {
-        reset(slot);
-        setPlaying(null);
-        return;
+    const playable = ordered.filter((clip) => {
+      const slot = isRect(clip.rect) ? clip.rect : slots[clip.slot];
+      return Boolean(slot && !failed.includes(clip.slot) && videoRefs.current[clip.slot]);
+    });
+    if (playable.length === 0) return;
+
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
+    setLoading(true);
+
+    const results = await Promise.all(
+      playable.map(async (clip) => {
+        const video = videoRefs.current[clip.slot];
+        if (!video) return { slot: clip.slot, ready: false };
+        const ready = await waitForCanPlay(video, controller.signal);
+        return { slot: clip.slot, ready };
+      }),
+    );
+
+    if (controller.signal.aborted) return;
+    loadAbortRef.current = null;
+    setLoading(false);
+
+    const readySlots: number[] = [];
+    for (const { slot, ready } of results) {
+      if (!ready) {
+        fail(slot);
+        continue;
       }
-
-      if (playing !== null) reset(playing);
+      const video = videoRefs.current[slot];
+      if (!video) continue;
       video.currentTime = 0;
-      setPlaying(slot);
+      readySlots.push(slot);
+    }
+    if (readySlots.length === 0) return;
+
+    setPlayingSlots(readySlots);
+    for (const slot of readySlots) {
+      const video = videoRefs.current[slot];
+      if (!video) continue;
       // Muted video is allowed to start from a tap; a rejected play (unsupported
       // codec, decoder busy) means this slot has no usable clip.
       void video.play().catch(() => fail(slot));
-    },
-    [fail, playing, reset],
-  );
+    }
+  }, [fail, failed, loading, ordered, playingSlots.length, slots, stopAll]);
 
   // Leaving the page mid-clip should not keep a decoder running.
   useEffect(() => {
     const refs = videoRefs.current;
     return () => {
+      loadAbortRef.current?.abort();
       for (const video of Object.values(refs)) video?.pause();
     };
   }, []);
@@ -116,7 +160,7 @@ export function LivePhotoOverlay({
     };
   }, [fail, clips]);
 
-  const ordered = [...clips].sort((a, b) => a.slot - b.slot);
+  const isAnyPlaying = playingSlots.length > 0;
 
   return (
     <>
@@ -131,8 +175,8 @@ export function LivePhotoOverlay({
           filterKey,
         });
 
-        const isPlaying = playing === clip.slot;
-        const label = `Live Photo foto ${clip.slot + 1}`;
+        const isSlotPlaying = playingSlots.includes(clip.slot);
+        const label = "Live Photo";
         const artStyle = clip.frameSrc
           ? liveFrameArtStyle(slot, canvas, clip.frameSrc)
           : null;
@@ -150,7 +194,7 @@ export function LivePhotoOverlay({
               src={clip.url}
               muted
               playsInline
-              preload="metadata"
+              preload="auto"
               disablePictureInPicture
               aria-hidden="true"
               tabIndex={-1}
@@ -164,17 +208,17 @@ export function LivePhotoOverlay({
               }}
               onEnded={(event) => {
                 event.currentTarget.currentTime = 0;
-                setPlaying((current) =>
-                  current === clip.slot ? null : current,
+                setPlayingSlots((current) =>
+                  current.filter((s) => s !== clip.slot),
                 );
               }}
               onError={() => fail(clip.slot)}
               className={`pointer-events-none absolute inset-0 size-full transition-opacity duration-200 ${
-                isPlaying ? "opacity-100" : "opacity-0"
+                isSlotPlaying ? "opacity-100" : "opacity-0"
               }`}
               style={videoStyle}
             />
-            {isPlaying && clip.frameSrc && artStyle && (
+            {isSlotPlaying && clip.frameSrc && artStyle && (
               <div
                 aria-hidden="true"
                 className="pointer-events-none absolute"
@@ -183,22 +227,22 @@ export function LivePhotoOverlay({
             )}
             <button
               type="button"
-              onClick={() => toggle(clip.slot)}
-              aria-pressed={isPlaying}
-              aria-label={`${isPlaying ? "Hentikan" : "Putar"} ${label}`}
-              title={`${isPlaying ? "Hentikan" : "Putar"} ${label}`}
+              onClick={toggle}
+              aria-pressed={isAnyPlaying}
+              aria-label={`${isAnyPlaying ? "Hentikan" : "Putar"} ${label}`}
+              title={`${isAnyPlaying ? "Hentikan" : "Putar"} ${label}`}
               className="group absolute inset-0 z-10 cursor-pointer focus-visible:outline-none"
               style={{ borderRadius: videoStyle.borderRadius }}
             >
               <span
                 aria-hidden="true"
                 className={`absolute right-2.5 top-2.5 grid size-9 place-items-center rounded-full border-2 border-ink shadow-lift-1 transition-[background-color,transform] duration-150 group-hover:scale-105 group-focus-visible:ring-2 group-focus-visible:ring-ink group-focus-visible:ring-offset-2 ${
-                  isPlaying
+                  isAnyPlaying
                     ? "bg-ink text-board-ink"
                     : "bg-elev text-ink group-hover:bg-butter"
                 }`}
               >
-                {isPlaying ? (
+                {isAnyPlaying ? (
                   <IconPlayerStopFilled size={12} aria-hidden="true" />
                 ) : (
                   <IconPlayerPlayFilled

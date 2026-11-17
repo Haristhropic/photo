@@ -96,3 +96,42 @@ export function liveFrameArtStyle(
     backgroundRepeat: "no-repeat",
   };
 }
+
+/**
+ * Waits until a video element has enough buffered data to start playing in
+ * sync with sibling clips, or resolves false if it errors or is aborted.
+ */
+export function waitForCanPlay(
+  video: HTMLVideoElement,
+  signal: AbortSignal,
+): Promise<boolean> {
+  if (signal.aborted || video.error) return Promise.resolve(false);
+  if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+    return Promise.resolve(true);
+  }
+  return new Promise((resolve) => {
+    const cleanup = () => {
+      video.removeEventListener("canplay", onReady);
+      video.removeEventListener("error", onError);
+      signal.removeEventListener("abort", onAbort);
+    };
+    const onReady = () => {
+      cleanup();
+      resolve(true);
+    };
+    const onError = () => {
+      cleanup();
+      resolve(false);
+    };
+    const onAbort = () => {
+      cleanup();
+      resolve(false);
+    };
+    video.addEventListener("canplay", onReady);
+    video.addEventListener("error", onError);
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (video.networkState !== HTMLMediaElement.NETWORK_LOADING) {
+      video.load();
+    }
+  });
+}
