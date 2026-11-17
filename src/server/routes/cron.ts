@@ -1,14 +1,13 @@
 import { timingSafeEqual } from "node:crypto";
 
 import { and, count, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import type { Context, Hono } from "hono";
 
 import { db } from "@/db";
 import { photoSessions } from "@/db/schema";
-import { requireAdmin } from "@/lib/auth";
 import { destroyAsset, isCloudinaryConfigured } from "@/lib/cloudinary";
 import { deleteStoredFile } from "@/lib/storage";
-
-export const runtime = "nodejs";
+import { currentAdmin } from "@/server/auth";
 
 // expires_at is stored as a naive UTC timestamp, so it is compared against the
 // current UTC time explicitly rather than the session-local now().
@@ -52,12 +51,12 @@ function denyUnauthorized(request: Request): Response | null {
     : Response.json({ error: "Unauthorized" }, { status: 401 });
 }
 
-export async function POST(request: Request) {
+async function runCleanup(c: Context) {
   // Schedulers authenticate with CRON_SECRET. The admin dashboard triggers the
   // same job from a signed-in session, so allow that path too instead of
   // forcing the browser to know the cron secret.
-  const denied = denyUnauthorized(request);
-  if (denied && !(await requireAdmin())) return denied;
+  const denied = denyUnauthorized(c.req.raw);
+  if (denied && !(await currentAdmin(c))) return denied;
 
   const expired = await db
     .select({
@@ -121,12 +120,7 @@ export async function POST(request: Request) {
   if (removableIds.length > 0) {
     await db
       .delete(photoSessions)
-      .where(
-        and(
-          expiredCutoff,
-          inArray(photoSessions.id, removableIds),
-        ),
-      );
+      .where(and(expiredCutoff, inArray(photoSessions.id, removableIds)));
   }
 
   // Surfaced so a retention run shows published photos were held back on
@@ -141,7 +135,7 @@ export async function POST(request: Request) {
       ),
     );
 
-  return Response.json({
+  return c.json({
     sessionsRemoved: removableIds.length,
     filesRemoved,
     cloudinaryRemoved,
@@ -151,4 +145,6 @@ export async function POST(request: Request) {
   });
 }
 
-export const GET = POST;
+export function registerCronRoutes(app: Hono): void {
+  app.on(["GET", "POST"], "/api/cron/cleanup", runCleanup);
+}

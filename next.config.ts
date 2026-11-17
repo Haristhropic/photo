@@ -40,9 +40,21 @@ const securityHeaders = [
     : []),
 ];
 
+const noIndexHeaders = [
+  { key: "X-Robots-Tag", value: "noindex, nofollow" },
+];
+
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // Private result links and the admin surface must never be indexed.
+      // Robots.txt alone is advisory, so every response also carries the tag.
+      { source: "/p/:path*", headers: noIndexHeaders },
+      { source: "/admin/:path*", headers: noIndexHeaders },
+      { source: "/api/:path*", headers: noIndexHeaders },
+    ];
   },
 };
 

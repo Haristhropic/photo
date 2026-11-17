@@ -97,9 +97,50 @@ async function upsertFrame(frame: SeedFrame) {
   );
 }
 
+const MIN_ADMIN_PASSWORD_LENGTH = 12;
+// Values that have appeared in docs, examples, or past seeds. Seeding any of
+// them would recreate the default-credential problem this guard exists for.
+const BANNED_ADMIN_PASSWORDS = new Set([
+  "snapvibe-dev-admin",
+  "admin",
+  "password",
+  "changeme",
+]);
+
+function requireAdminCredentials(): { email: string; password: string } {
+  const email = process.env.ADMIN_EMAIL?.trim();
+  const password = process.env.ADMIN_PASSWORD;
+
+  if (!email || !email.includes("@")) {
+    throw new Error(
+      "ADMIN_EMAIL wajib diset (contoh: admin@contoh.id) sebelum menjalankan db:seed.",
+    );
+  }
+
+  if (!password) {
+    throw new Error(
+      "ADMIN_PASSWORD wajib diset sebelum menjalankan db:seed. Tidak ada password default.",
+    );
+  }
+
+  if (password.length < MIN_ADMIN_PASSWORD_LENGTH) {
+    throw new Error(
+      `ADMIN_PASSWORD minimal ${MIN_ADMIN_PASSWORD_LENGTH} karakter. Gunakan password acak yang kuat.`,
+    );
+  }
+
+  if (BANNED_ADMIN_PASSWORDS.has(password.toLowerCase())) {
+    throw new Error(
+      "ADMIN_PASSWORD masih memakai nilai contoh. Ganti dengan password acak yang kuat.",
+    );
+  }
+
+  return { email, password };
+}
+
 async function main() {
-  const adminEmail = process.env.ADMIN_EMAIL ?? "admin@snapvibe.local";
-  const adminPassword = process.env.ADMIN_PASSWORD ?? "snapvibe-dev-admin";
+  const { email: adminEmail, password: adminPassword } =
+    requireAdminCredentials();
 
   const admin = await upsertUser(adminEmail, adminPassword, "ADMIN");
   console.log(`admin  ${adminEmail} (${admin.created ? "created" : "updated"})`);

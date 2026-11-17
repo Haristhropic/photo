@@ -148,10 +148,12 @@ export const FILTERS = {
 
 export const FILTER_ORDER = Object.keys(FILTERS) as FilterKey[];
 
+// `in` walks the prototype chain, so "toString" or "constructor" would pass.
+// hasOwn restricts the check to the literal keys the app actually defines.
 export function isLayoutType(value: unknown): value is LayoutType {
-  return typeof value === "string" && value in LAYOUTS;
+  return typeof value === "string" && Object.hasOwn(LAYOUTS, value);
 }
 
 export function isFilterKey(value: unknown): value is FilterKey {
-  return typeof value === "string" && value in FILTERS;
+  return typeof value === "string" && Object.hasOwn(FILTERS, value);
 }

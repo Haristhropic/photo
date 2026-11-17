@@ -34,7 +34,7 @@ export function SiteFooter() {
               aria-hidden="true"
               className="mt-0.5 shrink-0 sm:mt-0"
             />
-            Foto dihapus otomatis setelah masa retensi habis
+            Foto privat dihapus otomatis setelah 24 jam
           </p>
         </div>
 

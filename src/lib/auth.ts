@@ -4,10 +4,12 @@ import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { users, type Role } from "@/db/schema";
 
 export const SESSION_COOKIE = "snapvibe_session";
-const SESSION_TTL_SECONDS = 60 * 60 * 8;
+export const SESSION_TTL_SECONDS = 60 * 60 * 8;
+
+export type SessionAdmin = { id: string; email: string; role: Role };
 
 function secret(): string {
   const value = process.env.SESSION_SECRET;
@@ -21,32 +23,35 @@ function sign(payload: string): string {
   return createHmac("sha256", secret()).update(payload).digest("base64url");
 }
 
-export function createSessionToken(userId: string): string {
+/**
+ * Ties a cookie to the current password hash, so changing an admin password
+ * invalidates every session issued under the old one. Without this a stolen
+ * cookie would keep working for eight hours after the password was rotated.
+ */
+function fingerprint(passwordHash: string): string {
+  return createHmac("sha256", secret())
+    .update(`session:${passwordHash}`)
+    .digest("base64url");
+}
+
+export function createSessionToken(
+  userId: string,
+  passwordHash: string,
+): string {
   const expiresAt = Date.now() + SESSION_TTL_SECONDS * 1000;
-  const payload = `${userId}.${expiresAt}`;
+  const id = fingerprint(passwordHash);
+  const payload = `${userId}.${expiresAt}.${id}`;
   return `${payload}.${sign(payload)}`;
 }
 
-export async function setSessionCookie(userId: string): Promise<void> {
-  const store = await cookies();
-  store.set(SESSION_COOKIE, createSessionToken(userId), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: SESSION_TTL_SECONDS,
-  });
-}
-
-export async function clearSessionCookie(): Promise<void> {
-  const store = await cookies();
-  store.delete(SESSION_COOKIE);
-}
-
-/** Returns the authenticated admin, or null when the cookie is absent, forged, or expired. */
-export async function requireAdmin() {
-  const store = await cookies();
-  const token = store.get(SESSION_COOKIE)?.value;
+/**
+ * Validates a raw cookie value. Shared by the Next.js pages (which read the
+ * cookie store) and the Hono API (which reads the cookie header), so both
+ * surfaces enforce exactly the same rules.
+ */
+export async function resolveSessionToken(
+  token: string | null | undefined,
+): Promise<SessionAdmin | null> {
   if (!token) return null;
 
   const lastDot = token.lastIndexOf(".");
@@ -60,18 +65,41 @@ export async function requireAdmin() {
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
 
-  const [userId, expiresAtRaw] = payload.split(".");
+  const parts = payload.split(".");
+  // Three fields plus the signature. Older two-field tokens are rejected
+  // outright: they predate the password binding.
+  if (parts.length !== 3) return null;
+
+  const [userId, expiresAtRaw, id] = parts;
   const expiresAt = Number(expiresAtRaw);
-  if (!userId || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+  if (!userId || !id || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
     return null;
   }
 
   const [user] = await db
-    .select({ id: users.id, email: users.email, role: users.role })
+    .select({
+      id: users.id,
+      email: users.email,
+      role: users.role,
+      passwordHash: users.passwordHash,
+    })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
 
   if (!user || user.role !== "ADMIN") return null;
-  return user;
+
+  const actual = Buffer.from(id);
+  const wanted = Buffer.from(fingerprint(user.passwordHash));
+  if (actual.length !== wanted.length || !timingSafeEqual(actual, wanted)) {
+    return null;
+  }
+
+  return { id: user.id, email: user.email, role: user.role };
+}
+
+/** Returns the authenticated admin for a server-rendered page, or null. */
+export async function requireAdmin(): Promise<SessionAdmin | null> {
+  const store = await cookies();
+  return resolveSessionToken(store.get(SESSION_COOKIE)?.value);
 }

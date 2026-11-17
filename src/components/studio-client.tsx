@@ -2011,8 +2011,9 @@ export function StudioClient() {
                 </span>
                 <span className="text-small opacity-80">
                   Centang untuk mengunggah foto ini ke Cloudinary supaya
-                  bisa dilihat semua orang di galeri StripSnap. Biarkan
-                  kosong kalau fotomu hanya untukmu.
+                  bisa dilihat semua orang di galeri StripSnap. Foto galeri
+                  tidak kedaluwarsa; admin bisa menghapusnya kapan saja.
+                  Biarkan kosong kalau fotomu hanya untukmu.
                 </span>
               </span>
             </label>

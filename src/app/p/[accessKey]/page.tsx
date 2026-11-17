@@ -26,6 +26,9 @@ import { Logo } from "@/components/logo";
 export const metadata: Metadata = {
   title: "Hasil fotomu: StripSnap",
   description: "Unduh strip fotomu atau bagikan tautannya.",
+  // The access key is the capability that opens this page, so it must never
+  // end up in a search index.
+  robots: { index: false, follow: false },
 };
 
 /** Matches the studio's preview cap so the print reads the same size on both

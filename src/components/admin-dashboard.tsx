@@ -62,7 +62,7 @@ export function AdminDashboard({
                 {
                   label: "Sesi aktif",
                   value: totals.activeSessions,
-                  hint: "masih dalam masa retensi",
+                  hint: "belum lewat 24 jam",
                 },
                 {
                   label: "Total sesi",

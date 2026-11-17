@@ -4,7 +4,7 @@ Web photobooth untuk event. Tamu buka link di browser HP, pilih layout, jepret
 atau unggah foto dari galeri, lalu hias strip dengan filter, stiker, dan frame
 sebelum menyimpan. Data tersimpan di Neon Postgres, file foto di disk lokal.
 
-Stack: Next.js 16 (App Router) + React 19 + Tailwind v4 + Drizzle ORM + Neon Postgres.
+Stack: Next.js 16 (App Router) + React 19 + Tailwind v4 + Drizzle ORM + Neon Postgres, dengan Hono untuk lapisan API.
 
 ## Menjalankan
 
@@ -30,6 +30,23 @@ Buka http://localhost:3000. Booth ada di `/booth`, dashboard di `/admin`.
 
 Kamera hanya bisa diakses lewat HTTPS atau `localhost`. Untuk HP di jaringan
 lokal, pakai HTTPS (misalnya lewat `ngrok http 3000` atau reverse proxy).
+
+## API
+
+Seluruh `/api/*` ditangani satu aplikasi Hono. Next.js hanya punya satu route
+handler, `src/app/api/[...path]/route.ts`, yang meneruskan request ke `app.fetch`
+dari `src/server/app.ts`. Rute dipisah per area di `src/server/routes/`:
+`admin.ts` (login, frame, foto), `sessions.ts` (simpan sesi, unduh, Live Photo),
+`public.ts` (katalog frame, galeri, proxy file), dan `cron.ts` (retensi).
+Cookie sesi admin dan helper `currentAdmin` ada di `src/server/auth.ts`, sedangkan
+pembuatan dan validasi token tetap di `src/lib/auth.ts` supaya halaman server dan
+API memakai aturan yang sama.
+
+URL, bentuk request/response, status code, dan perilaku keamanan tidak berubah
+dari versi route handler sebelumnya. Menambah endpoint berarti mendaftarkannya di
+modul yang sesuai, bukan membuat file `route.ts` baru. Header keamanan (CSP,
+`X-Robots-Tag`) tetap dipasang Next.js lewat `next.config.ts` dan membungkus
+respons Hono.
 
 ## Neon
 
@@ -116,7 +133,7 @@ sudah ikut di-commit.
 | `NEXT_PUBLIC_BASE_URL` | Cadangan URL dasar untuk QR dan tautan berbagi. Normalnya dipakai origin dari request, jadi opsional |
 | `SESSION_SECRET` | Kunci HMAC untuk cookie sesi admin |
 | `CRON_SECRET` | Bearer token untuk `/api/cron/cleanup`; wajib di produksi |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Kredensial admin untuk `db:seed` |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Kredensial admin untuk `db:seed`. Keduanya wajib diisi; password minimal 12 karakter dan tidak boleh memakai nilai contoh |
 | `CLOUDINARY_URL` | Kredensial Cloudinary, mis. `cloudinary://KEY:SECRET@CLOUD_NAME`. Tanpa kurung sudut di sekitar key atau secret, kalau tidak `src/lib/cloudinary.ts` menolaknya |
 | `CLOUDINARY_FOLDER` | Folder tujuan aset di dalam cloud, default `photo` |
 
@@ -131,8 +148,9 @@ Checklist minimum sebelum produksi:
 1. Isi `DATABASE_URL`, `SESSION_SECRET`, `CRON_SECRET`, dan kredensial
    Cloudinary.
 2. Di database baru, jalankan `npm run db:migrate`, lalu `npm run db:seed`
-   sekali. Ganti `ADMIN_EMAIL`/`ADMIN_PASSWORD` sebelum seed; kredensial contoh
-   hanya untuk lokal.
+   sekali. `ADMIN_EMAIL` dan `ADMIN_PASSWORD` wajib diisi sebelum seed (tidak
+   ada default); pakai password acak minimal 12 karakter, misalnya dari
+   `openssl rand -base64 24`.
 3. `npm run build`, lalu `npm start`.
 4. Jadwalkan `POST /api/cron/cleanup` dengan header
    `Authorization: Bearer $CRON_SECRET`. Di Vercel, `vercel.json` sudah memakai
@@ -309,6 +327,8 @@ hanya menampilkan form login, dan `POST /api/admin/login` menolak siapa pun yang
 bukan user ber-role `ADMIN`.
 
 Akun admin dibuat `npm run db:seed` dari `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+Keduanya wajib diisi dan tidak punya nilai default; seed menolak password
+kurang dari 12 karakter atau nilai contoh yang pernah didokumentasikan.
 Seed juga mengunggah `Frame_RTS_01.png` dan `Frame_RTS_02.png` ke Cloudinary
 lalu melakukan upsert baris **Kultur** dan **Fiksi** ke Neon. Kalau Cloudinary
 belum diatur, seed memakai penyimpanan lokal sebagai fallback supaya alur admin
@@ -317,14 +337,16 @@ tetap bisa dicoba.
 Seed akun bersifat upsert **berdasarkan email**, jadi:
 
 - Ganti `ADMIN_PASSWORD` lalu jalankan `npm run db:seed` untuk memperbarui
-  password akun yang sudah ada.
+  password akun yang sudah ada. Cookie sesi terikat ke hash password, jadi
+  semua sesi lama langsung tidak berlaku setelah password berubah.
 - Ganti `ADMIN_EMAIL` akan **membuat akun admin kedua** dan meninggalkan akun
   lama tetap aktif. Hapus dulu baris lama di tabel `users`, atau ubah email-nya
   langsung di database.
 
-Kredensial default di `.env.example` (`admin@snapvibe.local` /
-`snapvibe-dev-admin`) hanya untuk lokal. Ganti keduanya sebelum deploy, karena
-akun itu ada di database yang sama dengan yang dipakai produksi.
+`POST /api/admin/login` dibatasi 10 percobaan per 10 menit per IP, dan email
+yang tidak ada tetap melewati verifikasi scrypt dengan hash dummy supaya waktu
+respons tidak membocorkan email mana yang terdaftar. Batas ini disimpan di
+memori tiap instance, jadi bukan pengganti rate limit di level platform.
 
 Semua endpoint di bawah butuh cookie sesi admin dari `POST /api/admin/login`.
 Tanpa cookie selalu dibalas `401`.

@@ -264,7 +264,7 @@ export function MaintenancePanel({ onChanged }: { onChanged: () => void }) {
       )}
 
       <p className="text-small font-semibold text-ink-body">
-        Hapus sesi yang sudah lewat masa retensi beserta file lokal dan aset
+        Hapus sesi yang sudah kedaluwarsa (24 jam) beserta file lokal dan aset
         Cloudinary-nya. Foto yang masih tampil di galeri publik sengaja
         dipertahankan.
       </p>

@@ -40,9 +40,11 @@ export default function PrivacyPage() {
                 Yang kami simpan
               </h2>
               <p className="mt-3">
-                StripSnap menyimpan strip foto hasil jepretanmu beserta tautan
-                unduhnya. Foto tidak&rsquo;mengenai nama, email, atau nomor
-                telepon, dan tidak disimpan di perangkat kamu.
+                StripSnap menyimpan strip foto hasil jepretan atau unggahanmu
+                beserta tautan unduhnya. Kalau kamu memakai mode Live, klip
+                pendek tiap jepretan ikut tersimpan. Foto tidak dikaitkan dengan
+                nama, email, atau nomor telepon, dan proses kamera maupun
+                pemilihan file berjalan di perangkatmu.
               </p>
             </section>
 
@@ -53,7 +55,14 @@ export default function PrivacyPage() {
               <p className="mt-3">
                 Setiap sesi punya tautan acak sendiri. Siapa pun yang punya
                 tautan atau QR itu bisa membuka dan mengunduh fotomu, jadi
-                simpan tautannya dan jangan bagikan ke publik.
+                simpan tautannya dan jangan bagikan sembarangan. Halaman hasil
+                tidak muncul di mesin pencari karena memakai kunci acak dan
+                ditandai agar tidak diindeks.
+              </p>
+              <p className="mt-3">
+                Foto hanya masuk galeri publik kalau kamu sendiri mencentang
+                &ldquo;Tampilkan di galeri publik&rdquo; di studio. Tanpa
+                centang itu, foto tetap privat di tautanmu.
               </p>
             </section>
 
@@ -62,8 +71,11 @@ export default function PrivacyPage() {
                 Berapa lama disimpan
               </h2>
               <p className="mt-3">
-                Foto dihapus otomatis setelah masa retensi event habis. Masa
-                retensi tiap event diatur organizer dan bisa berbeda.
+                Foto privat dan klip Live-nya dihapus otomatis 24 jam setelah
+                disimpan, begitu juga tautan hasilnya. Foto yang kamu pilih
+                untuk tampil di galeri publik tidak ikut kedaluwarsa: foto itu
+                tetap ada di galeri sampai admin menghapusnya, dan penghapusan
+                itu juga membuang salinan filenya.
               </p>
             </section>
 
@@ -72,8 +84,9 @@ export default function PrivacyPage() {
                 Kalau ada yang salah
               </h2>
               <p className="mt-3">
-                Kalau kamu yakin ada tautan yang salah orang, hubungi organizer
-                event yang membagikannya.
+                Kalau kamu yakin tautanmu bocor, atau ingin foto yang sudah
+                tampil di galeri publik dihapus, hubungi pengelola StripSnap
+                yang menyelenggarakan booth ini.
               </p>
             </section>
           </div>
