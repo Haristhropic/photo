@@ -54,7 +54,9 @@ import {
   FILTER_ORDER,
   LAYOUTS,
   PRINT_RADIUS,
+  isRect,
   type FilterKey,
+  type Rect,
 } from "@/lib/layouts";
 import {
   addStickerToStrip,
@@ -78,6 +80,7 @@ import {
   builtInFrames,
   dynamicFramePreset,
   filterFrames,
+  framePhotoSlots,
   FRAME_CATEGORIES,
   FRAME_CATEGORY_LABEL,
   frameSupportsLayout,
@@ -112,13 +115,26 @@ async function uploadLiveClips(
   accessKey: string,
   runId: string,
   slots: { slot: number; mime: string; durationMs: number }[],
+  windows: Rect[],
+  frameSrc: string | null,
 ): Promise<void> {
   try {
     const form = new FormData();
+    // The frame artwork is painted above the photos at render time, so the
+    // playback overlay has to repaint it over the video. Only bitmap frames
+    // ship an image; the built-in ones draw their art in code.
+    if (frameSrc) form.append("frame-src", frameSrc);
     for (const meta of slots) {
       const clip = await takeClip(runId, meta.slot);
       if (clip) {
         form.append(`slot-${meta.slot}`, clip.blob, `clip-${meta.slot}.${clip.mime.includes("mp4") ? "mp4" : "webm"}`);
+        // The printed window travels with the clip. A bitmap frame draws the
+        // photos into its own transparent windows, so the result page and the
+        // gallery cannot line a clip up from the layout slots alone.
+        const window = windows[meta.slot];
+        if (isRect(window)) {
+          form.append(`rect-${meta.slot}`, JSON.stringify(window));
+        }
       }
     }
     if (form.has(`slot-0`) || form.has(`slot-1`) || form.has(`slot-2`) || form.has(`slot-3`)) {
@@ -718,7 +734,21 @@ export function StudioClient() {
         draft.live?.runId &&
         draft.live.slots.length > 0
       ) {
-        try { await uploadLiveClips(data.accessKey, draft.live.runId, draft.live.slots); } catch {}
+        const layout = LAYOUTS[draft.layoutType];
+        // Exactly the windows the renderer just painted the shots into, so a
+        // playing clip covers the printed photo and nothing else.
+        const windows = activeFrame
+          ? framePhotoSlots(activeFrame, layout)
+          : layout.slots;
+        try {
+          await uploadLiveClips(
+            data.accessKey,
+            draft.live.runId,
+            draft.live.slots,
+            windows,
+            activeFrame?.bitmap?.src ?? null,
+          );
+        } catch {}
       }
 
       if (publish && !data.published) {

@@ -67,3 +67,32 @@ export function liveSlotFrame(
     },
   };
 }
+
+/**
+ * Places a bitmap frame's artwork over a playing clip.
+ *
+ * The renderer paints the frame after the photos, so part of the artwork can
+ * sit on top of a photo window. When a clip replaces the still, that part has
+ * to be repainted over the video or it vanishes for the length of the clip.
+ * The artwork is stretched to the whole canvas, so it is painted at canvas size
+ * and shifted until the window's area fills the clip box; the box clips it.
+ *
+ * A background is used rather than an `<img>`: the picture is decoration, and
+ * the remaining markup in this box is already inert to the pointer.
+ */
+export function liveFrameArtStyle(
+  slot: Rect,
+  canvas: { w: number; h: number },
+  src: string,
+): CSSProperties {
+  return {
+    position: "absolute",
+    left: `${(-slot.x / slot.w) * 100}%`,
+    top: `${(-slot.y / slot.h) * 100}%`,
+    width: `${(canvas.w / slot.w) * 100}%`,
+    height: `${(canvas.h / slot.h) * 100}%`,
+    backgroundImage: `url("${src}")`,
+    backgroundSize: "100% 100%",
+    backgroundRepeat: "no-repeat",
+  };
+}

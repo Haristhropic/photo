@@ -12,7 +12,13 @@ import {
   isCloudinaryConfigured,
   uploadStripPng,
 } from "@/lib/cloudinary";
-import { LAYOUTS, isFilterKey, isLayoutType } from "@/lib/layouts";
+import {
+  LAYOUTS,
+  isFilterKey,
+  isLayoutType,
+  isRect,
+  type Rect,
+} from "@/lib/layouts";
 import { clientKey, rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { contentTypeFor, readStoredFile, savePng, saveMedia } from "@/lib/storage";
 
@@ -66,6 +72,72 @@ function tooLarge(): Response {
     },
     { status: 413 },
   );
+}
+
+/**
+ * The printed photo window a clip has to cover, as sent by the studio.
+ *
+ * A bitmap frame draws the photos into its own transparent windows, which do
+ * not match the layout's slots, so playback cannot place the clip from the
+ * layout alone. The field is optional: a studio that omits it keeps the layout
+ * slots, exactly how every strip recorded before this was stored.
+ *
+ * The value is a display hint, never an authorisation input, but it is still
+ * clamped to the canvas so a crafted request cannot park the overlay outside
+ * the print.
+ */
+function clipRect(
+  form: FormData,
+  slot: number,
+  canvas: { w: number; h: number },
+): Rect | null {
+  const raw = form.get(`rect-${slot}`);
+  if (typeof raw !== "string") return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!isRect(parsed)) return null;
+
+  const x = Math.max(0, Math.min(parsed.x, canvas.w));
+  const y = Math.max(0, Math.min(parsed.y, canvas.h));
+  const w = Math.min(parsed.w, canvas.w - x);
+  const h = Math.min(parsed.h, canvas.h - y);
+  if (w <= 0 || h <= 0) return null;
+  return { x, y, w, h };
+}
+
+/**
+ * The frame artwork that was painted above the photos, as sent by the studio.
+ *
+ * Only bitmap frames need it: their artwork can overlap a photo window, and the
+ * playback overlay repaints that band over the video so a playing clip looks
+ * like the still. The artwork is already public (the studio and the gallery
+ * show it), but the value still has to be a plain URL: it lands in a CSS
+ * background on a public page, so script and data schemes are rejected.
+ */
+function frameOverlay(form: FormData): string | null {
+  const raw = form.get("frame-src");
+  if (typeof raw !== "string") return null;
+  const src = raw.trim();
+  if (!src || src.length > 2048) return null;
+  // The URL is painted as a CSS background, so characters that could end the
+  // `url(...)` token (or smuggle a second declaration) are refused outright.
+  if (/[\s"'()<>\\]/.test(src)) return null;
+  // Same-origin path, e.g. the local frame fallback. A protocol-relative URL
+  // would leave the origin, so it does not count as same-origin.
+  if (src.startsWith("/") && !src.startsWith("//")) return src;
+  try {
+    const url = new URL(src);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? src
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function isPng(bytes: Buffer): boolean {
@@ -374,8 +446,15 @@ export function registerSessionRoutes(app: Hono): void {
     }
 
     const form = await c.req.formData();
-    const entries: { slot: number; mime: string; durationMs: number; url: string }[] =
-      [];
+    const frameSrc = frameOverlay(form);
+    const entries: {
+      slot: number;
+      mime: string;
+      durationMs: number;
+      url: string;
+      rect?: Rect;
+      frameSrc?: string;
+    }[] = [];
     let totalSize = 0;
 
     for (let slot = 0; slot < layout.shotCount; slot++) {
@@ -403,7 +482,15 @@ export function registerSessionRoutes(app: Hono): void {
       const filename = `${accessKey}-live${slot}.${ext}`;
 
       const stored = await saveMedia(bytes, filename, mime);
-      entries.push({ slot, mime, durationMs: 2000, url: stored.url });
+      const rect = clipRect(form, slot, layout.canvas);
+      entries.push({
+        slot,
+        mime,
+        durationMs: 2000,
+        url: stored.url,
+        ...(rect ? { rect } : {}),
+        ...(frameSrc ? { frameSrc } : {}),
+      });
     }
 
     if (entries.length === 0) {

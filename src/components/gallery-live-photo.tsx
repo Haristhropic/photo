@@ -6,10 +6,10 @@ import {
 } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 
-import { liveSlotFrame } from "@/lib/live-frame";
-import type { FilterKey, Rect } from "@/lib/layouts";
+import { liveFrameArtStyle, liveSlotFrame } from "@/lib/live-frame";
+import { isRect, type FilterKey, type Rect } from "@/lib/layouts";
 
-type GalleryLiveClip = { slot: number };
+type GalleryLiveClip = { slot: number; rect?: Rect; frameSrc?: string };
 
 type GalleryLivePhotoProps = {
   /** Session id. Clips are fetched through this, never by their stored URL. */
@@ -103,7 +103,9 @@ export function GalleryLivePhoto({
   return (
     <>
       {ordered.map((clip) => {
-        const slot = slots[clip.slot];
+        // Prefer the window the studio recorded with the clip; a bitmap frame
+        // moves the printed photos out of the layout's own slots.
+        const slot = isRect(clip.rect) ? clip.rect : slots[clip.slot];
         if (!slot || failed.includes(clip.slot)) return null;
 
         const { box, video: videoStyle } = liveSlotFrame(slot, canvas, {
@@ -111,9 +113,16 @@ export function GalleryLivePhoto({
           filterKey,
         });
         const isPlaying = playing === clip.slot;
+        const artStyle = clip.frameSrc
+          ? liveFrameArtStyle(slot, canvas, clip.frameSrc)
+          : null;
 
         return (
-          <div key={clip.slot} className="absolute" style={box}>
+          <div
+            key={clip.slot}
+            className="absolute overflow-hidden"
+            style={{ ...box, borderRadius: videoStyle.borderRadius }}
+          >
             <video
               ref={(el) => {
                 videoRefs.current[clip.slot] = el;
@@ -146,6 +155,13 @@ export function GalleryLivePhoto({
               }`}
               style={videoStyle}
             />
+            {isPlaying && clip.frameSrc && artStyle && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute"
+                style={artStyle}
+              />
+            )}
           </div>
         );
       })}

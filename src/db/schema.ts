@@ -83,8 +83,26 @@ export const photoSessions = pgTable(
     publishedAt: timestamp("published_at", { withTimezone: false }),
     cloudinaryPublicId: varchar("cloudinary_public_id", { length: 191 }),
     cloudinaryUrl: text("cloudinary_url"),
-    // Per-shot live clips: [{ slot, url, mime, durationMs }]. Private Blob storage.
-    liveClips: jsonb("live_clips").$type<{ slot: number; url: string; mime: string; durationMs: number }[]>().notNull().default([]),
+    // Per-shot live clips: [{ slot, url, mime, durationMs, rect?, frameSrc? }].
+    // `rect` is the printed photo window in layout-canvas pixels: a bitmap
+    // frame draws the photos somewhere the layout's own slots do not describe,
+    // and playback needs that window to cover the still exactly. `frameSrc` is
+    // the frame artwork, painted above the photos at render time, so playback
+    // repaints the part that overlaps the window over the video. Older rows have
+    // neither and fall back to the layout slots.
+    liveClips: jsonb("live_clips")
+      .$type<
+        {
+          slot: number;
+          url: string;
+          mime: string;
+          durationMs: number;
+          rect?: FrameWindow;
+          frameSrc?: string;
+        }[]
+      >()
+      .notNull()
+      .default([]),
     createdAt: createdAt(),
   },
   (table) => [

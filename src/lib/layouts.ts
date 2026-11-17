@@ -34,6 +34,24 @@ const PAPER_EDGE_TOLERANCE = 1.5;
 export type CornerRadii = { tl: number; tr: number; br: number; bl: number };
 
 /**
+ * True when a decoded value is actually a rectangle: four finite numbers and a
+ * positive size. Live clip geometry arrives as JSON from the studio, so every
+ * consumer checks it before handing it to a style or canvas call.
+ */
+export function isRect(value: unknown): value is Rect {
+  if (!value || typeof value !== "object") return false;
+  const rect = value as Partial<Record<keyof Rect, unknown>>;
+  return (
+    Number.isFinite(rect.x) &&
+    Number.isFinite(rect.y) &&
+    Number.isFinite(rect.w) &&
+    Number.isFinite(rect.h) &&
+    (rect.w as number) > 0 &&
+    (rect.h as number) > 0
+  );
+}
+
+/**
  * Photos that sit against the paper margin take the margin's curve at their
  * outer corners. The print is clipped with a radius of twice the margin, so a
  * square photo corner would leave a thinner band of paper there than along the

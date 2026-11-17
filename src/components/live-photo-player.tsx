@@ -6,10 +6,19 @@ import {
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { liveSlotFrame } from "@/lib/live-frame";
-import type { FilterKey, Rect } from "@/lib/layouts";
+import { liveFrameArtStyle, liveSlotFrame } from "@/lib/live-frame";
+import { isRect, type FilterKey, type Rect } from "@/lib/layouts";
 
-type LiveClip = { slot: number; url: string; mime: string; durationMs: number };
+type LiveClip = {
+  slot: number;
+  url: string;
+  mime: string;
+  durationMs: number;
+  /** Printed photo window, when a bitmap frame moved the shot off the slot. */
+  rect?: Rect;
+  /** Frame artwork to repaint over the clip where it overlapped the photo. */
+  frameSrc?: string;
+};
 
 type LivePhotoOverlayProps = {
   canvas: { w: number; h: number };
@@ -112,7 +121,9 @@ export function LivePhotoOverlay({
   return (
     <>
       {ordered.map((clip) => {
-        const slot = slots[clip.slot];
+        // The clip's own window wins: with a bitmap frame the shot sits in the
+        // frame's transparent window, not in the layout's slot.
+        const slot = isRect(clip.rect) ? clip.rect : slots[clip.slot];
         if (!slot || failed.includes(clip.slot)) return null;
 
         const { box, video: videoStyle } = liveSlotFrame(slot, canvas, {
@@ -122,9 +133,16 @@ export function LivePhotoOverlay({
 
         const isPlaying = playing === clip.slot;
         const label = `Live Photo foto ${clip.slot + 1}`;
+        const artStyle = clip.frameSrc
+          ? liveFrameArtStyle(slot, canvas, clip.frameSrc)
+          : null;
 
         return (
-          <div key={clip.slot} className="absolute" style={box}>
+          <div
+            key={clip.slot}
+            className="absolute overflow-hidden"
+            style={{ ...box, borderRadius: videoStyle.borderRadius }}
+          >
             <video
               ref={(el) => {
                 videoRefs.current[clip.slot] = el;
@@ -156,6 +174,13 @@ export function LivePhotoOverlay({
               }`}
               style={videoStyle}
             />
+            {isPlaying && clip.frameSrc && artStyle && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute"
+                style={artStyle}
+              />
+            )}
             <button
               type="button"
               onClick={() => toggle(clip.slot)}
