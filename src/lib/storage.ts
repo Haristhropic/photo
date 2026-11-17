@@ -1,7 +1,7 @@
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { del, get, put } from "@vercel/blob";
+import { del, get, head, put } from "@vercel/blob";
 
 // Paths under this root are joined from request data, so Turbopack cannot scope
 // tracing to a literal subfolder and warns about whole-project tracing. The
@@ -17,6 +17,19 @@ const STORAGE_ROOT = path.resolve(
 // can never read or delete an unrelated object from the store.
 const SAFE_PNG_FILENAME = /^[a-zA-Z0-9_-]+\.png$/;
 const SAFE_MEDIA_FILENAME = /^[a-zA-Z0-9_-]+\.(png|webm|mp4)$/;
+
+// Clips are written by saveMedia under a flat basename, and the gallery stores
+// that same shape in a `/api/files/...` URL. A stored value that does not match
+// is a bad row, not a path worth reading.
+const STORED_MEDIA_URL = /^\/api\/files\/([a-zA-Z0-9_-]+\.(?:mp4|webm))$/;
+
+/**
+ * Turns a stored clip URL into its storage basename, or null when it is not one
+ * of the flat names `saveMedia` produces.
+ */
+export function storedMediaFilename(url: string): string | null {
+  return STORED_MEDIA_URL.exec(url)?.[1] ?? null;
+}
 
 export function storageRoot(): string {
   return STORAGE_ROOT;
@@ -129,6 +142,37 @@ export function resolveStoredPath(relative: string): string | null {
     return null;
   }
   return resolved;
+}
+
+/**
+ * Cheap existence probe for a stored media object.
+ *
+ * The public gallery uses it to stop advertising a Live clip whose object is no
+ * longer in storage (a manual cleanup, a storage migration, or a dev database
+ * whose clips were never on this disk). It deliberately avoids downloading the
+ * bytes the way `readStoredFile` would.
+ */
+export async function storedFileExists(relative: string): Promise<boolean> {
+  if (isBlobConfigured()) {
+    const filename = safeBlobFilename(relative);
+    if (!filename) return false;
+
+    try {
+      await head(filename, { token: blobToken() });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  const resolved = resolveStoredPath(relative);
+  if (!resolved) return false;
+  try {
+    await access(resolved);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function readStoredFile(relative: string): Promise<Buffer | null> {

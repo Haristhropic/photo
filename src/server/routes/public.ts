@@ -6,16 +6,17 @@ import { frames, photoSessions } from "@/db/schema";
 import type { DynamicFrameRecord } from "@/lib/frames";
 import { getPublicGallery } from "@/lib/gallery";
 import { serveMedia } from "@/lib/serve-media";
-import { contentTypeFor, readStoredFile } from "@/lib/storage";
+import {
+  contentTypeFor,
+  readStoredFile,
+  storedMediaFilename,
+} from "@/lib/storage";
 
 const DEFAULT_LIMIT = 60;
 const MAX_LIMIT = 120;
 
 const SESSION_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// Clips are written by saveMedia under a flat basename. Anything else in the
-// stored value is a bad row, not a path to read.
-const STORED_CLIP = /^\/api\/files\/([a-zA-Z0-9_-]+\.(?:mp4|webm))$/;
 const MAX_SLOT = 7;
 
 function notFound(): Response {
@@ -105,31 +106,32 @@ export function registerPublicRoutes(app: Hono): void {
     const [session] = await db
       .select({
         publishedAt: photoSessions.publishedAt,
-        expiresAt: photoSessions.expiresAt,
         liveClips: photoSessions.liveClips,
       })
       .from(photoSessions)
       .where(eq(photoSessions.id, id))
       .limit(1);
 
-    // Publishing is the guest's consent for a public photo, and an expired row is
-    // already past its retention window. Neither may leak a clip.
-    if (!session || !session.publishedAt || session.expiresAt < new Date()) {
+    // Publishing is the guest's consent for a public photo. Published rows are
+    // permanent — the retention job skips them — so `expiresAt` must not be
+    // consulted here: it only governs the private copies, and checking it hid
+    // the clips of every strip whose original session window had elapsed.
+    if (!session || !session.publishedAt) {
       return notFound();
     }
 
     const clip = session.liveClips.find((entry) => entry.slot === slot);
     if (!clip) return notFound();
 
-    const stored = STORED_CLIP.exec(clip.url);
-    if (!stored) return notFound();
+    const filename = storedMediaFilename(clip.url);
+    if (!filename) return notFound();
 
-    const bytes = await readStoredFile(stored[1]);
+    const bytes = await readStoredFile(filename);
     if (!bytes) return notFound();
 
     const contentType = clip.mime === "video/mp4" ? "video/mp4" : "video/webm";
-    // Public feed, but clips are only kept for the session's retention window, so
-    // keep a CDN copy short rather than immutable.
+    // Public feed and a permanent row, but an admin can unpublish or delete the
+    // photo at any time, so let a CDN copy live for an hour instead of forever.
     return serveMedia(c.req.raw, bytes, contentType, "public, max-age=3600");
   });
 
