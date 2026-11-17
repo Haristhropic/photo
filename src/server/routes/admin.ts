@@ -124,7 +124,7 @@ export function registerAdminRoutes(app: Hono): void {
       return c.json({ error: "Email atau password salah" }, 401);
     }
 
-    startAdminSession(c, user.id, user.passwordHash);
+    await startAdminSession(c, user, user.passwordHash);
     return c.json({ ok: true, email: user.email });
   });
 

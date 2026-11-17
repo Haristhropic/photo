@@ -20,12 +20,13 @@ export async function currentAdmin(c: Context): Promise<SessionAdmin | null> {
   return resolveSessionToken(getCookie(c, SESSION_COOKIE));
 }
 
-export function startAdminSession(
+export async function startAdminSession(
   c: Context,
-  userId: string,
+  admin: SessionAdmin,
   passwordHash: string,
-): void {
-  setCookie(c, SESSION_COOKIE, createSessionToken(userId, passwordHash), {
+): Promise<void> {
+  const token = await createSessionToken(admin, passwordHash);
+  setCookie(c, SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "Lax",
     secure,

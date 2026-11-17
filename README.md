@@ -39,8 +39,10 @@ dari `src/server/app.ts`. Rute dipisah per area di `src/server/routes/`:
 `admin.ts` (login, frame, foto), `sessions.ts` (simpan sesi, unduh, Live Photo),
 `public.ts` (katalog frame, galeri, proxy file), dan `cron.ts` (retensi).
 Cookie sesi admin dan helper `currentAdmin` ada di `src/server/auth.ts`, sedangkan
-pembuatan dan validasi token tetap di `src/lib/auth.ts` supaya halaman server dan
-API memakai aturan yang sama.
+pembuatan dan validasi JWT tetap di `src/lib/auth.ts` supaya halaman server dan
+API memakai aturan yang sama. Token ditandatangani HS256 dengan `SESSION_SECRET`,
+membawa `sub`, `iss`, `aud`, dan `exp` (8 jam), lalu tetap dicek ke database:
+role harus `ADMIN` dan fingerprint password hash di klaim `pwd` harus cocok.
 
 URL, bentuk request/response, status code, dan perilaku keamanan tidak berubah
 dari versi route handler sebelumnya. Menambah endpoint berarti mendaftarkannya di
@@ -131,7 +133,7 @@ sudah ikut di-commit.
 | `STORAGE_DIR` | Folder penyimpanan lokal untuk pengembangan, default `./storage`. Di Vercel folder ini sementara |
 | `BLOB_READ_WRITE_TOKEN` | Token Vercel Blob untuk penyimpanan foto yang persisten. Wajib di Vercel, opsional di lokal. Vercel mengisinya otomatis saat Blob store dihubungkan |
 | `NEXT_PUBLIC_BASE_URL` | Cadangan URL dasar untuk QR dan tautan berbagi. Normalnya dipakai origin dari request, jadi opsional |
-| `SESSION_SECRET` | Kunci HMAC untuk cookie sesi admin |
+| `SESSION_SECRET` | Kunci penandatanganan JWT (HS256) untuk cookie sesi admin |
 | `CRON_SECRET` | Bearer token untuk `/api/cron/cleanup`; wajib di produksi |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Kredensial admin untuk `db:seed`. Keduanya wajib diisi; password minimal 12 karakter dan tidak boleh memakai nilai contoh |
 | `CLOUDINARY_URL` | Kredensial Cloudinary, mis. `cloudinary://KEY:SECRET@CLOUD_NAME`. Tanpa kurung sudut di sekitar key atau secret, kalau tidak `src/lib/cloudinary.ts` menolaknya |
